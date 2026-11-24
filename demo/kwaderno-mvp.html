@@ -80,6 +80,13 @@ label.f { display: grid; gap: 5px; font-size: .85rem; font-weight: 500; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .tile { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px; min-height: 84px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
 .tile.in { border-color: var(--accent); background: var(--accent-soft); }
+.tile { padding: 0; overflow: hidden; }
+.tile .body { padding: 8px 10px 10px; display: grid; gap: 6px; }
+.pimg { display: block; width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--surface-2); }
+.ph { display: grid; place-items: center; width: 100%; aspect-ratio: 1 / 1; font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; letter-spacing: .02em; color: #fff; }
+.thumb { width: 48px; height: 48px; flex: none; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.thumb .pimg, .thumb .ph { aspect-ratio: auto; height: 100%; font-size: .95rem; }
+.hero-photo { width: min(220px, 100%); border-radius: 14px; overflow: hidden; border: 1px solid var(--line); }
 .tile .n { font-weight: 600; font-size: .88rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tile .r { display: flex; justify-content: space-between; align-items: end; gap: 4px; }
 .sell { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
@@ -344,6 +351,33 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
       h("button", { class: "btn primary big", onclick: () => { pendingBarcode = code; dlg.close(); go("products", "new"); } }, "Add as a new product"),
       h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel")));
   }
+  // Product photo or a colored initials placeholder (hue from the name, stable per product).
+  function productImage(p) {
+    const url = p.photo?.url;
+    if (url && (url.startsWith("/_blob/") || url.startsWith("https://"))) return h("img", { class: "pimg", src: url, alt: p.name, loading: "lazy" });
+    const words = p.name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
+    const initials = (words[0]?.[0] || "?") + (words[1]?.[0] || "");
+    let hash = 0; for (const ch of p.category || p.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return h("div", { class: "ph", style: `background:hsl(${hash % 360} 38% 42%)`, "aria-hidden": "true", text: initials.toUpperCase() });
+  }
+  /** Phone photo → square-ish JPEG ≤ 640 px (saves data) → private asset → product.photo. */
+  async function setProductPhoto(p, file) {
+    const assets = await window.claude?.use?.("assets");
+    if (!assets) return toast("Adding photos needs Editor access to this app");
+    try {
+      const bmp = await createImageBitmap(file);
+      const side = Math.min(bmp.width, bmp.height), k = Math.min(1, 640 / side);
+      const c = document.createElement("canvas"); c.width = Math.round(side * k); c.height = Math.round(side * k);
+      c.getContext("2d").drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, c.width, c.height);
+      const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.82));
+      const a = await assets.upload(blob);
+      const old = p.photo?.id;
+      await write("products/" + p.id, { ...strip(productById(p.id) || p), photo: { id: a.id, url: a.url } });
+      if (old) assets.delete(old).catch(() => {}); // remove the replaced photo
+      toast("Photo saved");
+    } catch (e) { toast("Could not save the photo: " + (e?.code || e?.message || "try again")); }
+  }
+  async function snapProductPhoto(p) { const f = await pickPhoto(true); if (f) await setProductPhoto(p, f); }
   const camIcon = () => svgIcon("M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z");
   async function askClaudeJson(prompt, images) {
     const sample = await window.claude?.use?.("sample");
@@ -463,8 +497,10 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
           prods.length ? h("div", { class: "tiles", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id); const q = stockOf(p.id);
             return h("button", { class: "tile" + (inCart ? " in" : ""), role: "listitem", onclick: () => addToCart(p) },
-              h("span", { class: "n", text: p.name }),
-              h("span", { class: "r" }, h("b", { class: "num", text: peso(p.price) }), h("span", { class: "small num", style: q <= 0 ? "color:var(--bad)" : "color:var(--muted)", text: inCart ? `×${inCart.qty}` : `${qtyFmt(q)} left` })));
+              productImage(p),
+              h("span", { class: "body" },
+                h("span", { class: "n", text: p.name }),
+                h("span", { class: "r" }, h("b", { class: "num", text: peso(p.price) }), h("span", { class: "small num", style: q <= 0 ? "color:var(--bad)" : "color:var(--muted)", text: inCart ? `×${inCart.qty}` : `${qtyFmt(q)} left` }))));
           })) : h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))),
         h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
       c.lines.length ? h("button", { class: "mobile-cart", onclick: () => openDialog("Current sale", checkoutDialog()) }, h("span", { text: `${c.lines.length} item(s)` }), h("span", { class: "num", text: `${peso(c.total)} ›` })) : null);
@@ -536,6 +572,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
     if (sub === "new") return productForm(null);
     if (sub === "stockin") return stockIn();
     if (sub === "expiry") return expiryView();
+    if (sub === "photos") return photoMode();
     if (sub && sub.startsWith("p-")) { const p = productById(sub.slice(2)); if (p) return productDetail(p); }
     const f = search.trim().toLowerCase();
     let list = activeProducts().filter((p) => !f || p.name.toLowerCase().includes(f) || (p.category || "").toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim()));
@@ -546,10 +583,12 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
         h("button", { class: "btn", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); } }, camIcon(), "Scan"),
         h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"),
         h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"),
+        h("button", { class: "btn", onclick: () => go("products", "photos") }, camIcon(), "Add photos"),
         h("button", { class: "btn primary", onclick: () => go("products", "new") }, "+ Add product"))),
       h("input", { type: "search", id: "prodSearch", placeholder: "Search name, category or barcode", value: search, "aria-label": "Search products", oninput: (e) => { search = e.target.value; render(); } }),
       h("div", { class: "pills" }, [["all", "All"], ["low", "Low stock"], ["out", "Out of stock"]].map(([k, l]) => h("button", { "aria-pressed": String(productFilter === k), onclick: () => { productFilter = k; render(); } }, l))),
       list.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, list.map((p) => h("li", {},
+        h("div", { class: "thumb" }, productImage(p)),
         h("button", { class: "grow", style: "text-align:left;border:0;background:none;padding:0", onclick: () => go("products", "p-" + p.id) }, h("div", { class: "trunc", style: "font-weight:600", text: p.name }), h("div", { class: "muted small trunc", text: [p.category, (p.barcodes || [])[0]].filter(Boolean).join(" · ") || "—" })),
         h("span", { class: "num", style: "font-weight:600", text: peso(p.price) }), stockChip(p)))))
         : h("div", { class: "empty", text: S.products.length ? "No matching products." : "No products yet. Add your first product." }));
@@ -567,7 +606,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
       if (cost == null) return toast("Enter a valid cost");
       if (code && S.products.some((x) => x.id !== p?.id && (x.barcodes || []).includes(code))) return toast("That barcode is already used by another product");
       const id = p?.id || uid();
-      const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString() };
+      const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString(), ...(p?.photo ? { photo: p.photo } : {}) };
       try {
         await write("products/" + id, body);
         pendingBarcode = "";
@@ -601,6 +640,9 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
           h("button", { class: "btn", onclick: async () => { const code = await scanBarcode(); if (!code) return; const other = byBarcode(code); if (other && other.id !== p.id) return toast(`Barcode already used by ${other.name}`); await write("products/" + p.id, { ...strip(p), barcodes: [...new Set([...(p.barcodes || []), code])] }); toast("Barcode saved"); } }, camIcon(), "Add barcode"),
           h("button", { class: "btn", onclick: () => expiryCapture(p.id) }, "Track expiry"),
           h("button", { class: "btn danger", onclick: async () => { await write("products/" + p.id, { ...strip(p), archived: true }); toast("Archived — history kept"); go("products"); } }, "Archive"))),
+      h("div", { style: "display:flex;gap:14px;align-items:end;flex-wrap:wrap" },
+        h("div", { class: "hero-photo" }, productImage(p)),
+        h("button", { class: "btn", onclick: () => snapProductPhoto(p) }, camIcon(), p.photo ? "Change photo" : "Add photo")),
       h("div", { class: "grid kpis" },
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "In stock" }), h("div", { class: "value" }, stockChip(p))),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Price" }), h("div", { class: "value num", text: peso(p.price) })),
@@ -721,6 +763,20 @@ ${catalog}`;
         } }, "Confirm stock-in")));
   }
 
+
+  // ---------- PHOTO MODE: walk the shelf and snap each product ----------
+  function photoMode() {
+    const all = activeProducts();
+    const missing = all.filter((p) => !p.photo);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: "Add product photos", style: "margin-top:8px" }),
+        h("div", { class: "muted small", text: `${all.length - missing.length} of ${all.length} products have a photo. Tap the camera on each, fill the frame with the item, good light.` }))),
+      missing.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, missing.map((p) => h("li", {},
+        h("div", { class: "thumb" }, productImage(p)),
+        h("span", { class: "grow trunc", style: "font-weight:600", text: p.name }),
+        h("button", { class: "btn primary", "aria-label": "Take photo of " + p.name, onclick: () => snapProductPhoto(p) }, camIcon(), "Photo")))))
+        : h("div", { class: "empty", text: "Every product has a photo. 🎉" }));
+  }
 
   // ---------- EXPIRY ----------
   const daysLeft = (date) => { const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((new Date(date + "T00:00:00") - t) / 864e5); };

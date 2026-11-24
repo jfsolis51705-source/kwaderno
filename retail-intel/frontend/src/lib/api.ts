@@ -1,4 +1,4 @@
-import type { AuditEntry, Capture, CaptureItem, CaptureKind, Order, Overview, Product, Rewards, Store } from "./types";
+import type { AuditEntry, Cashflow, Checkins, Capture, CaptureItem, CaptureKind, Order, Overview, Product, Rewards, Store } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -62,6 +62,8 @@ export const api = {
   draftOrder: (storeId: number, distributor: string) => call<Order>("/api/orders/draft", json("POST", { store_id: storeId, distributor })),
   patchOrder: (id: number, p: { distributor?: string; note?: string; lines?: { product_id: number; qty: number }[] }) => call<Order>(`/api/orders/${id}`, json("PATCH", p)),
   orderStatus: (id: number, status: "submitted" | "fulfilled" | "cancelled") => call<Order>(`/api/orders/${id}/status`, json("POST", { status })),
+  checkins: (storeId: number) => call<Checkins>(`/api/stores/${storeId}/checkins`),
+  cashflow: (storeId: number) => call<Cashflow>(`/api/stores/${storeId}/cashflow`),
   rewards: (storeId: number) => call<Rewards>(`/api/stores/${storeId}/rewards`),
   sync: (storeId: number, ops: { op_id: string; type: string; payload: Record<string, unknown> }[]) =>
     call<{ results: { op_id: string; ok: boolean; duplicate?: boolean; error?: string; product?: Product }[] }>("/api/sync", json("POST", { store_id: storeId, ops })),

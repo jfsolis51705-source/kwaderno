@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import image_checks
+import insights
 from auth import sign_media
 from db import (AuditLog, Capture, InventoryMovement, OrderLine, Product, RewardEntry, Store, SyncOp, WholesaleOrder,
                 utcnow)
@@ -49,12 +50,12 @@ def capture_out(c: Capture) -> dict:
     return {"id": c.id, "store_id": c.store_id, "kind": c.kind, "client_id": c.client_id, "image_url": sign_media(c.image_path),
             "sha256": c.sha256, "phash": c.phash, "width": c.width, "height": c.height, "size_bytes": c.size_bytes, "blur_score": c.blur_score,
             "quality_ok": c.quality_ok, "quality_issues": c.quality_issues or [], "duplicate_of": c.duplicate_of, "status": c.status,
-            "provider": c.provider, "items": c.items or [], "points_awarded": c.points_awarded, "created_at": c.created_at.isoformat(),
+            "provider": c.provider, "items": c.items or [], "points_awarded": c.points_awarded, "checkin_bonus": getattr(c, "checkin_bonus", 0), "created_at": c.created_at.isoformat(),
             "verified_at": c.verified_at.isoformat() if c.verified_at else None}
 
 
 def order_out(o: WholesaleOrder) -> dict:
-    lines = [{"id": l.id, "product_id": l.product_id, "sku": l.sku, "name": l.name, "qty": l.qty, "unit_cost": l.unit_cost_cents / 100,
+    lines = [{"id": l.id, "product_id": l.product_id, "sku": l.sku, "name": l.name, "qty": l.qty, "unit_cost": l.unit_cost_cents / 100, "reason": l.reason,
               "line_total": l.qty * l.unit_cost_cents / 100} for l in o.lines]
     return {"id": o.id, "store_id": o.store_id, "distributor": o.distributor, "status": o.status, "note": o.note, "lines": lines,
             "total": sum(x["line_total"] for x in lines), "created_at": o.created_at.isoformat(),
@@ -218,7 +219,9 @@ def confirm_capture(s: Session, c: Capture, items: list[dict], award_low_quality
         pts = POINTS[c.kind]
         s.add(RewardEntry(store_id=c.store_id, points=pts, reason=f"Verified {c.kind} capture #{c.id}", capture_id=c.id))
         c.points_awarded = pts
-    audit(s, "capture_verified", "capture", c.id, c.store_id, items=len(items), points=c.points_awarded,
+    if c.kind in ("ledger", "shelf"):
+        c.checkin_bonus = insights.award_checkin(s, c.store_id, c.created_at)
+    audit(s, "capture_verified", "capture", c.id, c.store_id, items=len(items), points=c.points_awarded, checkin_bonus=getattr(c, "checkin_bonus", 0),
           quality_override=bool(award_low_quality and not c.quality_ok), no_points_reason=None if eligible else "low_quality")
     return c
 
@@ -236,11 +239,12 @@ def draft_order(s: Session, store_id: int, distributor: str) -> WholesaleOrder:
     get_store(s, store_id)
     o = WholesaleOrder(store_id=store_id, distributor=distributor, status="draft")
     s.add(o)
+    rates = insights.sales_rates(s, store_id)
     for p in s.scalars(select(Product).where(Product.store_id == store_id).order_by(Product.name)):
-        if stock_status(p) != "ok":
-            qty = max(p.reorder_level * 2 - p.qty_on_hand, 1)
+        sg = insights.suggest(p, rates.get(p.id, 0.0))  # sales pace first, alert level when there is no history
+        if sg:
             cost = p.cost_cents or int(p.price_cents * 0.85)
-            o.lines.append(OrderLine(product_id=p.id, sku=p.sku, name=p.name, qty=qty, unit_cost_cents=cost))
+            o.lines.append(OrderLine(product_id=p.id, sku=p.sku, name=p.name, qty=sg[0], unit_cost_cents=cost, reason=sg[1]))
     s.flush()
     audit(s, "order_drafted", "order", o.id, store_id, distributor=distributor, lines=len(o.lines))
     return o
@@ -360,7 +364,10 @@ def portal_overview(s: Session) -> dict:
     rows = []
     for st in stores:
         ps = by_store[st.id]
+        cf = insights.cashflow(s, st.id)
+        velocity = sum(insights.sales_rates(s, st.id).values())
         rows.append({"id": st.id, "name": st.name, "barangay": st.barangay, "city": st.city, "skus": len(ps),
+                     "cashflow_score": cf["score"], "cashflow_band": cf["band"], "units_per_day": round(velocity, 1), "checkin_streak": cf["metrics"]["checkin_streak"],
                      "ok": sum(stock_status(p) == "ok" for p in ps), "low": sum(stock_status(p) == "low" for p in ps),
                      "out": sum(stock_status(p) == "out" for p in ps), "stock_value": sum(p.qty_on_hand * p.cost_cents for p in ps) / 100,
                      "points": int(pts.get(st.id) or 0), "pending_captures": pending[st.id], "last_capture_at": last_cap.get(st.id)})

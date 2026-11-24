@@ -56,13 +56,15 @@ export default function Overview() {
         </section>
       </div>
       <section className="card overflow-x-auto" aria-labelledby="stores-h">
-        <h2 id="stores-h" className="mb-2 font-bold">Stores</h2>
-        <table className="w-full min-w-[760px]">
-          <thead><tr>{["Store", "Area", "SKUs", "Low", "Out", "Stock value", "Pending photos", "Points", "Last capture"].map((h, i) => <th key={h} className={`th ${i > 1 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
+        <h2 id="stores-h" className="font-bold">Stores</h2>
+        <p className="mb-2 text-xs text-slate-500">Cash-flow score: indicative, from each store's own photos and stock records — not a credit decision.</p>
+        <table className="w-full min-w-[1000px]">
+          <thead><tr>{["Store", "Area", "SKUs", "Low", "Out", "Stock value", "Units/day", "Check-in streak", "Cash-flow score", "Pending photos", "Points", "Last capture"].map((h, i) => <th key={h} className={`th ${i > 1 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
           <tbody>{ov.stores.map((s) => (
             <tr key={s.id}><td className="td font-semibold">{s.name}</td><td className="td text-slate-500">{[s.barangay, s.city].filter(Boolean).join(", ")}</td>
               <td className="td text-right">{s.skus}</td><td className="td text-right text-amber-700">{s.low}</td><td className="td text-right text-red-700">{s.out}</td>
-              <td className="td text-right tabular-nums">{peso(s.stock_value)}</td><td className="td text-right">{s.pending_captures}</td><td className="td text-right">{s.points}</td><td className="td text-right text-xs">{when(s.last_capture_at)}</td></tr>))}</tbody>
+              <td className="td text-right tabular-nums">{peso(s.stock_value)}</td><td className="td text-right tabular-nums">{s.units_per_day}</td><td className="td text-right">{s.checkin_streak}</td>
+              <td className="td text-right"><span className={`chip ${s.cashflow_band === "Strong" ? "bg-emerald-100 text-emerald-700" : s.cashflow_band === "Fair" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{s.cashflow_score} · {s.cashflow_band}</span></td><td className="td text-right">{s.pending_captures}</td><td className="td text-right">{s.points}</td><td className="td text-right text-xs">{when(s.last_capture_at)}</td></tr>))}</tbody>
         </table>
       </section>
       <section className="card overflow-x-auto" aria-labelledby="oos-h">

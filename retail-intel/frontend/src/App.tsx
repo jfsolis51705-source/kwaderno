@@ -2,6 +2,7 @@ import type React from "react";
 import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import AuthPage from "./pages/Auth";
 import Account from "./pages/store/Account";
+import Score from "./pages/store/Score";
 import { OnlineBadge, Toast } from "./components/ui";
 import { useApp } from "./state/AppContext";
 import CaptureHub from "./pages/store/Capture";
@@ -108,6 +109,7 @@ export default function App() {
         <Route path="rewards" element={<RewardsPage />} />
         <Route path="sync" element={<SyncQueue />} />
         <Route path="account" element={<Account />} />
+        <Route path="score" element={<Score />} />
       </Route>
       <Route path="/portal" element={<RequireAuth ops><PortalLayout /></RequireAuth>}>
         <Route index element={<Navigate to="overview" replace />} />

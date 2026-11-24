@@ -38,6 +38,7 @@ try {
   // ---------- merchant app on a phone ----------
   const ctx = await browser.newContext({ ...devices["Pixel 7"] });
   const m = await ctx.newPage();
+  globalThis.__page = m;
   m.on("pageerror", (e) => errors.push(e.message));
   const loginAs = async (page, email) => {
     const form = page.getByRole("form", { name: "Log in" });
@@ -68,8 +69,19 @@ try {
   await m.getByLabel("Quantity").first().fill("7");
   await m.screenshot({ path: join(shots, "phone-review.png") });
   await m.getByRole("button", { name: "Confirm & update stock" }).click();
-  await m.getByText(/\+10 points/).waitFor();
+  await m.getByRole("status").filter({ hasText: /stock updated, \+10 points/ }).waitFor();
   check(true, "shelf capture confirmed, +10 points");
+  // daily check-in: the ledger page completes today's pair -> bonus
+  await m.getByTestId("checkin-card").waitFor();
+  await m.getByText("Handwritten ledger").click();
+  await m.getByTestId("photo-input").setInputFiles(fx("receipt.jpg"));
+  await m.getByRole("button", { name: "Analyse photo" }).click();
+  await m.getByRole("button", { name: "Confirm & update stock" }).click();
+  await m.getByRole("status").filter({ hasText: /\+10 check-in bonus/ }).waitFor();
+  check(true, "ledger + shelf photo on the same day earns the daily check-in bonus");
+  await m.getByTestId("checkin-card").getByText("🔥 1-day streak").waitFor();
+  check(true, "check-in card shows the streak");
+  await m.getByText("Shelf photo").first().click();
 
   // duplicate is rejected
   await m.getByTestId("photo-input").setInputFiles(fx("shelf.jpg"));
@@ -139,7 +151,11 @@ try {
   // rewards
   await m.getByRole("link", { name: "Rewards" }).click();
   const pts = Number(await m.getByTestId("points-balance").innerText());
-  check(pts >= 10, `rewards balance credited (${pts})`);
+  check(pts >= 35, `rewards balance credited (${pts})`);
+  await m.getByRole("link", { name: /Business score/ }).click();
+  const score = Number((await m.getByTestId("cashflow-score").innerText()).split("/")[0]);
+  check(score > 0 && score <= 100, `owner sees an explained business score (${score}/100)`);
+  await m.screenshot({ path: join(shots, "phone-score.png"), fullPage: true });
   await m.screenshot({ path: join(shots, "phone-rewards.png") });
   let wide = [];
   for (const path of ["capture", "catalog", "orders", "rewards", "sync", "account"]) {
@@ -161,6 +177,7 @@ try {
   await d.getByText("Share of shelf by brand").waitFor();
   check((await d.locator("#stores-h + table tbody tr, section:has(#stores-h) tbody tr").count()) === 4, "portal lists 4 stores");
   check((await d.locator("section:has(#sos-h) li").count()) > 0, "share-of-shelf computed");
+  check((await d.locator("section:has(#stores-h) th", { hasText: "Cash-flow score" }).count()) === 1, "portal shows cash-flow scores per store");
   check((await d.locator("section:has(#oos-h) tbody tr").count()) > 0, "out-of-stock alerts listed");
   await d.screenshot({ path: join(shots, "portal-overview.png"), fullPage: true });
   await d.getByRole("link", { name: "Wholesale orders" }).click();
@@ -178,6 +195,7 @@ try {
 } catch (e) {
   failed++;
   console.error("E2E ERROR:", e.message.split("\n").slice(0, 6).join("\n"));
+  try { await globalThis.__page?.screenshot({ path: join(shots, "failure.png"), fullPage: true }); console.error("screenshot: " + join(shots, "failure.png")); } catch { /* browser gone */ }
   console.error("--- api log ---\n" + api.log().slice(-2000));
 } finally {
   for (const p of procs) p.kill();

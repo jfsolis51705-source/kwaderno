@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type InputHTMLAtt
 import { api, ApiError } from "../../lib/api";
 import { hasBarcodeDetector, startScanner } from "../../lib/barcode";
 import { ISSUE_TEXT, peso, when } from "../../lib/format";
-import type { Capture, CaptureItem, CaptureKind, Product } from "../../lib/types";
+import type { Capture, CaptureItem, CaptureKind, Checkins, Product } from "../../lib/types";
 import { useApp } from "../../state/AppContext";
 import { Empty, StockChip } from "../../components/ui";
 
@@ -53,9 +53,23 @@ function PhotoCapture() {
     } catch (e) { toast((e as Error).message, "err"); } finally { setBusy(false); if (inputRef.current) inputRef.current.value = ""; }
   };
 
+  const [checkins, setCheckins] = useState<Checkins | null>(null);
+  useEffect(() => { if (storeId && online) api.checkins(storeId).then(setCheckins).catch(() => {}); }, [storeId, online, review]);
   if (review) return <ReviewPanel capture={review} onDone={() => { pick(null); loadPending(); }} />;
+  const t = checkins?.today;
   return (
     <div className="grid gap-4">
+      {checkins ? (
+        <div className="card grid gap-2 border-brand-100 bg-brand-50" data-testid="checkin-card">
+          <div className="flex items-center justify-between gap-2"><h2 className="font-bold">Today's check-in</h2><span className="chip bg-white text-brand-700">🔥 {checkins.streak}-day streak</span></div>
+          <p className="text-xs text-slate-600">Keep your notebook and shelves as they are — just take 2 photos a day: your sales ledger page and your shelves. +{checkins.bonus.per_day} points when both are saved, +{checkins.bonus.every_7_days} every 7 days in a row.</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([["ledger", "📒 Ledger page"], ["shelf", "🗄️ Shelves"]] as [CaptureKind, string][]).map(([k, l]) => (
+              <button key={k} className={`rounded-lg border p-2.5 text-left text-sm font-semibold ${t?.[k as "ledger" | "shelf"] ? "border-emerald-300 bg-emerald-50 text-emerald-800" : "border-slate-300 bg-white"}`} onClick={() => { setKind(k); inputRef.current?.click(); }}>
+                {t?.[k as "ledger" | "shelf"] ? "✓ " : "○ "}{l}<div className="text-xs font-normal text-slate-500">{t?.[k as "ledger" | "shelf"] ? "Done today" : "Tap to take photo"}</div></button>))}
+          </div>
+          <div className="flex gap-1" aria-label="Last 14 days">{checkins.days.slice(-14).map((d) => <span key={d.date} title={d.date} className={`h-2 flex-1 rounded ${d.complete ? "bg-brand-500" : d.ledger || d.shelf ? "bg-brand-100" : "bg-slate-200"}`} />)}</div>
+        </div>) : null}
       <div className="card grid gap-3">
         <div className="grid gap-2 sm:grid-cols-3">
           {KINDS.map(([k, label, hint]) => (
@@ -96,7 +110,8 @@ function ReviewPanel({ capture, onDone }: { capture: Capture; onDone: () => void
     setBusy(true);
     try {
       const c = await api.confirmCapture(capture.id, clean);
-      toast(c.points_awarded ? `Saved — stock updated, +${c.points_awarded} points` : "Saved — stock updated (no points: photo quality too low)", c.points_awarded ? "ok" : "warn");
+      const bonus = c.checkin_bonus ? `, +${c.checkin_bonus} check-in bonus` : "";
+      toast(c.points_awarded ? `Saved — stock updated, +${c.points_awarded} points${bonus}` : `Saved — stock updated (no points: photo quality too low)${bonus}`, c.points_awarded ? "ok" : "warn");
       await refreshProducts(); onDone();
     } catch (e) { toast((e as Error).message, "err"); } finally { setBusy(false); }
   };

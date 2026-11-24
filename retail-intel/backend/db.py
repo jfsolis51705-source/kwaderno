@@ -147,6 +147,7 @@ class OrderLine(Base):
     name: Mapped[str] = mapped_column(String(160))
     qty: Mapped[int] = mapped_column(Integer)
     unit_cost_cents: Mapped[int] = mapped_column(Integer, default=0)
+    reason: Mapped[str | None] = mapped_column(String(160))  # why this quantity was suggested
     order: Mapped[WholesaleOrder] = relationship(back_populates="lines")
 
 
@@ -157,6 +158,7 @@ class RewardEntry(Base):
     points: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(120))
     capture_id: Mapped[int | None] = mapped_column(Integer, unique=True)  # at most one award per capture
+    ref: Mapped[str | None] = mapped_column(String(64), unique=True)  # e.g. "checkin:12:2026-11-24" — at most one bonus per store per day
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

@@ -46,12 +46,14 @@ New merchants register at `/register`; that creates their store with them as own
 | **Capture → Barcode** | Scan with the camera through `BarcodeDetector` (Chrome, Edge, Android). The fallback is typing, or a USB/Bluetooth scanner that types and presses Enter. Buttons: −1, +1, +6, +12. Unknown codes open quick-add. |
 | **Capture → Manual** | Search a product and type ± quantity, or quick-add a new product. |
 | **Stock** | Editable catalog: name, brand, variant, barcode, price, cost, low-stock level, logo or photo. Shows low and out-of-stock flags. |
-| **Restock** | Draft a wholesale order from low-stock items, choose the distributor (Super8, Suy Sing…), edit quantities, then `draft → submitted → fulfilled`. Fulfilling adds the stock. |
-| **Rewards** | Points balance, history and redemption preview. Points per verified photo: shelf 10, receipt 15, ledger 15. |
+| **Restock** | **Predictive** draft orders. Each item's pace is units leaving stock per day over the last 14 days, from ledger photos, scans and lower shelf counts. An item is ordered when it would run out within the lead time (3 days) or is at its alert level, with enough to cover 10 days. Every line explains why ("Sells ~0.6/day, 2 day(s) left"). Items with no history refill to twice their alert level. Choose the distributor (Super8, Suy Sing…), edit quantities, then `draft → submitted → fulfilled`; fulfilling adds the stock. Tune with `RESTOCK_LEAD_DAYS` and `RESTOCK_COVER_DAYS`. |
+| **Today's check-in** (top of Capture) | The "zero behaviour change" loop: keep the notebook and shelves as they are and just take **2 photos a day**, the ledger page and the shelves. Once both are verified it gives **+10 points**, plus **+30 for every 7 days in a row**. Shows the streak and the last 14 days. |
+| **Rewards** | Points balance, history and redemption preview. Points per verified photo: shelf 10, receipt 15, ledger 15, plus check-in bonuses. Owners also get a link to the **Business score**. |
+| **Business score** (owners) | A **cash-flow readiness score** (0–100, banded Building / Fair / Strong) built only from the store's own records. Five weighted factors, each with its points and a plain explanation: sales recorded regularly 35, stock vs sales 20, wholesale restocks 15, clear original photos 15, time on KWADERNO 15. Shows how to raise it, with a disclaimer that it is **not a credit decision**. |
 | **Sync** | Offline queue with pending and failed items, plus **Sync now**. |
 
 ### Operations portal (`/portal/...`)
-- **Overview:** totals, share of shelf by brand (from each store's latest verified shelf photo), SKU stock health per store, a store table, and out-of-stock and low-stock alerts.
+- **Overview:** each store's **units sold per day** (supply-chain velocity), **check-in streak** and **cash-flow score**; totals, share of shelf by brand (from each store's latest verified shelf photo), SKU stock health per store, a store table, and out-of-stock and low-stock alerts.
 - **Wholesale orders:** the queue across all stores, with totals per distributor. Fulfil or cancel orders here.
 - **Verification log:** flagged or pending captures with their hash and sharpness, verify or reject actions, and the full audit log.
 
@@ -121,6 +123,10 @@ The full interactive reference is at http://localhost:8100/docs.
   - `PATCH /orders/{id}`
   - `POST /orders/{id}/status`
 - **Rewards:** `GET /stores/{id}/rewards`
+- **Insights:**
+  - `GET /stores/{id}/checkins` (last 30 days and streak)
+  - `GET /stores/{id}/forecast` (pace, days left and suggested quantity per product)
+  - `GET /stores/{id}/cashflow` (owners and ops only)
 - **Offline sync:** `POST /sync` (body: `store_id` plus `ops[]` with `op_id`, `type`, `payload`)
 - **Portal:**
   - `GET /portal/overview`
@@ -130,8 +136,8 @@ The full interactive reference is at http://localhost:8100/docs.
 ## Tests
 
 ```bash
-make test   # pytest (23) + vitest (6) + TypeScript typecheck
-make e2e    # builds the web app, starts the real API on a fresh seeded DB, drives Chromium (23 checks)
+make test   # pytest (27) + vitest (6) + TypeScript typecheck
+make e2e    # builds the web app, starts the real API on a fresh seeded DB, drives Chromium (27 checks)
 ```
 
 **Backend (pytest)**
@@ -183,5 +189,7 @@ make e2e    # builds the web app, starts the real API on a fresh seeded DB, driv
 
 - **Camera barcode scanning** uses the browser's `BarcodeDetector`. That covers Chrome, Edge and Android; on iPhone Safari the merchant types the code or uses a scanner.
 - **Mock vision** produces plausible but made-up lines. It shows the workflow, not accuracy. Use a real provider for real photos.
+- **QR Ph payments and cash-in/cash-out** need a licensed payment partner (e.g. PayMongo or Xendit) and their API keys. They are not built, and no screen pretends otherwise.
+- **The cash-flow score's weights** are a transparent starting point. They have not been validated against real repayment data; do that with a lender before relying on it.
 - **Staff invitations by email** aren't built: the owner sets a starting password and shares it in person.
 - **Rewards redemption** is a preview only.

@@ -30,6 +30,7 @@ export default function StoreOrders() {
         <label className="flex-1"><span className="label">Wholesale distributor</span>
           <select className="input" value={distributor} onChange={(e) => setDistributor(e.target.value)}>{distributors.map((d) => <option key={d}>{d}</option>)}</select></label>
         <button className="btn-primary" disabled={!online} onClick={draft}>Create draft from low stock</button>
+        <p className="w-full text-xs text-slate-500">Quantities follow how fast each item sold in the last 14 days (from your ledger photos and scans), so a delivery covers about 10 days. Items with no sales yet refill to twice their alert level.</p>
         {!online ? <p className="w-full text-xs text-amber-700">Offline — you can view saved orders; creating and sending orders needs a connection.</p> : null}
       </div>
       {orders.length ? orders.map((o) => <OrderCard key={o.id} order={o} editable={online} onChange={async () => { await load(); await refreshProducts(); }} />) : <Empty>No orders yet.</Empty>}
@@ -66,7 +67,7 @@ export function OrderCard({ order, editable, onChange, showStore }: { order: Ord
         <div className="overflow-x-auto"><table className="w-full min-w-[420px]">
           <thead><tr><th className="th">Item</th><th className="th text-right">Qty</th><th className="th text-right">Unit cost</th><th className="th text-right">Total</th></tr></thead>
           <tbody>{order.lines.map((l) => (
-            <tr key={l.id}><td className="td"><div className="font-medium">{l.name}</div><div className="font-mono text-xs text-slate-500">{l.sku}</div></td>
+            <tr key={l.id}><td className="td"><div className="font-medium">{l.name}</div><div className="font-mono text-xs text-slate-500">{l.sku}</div>{l.reason ? <div className="text-xs text-brand-700">{l.reason}</div> : null}</td>
               <td className="td text-right">{isDraft && editable ? <input aria-label={`Quantity of ${l.name}`} type="number" min={0} className="input w-20 py-1 text-right" value={qty[l.product_id] ?? String(l.qty)} onChange={(e) => setQty({ ...qty, [l.product_id]: e.target.value })} /> : l.qty}</td>
               <td className="td text-right tabular-nums">{peso(l.unit_cost)}</td><td className="td text-right tabular-nums">{peso(l.line_total)}</td></tr>))}</tbody>
         </table></div>) : <Empty>No items. Add one below.</Empty>}

@@ -14,10 +14,10 @@ export interface Capture {
   id: number; store_id: number; kind: CaptureKind; client_id: string | null; image_url: string; sha256: string; phash: string;
   width: number; height: number; size_bytes: number; blur_score: number; quality_ok: boolean; quality_issues: string[];
   duplicate_of: number | null; status: "pending_review" | "verified" | "rejected"; provider: string; items: CaptureItem[];
-  points_awarded: number; created_at: string; verified_at: string | null;
+  points_awarded: number; checkin_bonus?: number; created_at: string; verified_at: string | null;
 }
 
-export interface OrderLine { id: number; product_id: number; sku: string; name: string; qty: number; unit_cost: number; line_total: number }
+export interface OrderLine { id: number; product_id: number; sku: string; name: string; qty: number; unit_cost: number; line_total: number; reason?: string | null }
 export interface Order {
   id: number; store_id: number; store?: string; distributor: string; status: "draft" | "submitted" | "fulfilled" | "cancelled"; note: string | null;
   lines: OrderLine[]; total: number; created_at: string; submitted_at: string | null; fulfilled_at: string | null;
@@ -30,7 +30,7 @@ export interface Rewards {
 }
 
 export interface Overview {
-  stores: { id: number; name: string; barangay: string | null; city: string | null; skus: number; ok: number; low: number; out: number; stock_value: number; points: number; pending_captures: number; last_capture_at: string | null }[];
+  stores: { id: number; name: string; barangay: string | null; city: string | null; skus: number; cashflow_score: number; cashflow_band: string; units_per_day: number; checkin_streak: number; ok: number; low: number; out: number; stock_value: number; points: number; pending_captures: number; last_capture_at: string | null }[];
   totals: { stores: number; skus: number; low: number; out: number; captures: number; flagged: number; points: number; open_orders: number };
   captures_by_status: Record<string, number>;
   alerts: { store_id: number; store: string; product_id: number; sku: string; name: string; brand: string | null; qty_on_hand: number; reorder_level: number; status: StockStatus }[];
@@ -45,3 +45,11 @@ export type SyncOpType = "adjust" | "product_upsert" | "product_patch";
 export interface QueuedOp { id: string; kind: "op"; storeId: number; type: SyncOpType; payload: Record<string, unknown>; createdAt: string; seq?: number; error?: string }
 export interface QueuedCapture { id: string; kind: "capture"; storeId: number; captureKind: CaptureKind; data: ArrayBuffer; mime: string; fileName: string; createdAt: string; seq?: number; error?: string }
 export type QueueEntry = QueuedOp | QueuedCapture;
+
+export interface CheckinDay { date: string; ledger: boolean; shelf: boolean; complete: boolean }
+export interface Checkins { today: CheckinDay; streak: number; days: CheckinDay[]; complete_days: number; bonus: { per_day: number; every_7_days: number } }
+export interface Cashflow {
+  store_id: number; score: number; band: "Strong" | "Fair" | "Building"; disclaimer: string; improve: string[]; computed_at: string;
+  factors: { key: string; label: string; weight: number; score: number; points: number; detail: string }[];
+  metrics: { avg_daily_sales: number; sales_30d: number; ledger_days_30d: number; stock_value: number; orders_received_60d: number; checkin_streak: number };
+}

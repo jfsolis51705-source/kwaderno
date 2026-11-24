@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../../lib/api";
 import { kv } from "../../lib/idb";
 import { when } from "../../lib/format";
@@ -7,7 +8,7 @@ import { useApp } from "../../state/AppContext";
 import { Empty } from "../../components/ui";
 
 export default function RewardsPage() {
-  const { storeId } = useApp();
+  const { storeId, role } = useApp();
   const [r, setR] = useState<Rewards | null>(null);
   useEffect(() => {
     if (!storeId) return;
@@ -25,6 +26,7 @@ export default function RewardsPage() {
         {next ? <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/30"><div className="h-full bg-white" style={{ width: `${Math.min(100, (r.balance / next.points) * 100)}%` }} /></div> : null}
         {next ? <div className="mt-1 text-xs opacity-90">{next.points_short} more points to “{next.label}”</div> : null}
       </div>
+      {role !== "staff" ? <Link to="/store/score" className="card flex items-center gap-3 hover:border-brand-500"><span className="text-2xl">📈</span><span className="flex-1"><span className="block font-semibold">Business score</span><span className="text-xs text-slate-500">Cash-flow readiness from your photos and stock records — and how to raise it</span></span><span aria-hidden>›</span></Link> : null}
       <div className="card"><h2 className="mb-2 font-semibold">Redeem (preview)</h2>
         <ul className="divide-y divide-slate-100">{r.redemptions.map((x) => (
           <li key={x.id} className="flex items-center gap-3 py-2"><div className="flex-1 text-sm font-medium">{x.label}</div><div className="text-sm tabular-nums text-slate-500">{x.points} pts</div>

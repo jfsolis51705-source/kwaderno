@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import auth
+import insights
 import services as svc
 from db import Capture, Database, Product, Store, StoreMember, User, WholesaleOrder
 from schemas import (AdjustIn, ConfirmCapture, LoginIn, MemberIn, OrderDraftIn, OrderPatch, OrderStatusIn, ProductIn,
@@ -344,6 +345,22 @@ def create_app(database_url: str | None = None, upload_dir: str | None = None, v
     def rewards(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
         auth.require_store(s, u, store_id)
         return svc.rewards(s, store_id)
+
+    # ---------- check-ins, forecast, cash-flow score ----------
+    @app.get("/api/stores/{store_id}/checkins")
+    def checkins(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id)
+        return insights.checkin_days(s, store_id)
+
+    @app.get("/api/stores/{store_id}/forecast")
+    def forecast(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id)
+        return {"lead_days": insights.LEAD_DAYS, "cover_days": insights.COVER_DAYS, "history_days": insights.HISTORY_DAYS, "products": insights.forecast(s, store_id)}
+
+    @app.get("/api/stores/{store_id}/cashflow")
+    def cashflow(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id, owner_only=True)  # financial picture: owners and KELSON operations only
+        return insights.cashflow(s, store_id)
 
     # ---------- offline sync ----------
     @app.post("/api/sync")

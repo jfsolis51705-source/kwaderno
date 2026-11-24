@@ -166,6 +166,7 @@ dialog .db * { min-width: 0; }
 .libitem .pimg { border-radius: 6px; }
 .tabs-admin { display: flex; gap: 6px; flex-wrap: wrap; }
 .tabs-admin a { padding: 7px 14px; border-radius: 99px; border: 1px solid var(--line); text-decoration: none; color: var(--muted); font-weight: 600; font-size: .9rem; background: var(--surface); }
+.tabs-admin.sub a { padding: 5px 12px; font-size: .85rem; }
 .tabs-admin a[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .vgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
 .vcard { padding: 0; overflow: hidden; text-align: left; cursor: pointer; display: grid; color: inherit; font: inherit; }
@@ -255,7 +256,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "";
@@ -307,6 +308,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
+    if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
@@ -621,6 +623,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   function viewHome() {
     if (sub === "tips") return viewTips();
+    if (sub === "shelf") return viewShelfSubmit();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
     const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
@@ -637,7 +640,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "head" }, h("div", {}, h("div", { class: "muted small", text: new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" }) }), h("h1", { text: "Magandang araw!" })),
         h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => go("sell") }, "Record a sale"), h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in / receipt"), h("button", { class: "btn", onclick: () => go("products", "new") }, "Add product"), h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"))),
       expired || soon ? h("button", { class: "note" + (expired ? " err" : ""), style: "text-align:left;border:0", onclick: () => go("products", "expiry") }, expired ? `${expired} batch(es) expired` + (soon ? `, ${soon} more expire this week` : "") + " — check the expiry list" : `${soon} batch(es) expire within 7 days — check the expiry list`) : null,
-      tipsCard(),
+      tipsCard(), shelfCard(),
       h("div", { class: "grid kpis" },
         kpi("Sales today", peso(sum(today, (s) => s.total)), `${today.length} sale(s)`),
         kpi("Cash · GCash · Utang", `${peso(by("cash"))}`, `GCash ${peso(by("gcash"))} · Utang ${peso(by("credit"))}`),
@@ -1318,6 +1321,7 @@ ${catalog}`;
     if (sub === "library") return adminPage("library", "Product photo library", viewLibrary());
     if (sub === "products") return adminPage("products", "Products across all stores", viewNetworkProducts());
     if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
+    if (sub && sub.startsWith("audit")) return adminPage("audit", "Shelf audit", viewAudit());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
     const stores = S.stores.filter((x) => adminSample || !x.sample).map((x) => ({ ...x, st: storeStats(x, keys7, keys30, today) }));
@@ -1571,10 +1575,352 @@ ${catalog}`;
       }) : h("div", { class: "empty", text: "No store matches." }));
   }
 
+  // ---------- SHELF AUDIT: must-stock availability, facings and share of shelf from store photos ----------
+  // Photos come from two places: albums imported by KELSON (Visual inventory) and shelf photos merchants submit from their app.
+  // Definitions (per visit = one store on one date):
+  //   MSL = must-stock SKUs set by KELSON · Found = MSL SKUs seen on this visit's photos
+  //   Listed = MSL SKUs this store has ever had on its shelf · OSA% = Found / Listed · OOS% = (Listed − Found) / Listed
+  //   Facings = product fronts visible · SOS% (share of shelf) = facings of a SKU / all facings in the display
+  const PH = {"W": 300, "H": 516, "minLng": 116.8, "maxLng": 126.8, "minLat": 4.4, "maxLat": 21.2, "k": 0.9762960071199334, "d": "M129.0,79.4L133.6,81.0L143.8,86.7L147.5,88.2L151.4,89.2L154.4,89.5L157.2,88.2L158.3,86.9L160.4,83.3L162.6,82.9L164.0,84.2L165.0,85.9L165.5,88.4L164.9,91.1L162.7,93.4L161.4,96.3L160.5,105.8L160.5,108.6L161.3,111.3L163.1,115.6L164.1,116.9L166.9,118.4L167.7,119.6L167.8,121.7L168.2,123.5L170.0,124.2L171.5,125.2L171.0,127.2L170.0,129.3L168.7,134.5L162.8,146.3L162.5,148.9L160.1,154.0L155.2,154.9L149.6,157.3L146.6,159.2L143.9,161.8L142.8,165.1L143.7,166.6L144.2,168.2L144.2,169.9L143.4,171.3L140.7,174.8L139.6,177.6L138.4,178.9L137.7,180.5L138.0,182.2L139.0,183.8L142.3,190.4L145.8,196.9L146.6,197.6L146.8,198.5L144.8,200.2L144.9,203.3L145.4,206.4L148.5,214.0L149.0,216.0L150.1,217.6L151.6,219.2L153.4,220.5L158.4,222.7L160.3,223.2L162.4,223.3L162.8,221.8L164.6,221.3L164.2,219.8L162.0,217.7L162.0,216.6L163.1,215.8L164.5,215.3L167.6,213.0L170.7,211.2L174.8,211.4L178.8,212.4L181.7,213.4L184.1,215.4L186.5,218.7L188.2,222.4L188.1,224.1L187.7,225.9L187.7,227.7L189.0,228.8L192.9,228.9L194.9,226.2L195.2,223.1L193.8,221.9L194.4,220.4L195.6,219.2L197.4,220.2L199.0,222.2L205.0,224.2L206.5,224.3L207.7,224.7L210.4,226.2L211.7,227.3L210.2,229.7L204.2,230.2L202.4,232.0L204.3,235.7L207.1,238.6L208.9,241.0L210.5,243.6L210.5,246.0L209.6,248.5L212.2,248.3L214.6,248.8L218.1,250.9L219.2,251.1L220.3,250.7L220.1,258.3L217.8,265.1L214.9,264.3L212.4,261.4L212.8,257.8L214.4,254.4L213.6,253.7L211.9,254.0L210.1,254.7L208.1,255.0L204.8,254.6L198.1,250.8L195.3,250.5L194.7,248.8L194.9,245.3L192.2,241.0L191.7,239.5L190.9,238.3L182.9,233.7L181.9,232.9L179.4,229.2L173.8,224.0L172.3,223.4L170.6,223.3L170.0,224.6L170.8,226.6L171.1,228.4L171.0,230.3L171.2,231.7L173.9,234.6L174.2,236.0L176.1,239.7L176.3,244.1L174.0,245.9L171.4,243.9L171.3,242.2L170.9,240.7L168.2,236.7L167.3,235.9L162.2,231.9L158.2,227.7L149.3,223.1L148.3,222.8L146.7,223.2L145.3,223.7L141.0,226.0L139.5,227.5L139.4,230.0L136.3,231.9L132.1,232.2L128.9,231.0L126.2,228.6L123.9,228.5L121.2,224.7L117.9,224.2L115.1,227.1L114.5,221.3L114.5,215.4L115.3,213.6L116.7,212.2L123.7,206.0L124.6,204.0L124.2,201.3L122.6,199.2L120.1,197.8L117.2,197.3L115.2,196.1L113.6,194.1L112.4,197.6L113.4,202.9L113.7,206.3L112.7,207.6L110.9,207.6L109.1,207.2L107.9,206.0L107.0,202.4L104.5,200.1L103.5,196.8L102.4,196.3L100.2,196.6L98.4,195.0L97.4,191.1L97.1,186.9L96.2,183.4L94.8,180.0L94.0,177.2L92.7,164.7L92.5,163.6L91.8,162.6L90.2,161.2L89.0,159.5L88.8,158.0L89.1,151.9L89.7,150.4L90.9,149.7L92.6,150.9L93.9,152.4L95.5,153.1L97.0,154.0L99.7,157.7L100.8,158.2L104.2,158.1L106.1,157.7L107.1,156.4L107.6,154.8L107.7,152.9L105.8,147.4L105.1,143.5L105.1,139.9L105.7,136.3L108.3,130.3L108.6,126.2L108.4,120.7L108.8,117.4L108.7,115.5L107.2,112.6L106.7,109.4L111.2,93.3L112.6,90.2L113.6,86.9L114.0,82.7L117.3,81.5L120.5,79.7L122.1,79.9L123.7,80.3L127.6,79.4L129.0,79.4ZM15.4,391.9L12.6,394.2L12.9,391.4L13.6,388.8L16.5,383.5L18.5,381.9L21.9,377.7L23.8,375.7L28.3,371.7L32.5,367.3L34.0,367.0L35.5,366.9L36.8,366.4L39.5,364.0L46.3,356.2L52.0,350.3L57.8,342.9L60.6,340.7L61.4,339.9L66.7,333.1L68.4,332.2L70.2,331.4L71.5,330.5L72.7,329.3L74.6,326.4L75.4,322.9L74.9,320.9L73.8,318.0L75.2,314.1L76.2,312.3L80.0,304.3L81.0,302.6L82.6,303.6L82.8,305.1L82.0,308.5L82.0,310.1L82.9,311.9L81.8,314.7L84.5,322.3L86.5,327.0L86.7,328.6L83.8,331.5L82.2,332.3L78.7,333.1L77.0,333.9L74.6,336.3L72.9,339.3L72.5,340.9L71.8,342.1L64.4,344.2L61.1,345.5L59.4,346.6L58.7,348.2L59.2,351.1L53.1,361.8L51.1,364.5L49.1,366.9L46.5,368.5L42.9,369.5L40.0,371.6L38.1,375.2L35.7,378.5L32.7,380.9L29.4,383.0L26.4,384.6L23.2,385.7L22.2,387.1L21.5,388.9L20.0,389.7L18.4,390.2L15.4,391.9ZM170.9,294.4L174.4,296.0L177.8,294.6L181.2,295.0L184.0,297.0L183.0,298.3L182.9,299.7L189.0,296.7L190.8,296.8L190.7,299.7L190.3,302.1L189.6,304.5L188.3,307.3L186.5,309.7L184.2,311.5L181.4,312.6L180.1,313.6L179.6,315.1L179.8,317.0L179.1,318.7L176.2,319.4L171.7,322.7L161.9,324.9L159.2,326.3L157.5,328.2L155.7,329.9L154.6,330.3L154.2,329.6L154.1,328.9L155.5,324.4L155.1,322.5L154.5,320.8L154.9,317.2L156.6,313.9L157.5,310.3L157.8,303.3L159.1,293.6L159.0,292.4L158.0,291.1L154.3,290.0L152.8,289.0L153.5,287.1L154.9,285.7L156.9,285.8L158.6,287.0L164.7,289.6L168.0,291.7L170.9,294.4ZM189.9,372.7L188.0,373.1L185.8,372.9L184.4,371.4L182.0,364.9L179.2,363.3L176.0,362.1L174.4,361.1L172.8,359.9L168.3,353.4L168.0,349.4L168.7,347.2L170.1,345.2L171.7,344.6L175.4,344.6L177.4,344.3L181.7,341.3L182.0,340.2L182.0,335.3L181.6,331.8L180.5,328.5L181.7,327.0L183.2,325.5L184.7,322.6L185.0,320.5L185.0,318.3L185.5,316.8L186.8,316.0L192.6,313.6L193.7,313.4L201.4,315.6L202.9,318.9L203.0,320.0L201.8,323.7L200.8,326.1L198.2,329.9L196.3,334.0L194.9,340.2L194.0,342.2L191.6,346.0L190.9,348.2L190.9,352.7L190.4,354.5L190.4,356.1L195.2,363.7L195.6,365.0L195.6,366.3L194.8,368.0L192.8,371.0L191.7,372.0L189.9,372.7ZM233.2,302.7L235.4,303.8L237.8,303.4L240.7,301.0L243.9,301.8L245.9,305.4L246.8,306.8L247.4,309.1L247.1,314.8L246.4,319.8L247.0,320.9L248.6,321.8L249.8,323.0L250.9,324.4L251.7,326.0L251.9,330.0L253.8,333.3L254.1,334.6L253.6,335.9L250.5,335.6L250.2,336.7L250.3,338.2L249.2,337.3L247.4,334.1L245.6,332.7L246.2,337.9L246.7,340.5L246.8,343.0L243.9,341.1L240.3,339.8L239.4,338.8L239.8,335.6L239.7,333.9L238.2,330.5L239.9,323.0L239.9,321.5L239.6,320.0L238.2,317.0L235.9,314.5L234.5,314.5L231.1,316.2L229.3,315.6L228.4,308.6L227.0,301.9L226.0,300.2L225.2,298.4L225.9,296.9L227.3,297.5L229.1,299.3L231.4,300.3L232.5,301.1L233.2,302.7ZM253.2,266.4L255.4,268.9L255.8,270.7L255.6,272.7L256.5,273.6L258.3,273.8L260.4,274.8L262.1,276.7L261.1,278.4L261.4,280.9L259.7,284.0L259.9,289.6L260.9,291.4L261.0,293.1L260.8,295.1L261.2,296.5L263.8,301.7L264.3,303.4L263.5,304.7L263.2,306.0L264.9,306.1L267.1,308.2L268.4,311.0L268.1,311.7L266.3,309.6L264.9,309.2L258.9,309.8L255.4,308.9L253.0,308.8L250.7,305.1L248.7,304.4L247.0,302.8L244.3,298.6L243.5,296.1L245.4,293.7L246.0,291.7L245.9,289.8L244.0,290.1L242.5,289.5L240.7,287.1L239.9,285.8L238.5,284.6L236.3,281.9L233.1,280.9L231.9,280.1L229.3,277.9L227.6,275.1L225.8,270.2L224.8,265.1L233.0,266.4L241.2,266.2L250.5,265.0L253.2,266.4ZM117.1,237.1L118.6,237.4L123.5,236.5L125.4,236.9L126.7,238.7L128.3,239.2L129.6,240.1L132.1,238.6L134.5,240.3L136.7,243.7L139.3,246.1L141.6,247.8L142.2,249.1L140.7,251.3L140.2,253.9L140.4,256.9L142.2,263.0L141.6,264.6L139.7,267.0L138.4,269.6L138.5,270.6L138.0,271.5L137.9,273.4L136.7,273.0L135.7,273.2L134.7,274.1L133.1,275.9L130.6,275.3L129.5,274.8L129.2,273.2L128.5,272.2L127.5,271.5L124.9,268.9L123.7,266.8L123.6,264.7L122.9,262.7L121.7,261.0L119.9,259.6L119.3,258.3L119.1,256.8L119.0,252.8L116.4,247.9L115.5,246.6L113.2,245.5L111.3,243.9L110.4,242.3L109.7,239.8L109.1,239.4L107.6,239.5L106.2,239.2L106.5,237.3L108.0,236.0L110.1,235.8L115.6,236.6L117.1,237.1ZM276.2,364.8L278.6,366.7L281.8,366.2L281.7,370.9L282.2,372.3L285.2,376.2L285.6,379.5L283.9,382.6L282.6,384.0L280.2,386.2L280.2,387.1L281.2,388.2L284.5,388.8L287.0,390.5L287.4,395.4L289.8,399.2L289.7,400.8L288.7,407.7L289.1,410.5L290.8,412.9L292.3,413.9L293.2,415.3L293.8,419.3L293.7,426.2L293.5,428.5L292.4,430.8L289.2,435.8L284.8,439.8L282.5,439.5L281.8,440.7L283.2,444.3L282.7,452.0L281.7,457.4L280.3,454.6L279.3,451.8L278.4,444.3L277.3,440.9L275.6,437.9L274.8,435.1L273.1,432.6L270.7,425.9L269.2,426.3L266.7,428.1L266.2,429.3L265.8,431.2L265.2,432.9L262.3,435.7L259.9,438.9L258.1,442.4L257.4,445.7L259.0,448.2L260.6,449.3L262.9,451.5L263.7,452.6L266.2,460.0L266.0,467.5L264.2,470.8L259.7,477.2L256.4,479.2L254.6,478.2L253.2,474.3L253.0,472.8L254.0,469.1L254.1,465.8L253.0,464.7L251.7,464.9L251.3,465.4L248.3,469.7L247.0,470.8L245.2,471.0L243.8,470.7L235.1,466.9L227.9,463.2L222.4,459.7L218.3,454.4L217.4,450.5L217.4,446.4L215.6,440.3L215.4,438.3L215.6,436.4L217.3,432.6L219.5,430.8L220.8,429.4L221.8,427.9L222.4,426.0L222.2,424.0L221.4,422.8L218.0,418.4L215.1,415.7L208.9,413.3L207.5,412.0L206.0,411.0L204.3,410.6L202.5,410.6L200.8,411.3L200.3,412.9L200.5,414.3L200.3,415.7L197.7,423.6L194.4,421.9L191.3,419.9L190.6,418.5L190.1,416.8L189.6,415.7L188.9,414.6L187.4,417.3L185.7,419.3L183.5,419.9L181.3,419.9L180.5,419.0L179.8,414.0L177.4,412.4L174.5,412.7L170.9,415.5L170.3,416.5L169.5,418.9L165.6,425.7L163.6,430.9L161.3,436.0L160.3,437.7L158.9,438.8L156.9,438.3L154.9,437.1L153.1,433.8L153.7,430.0L155.8,427.6L157.4,425.0L159.5,415.9L159.6,412.6L160.0,411.2L163.3,407.1L166.1,404.6L167.6,404.0L173.7,402.5L176.2,401.3L180.1,401.3L183.3,400.6L185.9,398.7L186.1,396.6L185.9,394.5L186.6,393.2L187.5,392.1L188.8,390.7L190.4,389.6L194.8,388.8L196.3,387.9L197.4,386.5L199.1,383.8L200.9,384.5L202.9,385.5L206.4,386.4L209.5,388.6L211.5,392.1L211.8,393.9L212.4,399.6L211.6,400.9L208.6,403.7L210.0,403.9L213.9,401.5L215.9,400.5L220.8,399.2L222.0,398.4L222.7,397.1L224.5,393.6L225.8,389.8L226.7,388.3L228.1,387.0L229.5,386.8L234.6,389.4L238.0,388.1L238.8,384.3L239.6,378.6L240.2,377.1L242.1,375.6L244.3,376.0L247.4,378.1L250.3,378.8L251.3,377.1L252.3,373.9L253.4,373.9L257.3,375.0L261.0,374.3L262.1,370.4L261.3,366.2L258.4,354.2L260.1,351.5L261.6,351.4L265.3,354.6L272.3,358.9L274.7,361.6L276.2,364.8ZM197.1,360.9L196.0,361.7L195.5,359.7L195.8,357.0L198.1,347.4L197.6,345.0L201.5,339.7L203.8,334.7L207.3,329.4L207.8,326.7L211.0,321.6L213.9,314.4L213.8,312.0L214.5,310.8L215.0,309.1L215.0,307.5L217.1,304.9L217.8,306.6L217.1,310.0L217.2,311.6L217.6,312.4L217.6,315.6L216.8,320.4L217.6,326.0L216.2,331.7L214.5,334.3L212.3,336.1L209.7,337.2L207.0,340.1L205.4,343.4L205.0,346.4L200.8,356.6L197.1,360.9ZM153.6,70.8L151.8,73.0L150.7,72.4L151.8,70.3L151.8,69.5L152.6,67.9L154.3,67.3L155.7,68.9L153.6,70.8ZM141.6,56.4L142.0,59.2L140.1,59.2L137.5,57.5L137.2,56.6L137.3,55.9L137.7,55.3L141.6,56.4ZM154.8,25.6L154.3,26.0L153.4,25.8L154.3,22.9L155.8,22.1L157.0,22.4L154.8,25.6ZM152.3,12.8L150.9,15.3L149.7,15.3L149.9,13.9L151.5,11.0L152.0,11.1L152.3,12.8ZM130.8,464.6L132.5,466.7L134.5,466.2L137.7,466.8L138.4,468.0L138.3,468.7L134.8,470.8L132.6,468.6L128.5,470.2L126.5,469.2L123.9,470.0L122.3,468.3L122.9,466.6L127.2,463.9L130.8,464.6ZM8.4,409.0L6.8,411.3L5.1,408.7L5.2,404.9L5.8,403.9L8.4,403.3L8.4,409.0ZM93.5,329.1L89.8,330.0L88.9,327.0L91.5,324.3L94.5,325.4L96.3,326.5L95.4,327.5L93.5,329.1ZM99.0,277.4L100.6,277.9L101.8,277.5L102.9,275.8L103.8,278.2L106.2,280.2L105.5,282.2L103.3,282.4L101.2,282.0L99.0,282.8L96.3,282.3L94.8,280.4L92.9,277.1L91.9,276.4L92.1,275.1L92.7,274.2L92.4,274.0L92.6,273.4L92.9,272.9L93.5,272.8L94.9,274.3L98.3,276.5L99.0,277.4ZM97.1,291.7L94.9,292.7L94.3,292.1L94.0,290.6L94.0,289.5L91.8,284.0L93.5,283.2L94.6,283.8L95.9,284.7L97.0,285.1L98.1,286.8L97.9,288.1L98.2,289.2L97.1,291.7ZM175.4,329.5L174.7,329.9L173.9,329.8L172.2,330.9L171.5,328.9L172.1,325.3L174.8,322.7L175.4,321.8L176.2,321.3L177.1,321.2L177.9,322.3L178.1,323.9L176.4,328.7L175.4,329.5ZM233.9,350.6L233.5,351.7L231.2,351.6L230.3,351.7L228.1,354.6L226.8,355.4L219.7,356.3L214.1,355.6L212.2,354.0L210.9,351.4L210.5,349.6L211.9,347.7L213.2,346.5L217.8,344.0L218.9,342.1L221.2,339.8L226.1,339.1L226.5,339.7L227.2,340.0L228.1,340.1L230.6,342.0L233.3,343.2L232.7,347.7L233.4,349.2L233.9,350.6ZM103.5,489.7L102.8,491.5L101.8,492.4L100.5,491.9L99.5,490.9L99.0,492.4L96.4,492.9L94.8,495.1L92.3,495.7L90.7,495.4L90.9,493.5L95.5,490.6L98.4,489.5L100.9,487.4L102.2,487.1L102.9,488.9L103.5,489.7ZM158.8,453.7L155.8,454.1L154.8,454.1L152.4,451.0L152.2,449.6L150.3,448.0L150.9,446.5L153.4,446.1L157.7,444.1L164.6,447.2L165.7,448.3L163.6,449.0L162.0,452.0L158.8,453.7ZM277.8,351.2L277.4,351.4L275.8,349.0L276.0,346.2L278.3,342.2L279.9,345.8L279.9,347.4L279.7,348.2L281.2,350.1L280.1,351.1L277.8,351.2ZM266.7,346.6L266.2,347.5L265.5,345.7L263.7,344.1L262.1,341.2L260.9,340.4L261.6,338.1L261.7,334.5L263.5,332.9L264.2,332.3L265.4,330.6L266.0,330.5L266.6,331.9L265.4,336.5L267.1,341.8L266.5,345.1L266.8,345.9L266.7,346.6ZM104.2,228.8L104.2,230.9L99.1,227.8L99.0,226.7L99.1,226.0L99.6,225.5L102.3,226.6L104.2,228.8ZM153.4,235.3L155.3,235.3L155.9,235.1L159.5,237.6L159.2,238.9L159.7,240.7L157.6,243.6L157.3,244.6L156.1,245.6L152.3,243.2L150.9,241.8L150.5,238.8L152.0,234.5L153.4,235.3ZM158.8,271.7L156.4,279.3L154.8,276.7L155.5,275.1L154.1,273.7L153.7,272.4L154.3,270.7L155.7,269.2L156.0,264.2L159.1,262.6L160.3,262.5L159.9,263.8L160.0,266.0L158.8,271.7ZM175.7,273.1L174.1,273.8L171.0,270.8L169.2,269.4L168.7,268.6L170.1,267.5L174.1,267.5L176.2,269.6L176.5,270.8L175.7,273.1ZM194.4,256.3L197.0,261.0L194.2,257.8L191.0,255.6L187.6,252.1L185.2,250.8L184.5,250.0L184.7,248.6L186.6,248.3L187.3,248.4L192.2,254.7L194.4,256.3ZM209.2,268.6L209.3,271.3L208.3,270.3L204.6,265.0L203.6,263.1L204.6,261.8L207.3,263.8L209.2,268.6ZM207.5,273.7L213.2,277.4L217.2,283.6L217.7,288.3L217.3,290.2L215.5,288.1L211.4,285.2L208.6,284.6L207.7,284.1L208.1,282.5L206.2,281.0L206.0,280.4L204.4,279.8L201.9,276.5L200.2,275.9L198.5,276.6L194.8,281.5L190.8,284.9L190.7,283.5L192.3,279.3L193.4,272.5L194.0,270.4L193.1,267.4L193.0,264.7L196.1,265.9L199.8,267.2L202.8,268.9L203.2,270.1L207.5,273.7ZM226.6,232.5L225.8,234.4L224.8,233.7L223.5,233.8L221.2,235.5L217.7,233.3L217.1,231.5L219.7,227.6L219.7,221.8L220.6,220.4L221.6,219.3L222.7,218.8L225.2,222.7L226.1,223.3L228.5,225.1L227.9,228.8L228.1,231.0L226.6,232.5ZM161.3,219.7L161.2,220.9L154.7,216.4L154.4,215.6L154.4,214.9L154.8,214.1L161.3,219.7ZM157.0,190.3L157.5,191.3L157.0,191.3L156.5,191.5L155.1,193.7L156.6,197.8L155.7,200.8L153.9,201.0L153.3,200.7L153.6,199.2L154.1,198.5L153.7,196.6L152.6,195.3L151.9,193.0L150.6,191.6L151.2,189.3L155.1,189.0L157.0,190.3ZM225.4,325.4L224.7,325.6L226.1,322.3L227.2,322.8L227.5,323.1L227.5,324.6L225.4,325.4ZM254.4,344.5L254.6,346.1L250.8,342.1L250.0,339.3L251.3,339.4L253.0,340.4L254.4,344.5ZM184.1,423.6L184.4,424.3L184.3,425.0L181.2,426.5L180.2,426.4L179.9,424.1L180.6,423.0L182.1,423.9L183.4,422.8L184.1,423.6ZM269.5,437.3L269.1,439.0L267.2,434.9L266.5,433.9L267.5,430.4L269.5,432.1L269.5,437.3ZM234.3,298.1L230.5,298.4L228.9,297.0L226.8,292.8L229.1,292.0L231.4,292.2L233.0,293.6L234.6,296.4L234.3,298.1ZM240.2,370.3L239.4,372.2L236.0,370.7L235.2,369.3L235.6,367.8L237.2,367.2L238.1,367.2L239.7,368.9L240.2,370.3ZM133.5,65.0L133.4,67.1L131.9,66.0L131.6,64.4L131.7,63.3L132.3,61.9L133.3,63.2L133.5,65.0ZM91.8,297.1L92.5,298.8L91.6,301.2L90.9,301.8L90.0,300.8L87.8,300.0L87.7,298.7L88.8,298.7L90.8,297.5L91.8,297.1ZM208.7,304.6L210.4,308.6L208.1,308.6L207.2,305.7L208.3,304.7L208.7,304.6ZM165.3,266.3L164.4,267.3L163.9,267.1L163.4,265.5L164.3,264.3L164.6,264.4L165.3,266.3ZM275.1,356.5L274.6,357.3L273.7,355.6L274.5,352.0L275.0,351.4L275.8,353.7L275.1,356.5ZM241.6,295.0L241.1,296.6L240.2,296.2L239.5,295.4L238.3,293.1L238.0,291.3L239.7,292.3L240.7,294.0L241.6,295.0ZM16.7,398.8L14.6,399.6L14.2,397.6L14.4,395.8L15.9,395.9L16.6,396.5L16.7,398.8ZM207.0,367.4L207.2,370.6L204.5,371.6L202.2,370.7L200.8,368.8L200.8,368.1L202.0,368.2L204.8,366.5L205.7,366.1L207.0,367.4Z"};
+  const DISPLAYS = { chiller: "Chiller", hanging: "Hanging display", shelf: "Home shelf" };
+  const POINTS_PER_PHOTO = 10;
+  let auditMonth = "", auditStatus = "", auditDisplay = "", auditSearch = "", drillDisplay = "", drillSel = 0, drillMode = "sku", drillZoom = 1;
+  const subsByStore = new Map(); // storeId -> submissions (merchant shelf photos)
+  function watchSubmissions() {
+    if (!S.owner) return;
+    for (const st of S.stores) {
+      if (st.sample || st.ownerStore || subsByStore.has(st.id)) continue;
+      subsByStore.set(st.id, []);
+      S.db.collection(`stores/${st.id}/submissions`).onSnapshot((snap) => { subsByStore.set(st.id, snap.docs.map((d) => ({ ...d.data(), _doc: d.id }))); if (view === "admin") render(); }, () => {});
+    }
+  }
+  function dirFor(name) { const n = normName(name); return S.directory.find((d) => normName(d.name) === n) || S.directory.find((d) => normName(d.name).split(" ")[0] === n.split(" ")[0]); }
+  /** Every audit photo, with a way to save changes back to where it lives. */
+  function auditPhotos() {
+    const out = [];
+    for (const v of S.visual) (v.photos || []).forEach((p, i) => { const dir = dirFor(v.name);
+      out.push({ uid: `v~${v.id}~${p.id}`, storeKey: "v:" + v.id, store: v.name, barangay: v.barangay, city: v.city, address: dir?.address || null, by: dir?.surveyor || "KELSON field team", src: "Drive import",
+        date: p.date || null, p, save: async (np) => { const cur = S.visual.find((x) => x.id === v.id) || v; await saveVisual(cur, cur.photos.map((q) => (q.id === p.id ? np : q))); } }); });
+    for (const st of S.stores) for (const sub of subsByStore.get(st.id) || []) {
+      out.push({ uid: `s~${st.id}~${sub._doc}`, storeKey: "s:" + st.id, store: st.name, barangay: st.barangay, city: st.city, address: null, by: "Merchant (store app)", src: "Store app",
+        date: sub.date || (sub.at || "").slice(0, 10) || null, p: sub, app: { storeId: st.id, subId: sub._doc },
+        save: async (np) => { const { _doc, ...rest } = np; await S.db.doc(`stores/${st.id}/submissions/${sub._doc}`).set(rest); } });
+    }
+    return out;
+  }
+  const mslKeys = () => new Set((S.msl?.items || []).map((x) => x.k));
+  const itemKey = (it) => normName(it.name);
+  const facingsOf = (it) => Math.max(1, Math.round(Number(it.facings) || 1));
+  function visitsOf(photos) {
+    const m = new Map();
+    for (const a of photos) { const key = a.storeKey + "|" + (a.date || "undated"); const r = m.get(key) || { key, storeKey: a.storeKey, store: a.store, date: a.date, barangay: a.barangay, city: a.city, photos: [] }; r.photos.push(a); m.set(key, r); }
+    return [...m.values()];
+  }
+  function visitStats(visit, allPhotos) {
+    const M = mslKeys(); const seen = new Set(), ever = new Set();
+    for (const a of visit.photos) for (const it of a.p.items || []) seen.add(itemKey(it));
+    for (const a of allPhotos) if (a.storeKey === visit.storeKey) for (const it of a.p.items || []) ever.add(itemKey(it));
+    const found = [...M].filter((k) => seen.has(k)).length, listed = [...M].filter((k) => ever.has(k)).length;
+    return { msl: M.size, found, listed, mslPct: M.size ? found / M.size : 0, listPct: M.size ? listed / M.size : 0, osa: listed ? found / listed : 0, oos: listed ? (listed - found) / listed : 0, scanned: visit.photos.some((a) => a.p.items) };
+  }
+  const pct = (x) => (x * 100).toFixed(2) + "%";
+  function auditTabs(active) {
+    const t = (k, label) => h("a", { href: "#admin-" + k, "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", k); } }, label);
+    return h("nav", { class: "tabs-admin sub", "aria-label": "Shelf audit sections" }, t("audit", "Overview"), t("audit-subs", "Submissions"), t("audit-oos", "Out of stock"), t("audit-shelf", "On shelf"), t("audit-msl", `Must-stock list (${(S.msl?.items || []).length})`));
+  }
+  function viewAudit() {
+    watchSubmissions();
+    if (sub.startsWith("audit-d-")) { const a = auditPhotos().find((x) => x.uid === decodeURIComponent(sub.slice(8))); if (a) return viewAuditDrill(a); }
+    const tab = sub === "audit" ? "audit" : sub;
+    const body = tab === "audit-subs" ? auditSubmissions() : tab === "audit-oos" ? auditOOS() : tab === "audit-shelf" ? auditOnShelf() : tab === "audit-msl" ? auditMSL() : auditOverview();
+    return h("div", { class: "view" }, auditTabs(tab), body);
+  }
+
+  // ----- Overview -----
+  function auditOverview() {
+    const all = auditPhotos();
+    const months = [...new Set(all.map((a) => (a.date || "").slice(0, 7)).filter(Boolean))].sort();
+    const inM = (a, m) => !m || (a.date || "").startsWith(m);
+    const cur = all.filter((a) => inM(a, auditMonth));
+    const prevM = auditMonth ? months[months.indexOf(auditMonth) - 1] : null;
+    const prev = prevM ? all.filter((a) => inM(a, prevM)) : null;
+    const stats = (ph) => { const vs = visitsOf(ph); const outlets = new Set(ph.map((a) => a.storeKey)).size; const users = new Set(ph.map((a) => a.by)).size;
+      return { visits: vs.length, images: ph.length, outlets, users, freq: outlets ? vs.length / outlets : 0, perVisit: vs.length ? ph.length / vs.length : 0 }; };
+    const A = stats(cur), B = prev ? stats(prev) : null;
+    const delta = (k) => { if (!B || !B[k]) return null; const d = (A[k] - B[k]) / B[k]; return h("div", { class: "small", style: `color:${d >= 0 ? "var(--good)" : "var(--bad)"}`, text: `${d >= 0 ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(1)}% vs ${monthLabel(prevM)}: ${typeof B[k] === "number" && !Number.isInteger(B[k]) ? B[k].toFixed(2) : B[k]}` }); };
+    const big = (label, val, k, hint) => h("div", { class: "card kpi", style: "text-align:center" }, h("div", { class: "label", text: label }), h("div", { class: "value num", style: "font-size:2.2rem", text: val }), delta(k), hint ? h("div", { class: "muted small", text: hint }) : null);
+    // trend: by month (all time) or by day (one month)
+    const buckets = auditMonth ? [...new Set(cur.map((a) => a.date))].sort() : months;
+    const series = buckets.map((b) => { const ph = all.filter((a) => (auditMonth ? a.date === b : (a.date || "").startsWith(b))); return { label: auditMonth ? fmtDate(b) : monthLabel(b), images: ph.length, outlets: new Set(ph.map((a) => a.storeKey)).size }; });
+    const scanned = all.filter((a) => a.p.items).length, pending = all.filter((a) => (a.p.status || "pending") === "pending").length;
+    return h("div", { class: "view" },
+      h("div", { class: "toolbar" }, h("select", { "aria-label": "Period", onchange: (e) => { auditMonth = e.target.value; render(); } }, h("option", { value: "", text: "All time" }), months.map((m) => h("option", { value: m, text: monthLabel(m), selected: auditMonth === m || null }))),
+        h("span", { class: "muted small", text: `${scanned} of ${all.length} photos read by AI · ${pending} waiting for validation` })),
+      h("div", { class: "grid", style: "grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px" },
+        big("Total visits", String(A.visits), "visits", "a store photographed on a day"), big("Total image submissions", String(A.images), "images"),
+        big("Unique outlets", String(A.outlets), "outlets"), big("Unique contributors", String(A.users), "users"),
+        big("Average visit frequency", A.freq.toFixed(2), "freq", "visits per outlet"), big("Average images per visit", A.perVisit.toFixed(2), "perVisit")),
+      h("div", { class: "card" }, h("h2", { text: `Image submissions vs outlets visited — ${auditMonth ? monthLabel(auditMonth) + " by day" : "by month"}` }),
+        h("div", { class: "legend", style: "margin:6px 0 8px" }, h("span", {}, h("i", { style: "background:var(--s1)" }), "Image submissions"), h("span", {}, h("i", { style: "background:var(--s2)" }), "Outlets visited")),
+        series.length ? comboChart(series) : h("div", { class: "empty", text: "No photos yet." })),
+      h("div", { class: "card" }, h("h2", { text: "Outlet coverage" }), h("div", { class: "muted small", style: "margin:2px 0 10px", text: "Every surveyed store from the Directory. Blue = has shelf photos, grey = none yet. Hover or tap a dot." }), outletMap()));
+  }
+  const monthLabel = (m) => (m ? new Date(m + "-15T12:00:00").toLocaleDateString("en-PH", { month: "short", year: "numeric" }) : "");
+  function comboChart(series) {
+    const W = 720, H = 240, pl = 40, pr = 12, pt = 14, pb = 44, iw = W - pl - pr, ih = H - pt - pb;
+    const max = Math.max(1, ...series.map((x) => Math.max(x.images, x.outlets))); const step = Math.max(1, Math.ceil(max / 4)); const top = step * 4;
+    const NS = "http://www.w3.org/2000/svg"; const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Image submissions and outlets visited over time" });
+    const y = (v) => pt + ih - (v / top) * ih, band = iw / series.length, bw = Math.min(36, band * 0.6);
+    for (let v = 0; v <= top; v += step) { svg.append(el("line", { x1: pl, x2: W - pr, y1: y(v), y2: y(v), stroke: "var(--line)" })); svg.append(el("text", { x: pl - 6, y: y(v), dy: "0.32em", "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, String(v))); }
+    const tip = h("div", { class: "tip", hidden: true }); const wrap = h("div", { class: "chart" });
+    series.forEach((x, i) => { const cx = pl + i * band + band / 2;
+      if (x.images) svg.append(el("rect", { x: cx - bw / 2, y: y(x.images), width: bw, height: pt + ih - y(x.images), rx: 3, fill: "var(--s1)" }));
+      if (series.length <= 16 || i % Math.ceil(series.length / 12) === 0) svg.append(el("text", { x: cx, y: H - pb + 16, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, x.label));
+      const hit = el("rect", { x: pl + i * band, y: pt, width: band, height: ih, fill: "transparent", tabindex: 0, "aria-label": `${x.label}: ${x.images} images, ${x.outlets} outlets` });
+      const show = () => { tip.hidden = false; tip.replaceChildren(h("b", { text: x.label }), h("div", { text: `${x.images} image(s) · ${x.outlets} outlet(s)` })); tip.style.left = `clamp(0px, calc(${(cx / W) * 100}% - 70px), calc(100% - 160px))`; };
+      for (const ev of ["mouseenter", "focus", "click"]) hit.addEventListener(ev, show); for (const ev of ["mouseleave", "blur"]) hit.addEventListener(ev, () => (tip.hidden = true)); svg.append(hit); });
+    svg.append(el("path", { d: series.map((x, i) => `${i ? "L" : "M"}${pl + i * band + band / 2},${y(x.outlets)}`).join(""), fill: "none", stroke: "var(--s2)", "stroke-width": 2.5 }));
+    series.forEach((x, i) => svg.append(el("circle", { cx: pl + i * band + band / 2, cy: y(x.outlets), r: 4, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2, "pointer-events": "none" })));
+    wrap.append(svg, tip); return wrap;
+  }
+  function outletMap() {
+    const NS = "http://www.w3.org/2000/svg"; const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
+    const withPhotos = new Set(S.visual.map((v) => normName(v.name)));
+    const has = (d) => withPhotos.has(normName(d.name)) || S.visual.some((v) => normName(v.name).split(" ")[0] === normName(d.name).split(" ")[0] && (v.barangay || "").toLowerCase() === (d.barangay || "").toLowerCase());
+    const pts = S.directory.filter((d) => d.lat && d.lng);
+    const info = h("div", { class: "muted small", style: "min-height:2.6em", text: `${pts.length} outlets · ${pts.filter(has).length} with shelf photos` });
+    const dot = (svg, x, y, d, r) => { const c = el("circle", { cx: x, cy: y, r, fill: has(d) ? "var(--s1)" : "var(--muted)", "fill-opacity": has(d) ? 0.95 : 0.55, stroke: "var(--surface)", "stroke-width": r / 3, tabindex: 0, style: "cursor:pointer" });
+      c.append(el("title", {}, d.name)); const show = () => { info.textContent = `${d.name} · ${[d.barangay, d.city].filter(Boolean).join(", ")}${has(d) ? " · has shelf photos" : ""}`; };
+      c.addEventListener("click", show); c.addEventListener("focus", show); c.addEventListener("mouseenter", show); svg.append(c); };
+    // whole country
+    const big = el("svg", { viewBox: `0 0 ${PH.W} ${PH.H}`, role: "img", "aria-label": "Map of the Philippines with outlets", style: "max-height:520px;width:100%" });
+    big.append(el("path", { d: PH.d, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-width": 0.6, "stroke-linejoin": "round" }));
+    const px = (lng) => ((lng - PH.minLng) / (PH.maxLng - PH.minLng)) * PH.W, py = (lat) => ((PH.maxLat - lat) / (PH.maxLat - PH.minLat)) * PH.H;
+    for (const d of pts) dot(big, px(d.lng), py(d.lat), d, 2.6);
+    // zoom on where the outlets are
+    const lats = pts.map((d) => d.lat), lngs = pts.map((d) => d.lng); const minLat = Math.min(...lats) - 0.03, maxLat = Math.max(...lats) + 0.03, minLng = Math.min(...lngs) - 0.03, maxLng = Math.max(...lngs) + 0.03;
+    const k = Math.cos(((minLat + maxLat) / 2) * Math.PI / 180); const ZW = 420, ZH = Math.round(ZW * (maxLat - minLat) / ((maxLng - minLng) * k));
+    const zoom = el("svg", { viewBox: `0 0 ${ZW} ${ZH}`, role: "img", "aria-label": "Zoomed map of outlets", style: "width:100%;max-height:520px" });
+    zoom.append(el("rect", { x: 0, y: 0, width: ZW, height: ZH, rx: 10, fill: "var(--surface-2)" }));
+    const zx = (lng) => ((lng - minLng) / (maxLng - minLng)) * ZW, zy = (lat) => ((maxLat - lat) / (maxLat - minLat)) * ZH;
+    const g = el("g", { transform: `translate(${-minLng * ZW / (maxLng - minLng)},0)` }); // outline clipped to the zoom window
+    const outline = el("path", { d: PH.d, fill: "var(--accent-soft)", stroke: "var(--accent)", "stroke-width": 1, "vector-effect": "non-scaling-stroke", transform: `translate(${zx(PH.minLng)},${zy(PH.maxLat)}) scale(${(ZW / (maxLng - minLng)) * ((PH.maxLng - PH.minLng) / PH.W)},${(ZH / (maxLat - minLat)) * ((PH.maxLat - PH.minLat) / PH.H)})` });
+    zoom.append(outline); void g;
+    for (const d of pts) dot(zoom, zx(d.lng), zy(d.lat), d, 5);
+    const cities = new Map(); for (const d of pts) { const c = d.city || "Not stated"; if (!cities.has(c)) cities.set(c, []); cities.get(c).push(d); }
+    for (const [c, ds] of cities) if (c !== "Not stated") { const x = ds.reduce((a, d) => a + zx(d.lng), 0) / ds.length, yv = Math.min(...ds.map((d) => zy(d.lat))) - 10; { const anchor = x > ZW * 0.7 ? "end" : x < ZW * 0.3 ? "start" : "middle"; zoom.append(el("text", { x: Math.min(ZW - 6, Math.max(6, x)), y: Math.max(14, yv), "text-anchor": anchor, fill: "var(--fg)", "font-size": 12, "font-weight": 600, stroke: "var(--surface-2)", "stroke-width": 3, "paint-order": "stroke" }, `${c} (${ds.length})`)); } }
+    return h("div", { class: "grid", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;align-items:start" },
+      h("div", {}, h("div", { class: "muted small", style: "margin-bottom:4px", text: "Philippines" }), big),
+      h("div", {}, h("div", { class: "muted small", style: "margin-bottom:4px", text: "Zoomed to the outlets" }), zoom, info));
+  }
+
+  // ----- Submissions (tasks) -----
+  const statusOf = (a) => a.p.status || "pending";
+  const STATUS = { pending: ["idle", "Pending"], approved: ["on", "Approved"], rejected: ["off", "Rejected"] };
+  function auditSubmissions() {
+    const all = auditPhotos(); const q = auditSearch.trim().toLowerCase();
+    const list = all.filter((a) => (!auditStatus || (auditStatus === "unscanned" ? !a.p.items : statusOf(a) === auditStatus)) && (!auditDisplay || (a.p.display || "") === auditDisplay) && (!q || (a.store + " " + (a.barangay || "")).toLowerCase().includes(q)))
+      .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const unscanned = all.filter((a) => !a.p.items);
+    return h("div", { class: "view" },
+      h("div", { class: "toolbar" },
+        h("input", { type: "search", id: "audSearch", placeholder: "Search store or barangay", value: auditSearch, "aria-label": "Search submissions", oninput: (e) => { auditSearch = e.target.value; render(); const el = $("#audSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
+        h("select", { "aria-label": "Status", onchange: (e) => { auditStatus = e.target.value; render(); } }, [["", "Any status"], ["pending", "Pending"], ["approved", "Approved"], ["rejected", "Rejected"], ["unscanned", "Not read by AI"]].map(([v, l]) => h("option", { value: v, text: l, selected: auditStatus === v || null }))),
+        h("select", { "aria-label": "Display", onchange: (e) => { auditDisplay = e.target.value; render(); } }, [["", "Any display"], ...Object.entries(DISPLAYS)].map(([v, l]) => h("option", { value: v, text: l, selected: auditDisplay === v || null }))),
+        unscanned.length ? h("button", { class: "btn primary", onclick: async (e) => { e.currentTarget.disabled = true; let ok = 0; for (const [n, a] of unscanned.entries()) { toast(`AI reading photo ${n + 1} of ${unscanned.length} — ${a.store}`); if (await scanAuditPhoto(a, true)) ok++; } toast(`Done: ${ok} of ${unscanned.length} read`); } }, `Read ${unscanned.length} photo(s) with AI`) : null),
+      list.length ? h("div", { class: "table-wrap card", style: "padding:0" }, h("table", {}, h("thead", {}, h("tr", {}, ["", "Date", "Store", "Display", "From", "SKUs", "Facings", "Status", ""].map((x, i) => h("th", { class: i === 5 || i === 6 ? "r" : "", text: x })))),
+        h("tbody", {}, list.map((a) => h("tr", { class: "click", tabindex: 0, onclick: () => go("admin", "audit-d-" + encodeURIComponent(a.uid)), onkeydown: (e) => { if (e.key === "Enter") go("admin", "audit-d-" + encodeURIComponent(a.uid)); } },
+          h("td", {}, h("img", { src: a.p.url, alt: "", loading: "lazy", style: "width:56px;height:42px;object-fit:cover;border-radius:6px;display:block" })),
+          h("td", { text: fmtDate(a.date) }), h("td", {}, h("div", { style: "font-weight:600", text: a.store }), h("div", { class: "muted small", text: [a.barangay, a.city].filter(Boolean).join(", ") })),
+          h("td", { text: DISPLAYS[a.p.display] || "—" }), h("td", { class: "small", text: a.src }),
+          h("td", { class: "r num", text: a.p.items ? a.p.items.length : "—" }), h("td", { class: "r num", text: a.p.items ? a.p.items.reduce((x, it) => x + facingsOf(it), 0) : "—" }),
+          h("td", {}, statusChip(STATUS[statusOf(a)])), h("td", {}, h("span", { class: "btn sm" }, "Open")))))))
+        : h("div", { class: "empty", text: "No submissions match." }));
+  }
+  async function scanAuditPhoto(a, quiet) {
+    const sample = await window.claude?.use?.("sample"); if (!sample) { if (!quiet) toast("AI is not available here"); return false; }
+    try {
+      const blob = await (await fetch(a.p.url)).blob();
+      const out = await sample.json(`This is a shelf photo from a Filipino sari-sari store. Identify each distinct product (SKU) you can clearly read and count its facings (how many fronts of that product are visible).
+Also give one bounding box per SKU around where it appears, as fractions of the image: [x, y, width, height] with 0,0 at top-left.
+Reply with JSON only: {"display":"chiller" | "hanging" | "shelf","items":[{"name":"Brand Product Variant Size","brand":"Brand","category":"${CATS.join('" | "')}","facings":3,"box":[0.1,0.2,0.15,0.1]}],"note":"one short sentence"}.
+At most 40 items. Skip anything you cannot read clearly; do not guess.`, { images: [blob], modelTier: "default" });
+      const num = (v) => (typeof v === "number" && isFinite(v) ? Math.min(1, Math.max(0, v)) : null);
+      const items = (Array.isArray(out?.items) ? out.items : []).filter((x) => x && typeof x.name === "string" && x.name.trim()).slice(0, 40).map((x) => {
+        const box = Array.isArray(x.box) && x.box.length === 4 && x.box.every((v) => num(v) != null) ? x.box.map(num) : null;
+        return { name: x.name.trim().slice(0, 80), brand: typeof x.brand === "string" && x.brand.trim() ? x.brand.trim().slice(0, 40) : x.name.trim().split(" ")[0], category: CATS.includes(x.category) ? x.category : "Others",
+          facings: Math.min(200, Math.max(1, Math.round(Number(x.facings) || 1))), ...(box ? { box } : {}) }; });
+      const display = DISPLAYS[out?.display] ? out.display : a.p.display || null;
+      await a.save({ ...a.p, items, display, counted: true, note: typeof out?.note === "string" ? out.note.slice(0, 200) : a.p.note || null, scannedAt: new Date().toISOString() });
+      if (!quiet) toast(`${items.length} SKU(s) read`); return true;
+    } catch (e) { if (!quiet) toast(e?.code === "rate_limited" ? "AI is busy, try again in a minute" : "Could not read the photo"); return false; }
+  }
+
+  // ----- Drilldown of one submission (visit) -----
+  function viewAuditDrill(a) {
+    const all = auditPhotos(); const visit = visitsOf(all).find((v) => v.photos.some((x) => x.uid === a.uid));
+    const st = visitStats(visit, all);
+    const displays = [...new Set(visit.photos.map((x) => x.p.display || "shelf"))];
+    const disp = displays.includes(drillDisplay) ? drillDisplay : a.p.display || displays[0];
+    const inDisp = visit.photos.filter((x) => (x.p.display || "shelf") === disp);
+    const cur = inDisp.find((x) => x.uid === a.uid) || inDisp[0] || a;
+    // breakdown for this display
+    const rows = new Map(); let total = 0;
+    for (const x of inDisp) for (const it of x.p.items || []) { const k = drillMode === "brand" ? it.brand || it.name.split(" ")[0] : itemKey(it); const r = rows.get(k) || { brand: it.brand || "", name: drillMode === "brand" ? it.brand || it.name : it.name, facings: 0, skus: 0, msl: mslKeys().has(itemKey(it)) }; r.facings += facingsOf(it); r.skus++; rows.set(k, r); total += facingsOf(it); }
+    const list = [...rows.values()].sort((p, q) => q.facings - p.facings || p.name.localeCompare(q.name));
+    const dir = dirFor(a.store);
+    const kpi = (label, value, hint, help) => h("div", { class: "card kpi" }, h("div", { class: "label", style: "display:flex;justify-content:space-between", title: help || "" }, label, help ? h("span", { class: "muted", text: "?", title: help }) : null), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
+    const brandsDialog = () => { const b = new Map(); let t = 0; for (const x of visit.photos) for (const it of x.p.items || []) { const k = it.brand || it.name.split(" ")[0]; const r = b.get(k) || { k, f: 0, s: 0 }; r.f += facingsOf(it); r.s++; b.set(k, r); t += facingsOf(it); }
+      openDialog(`Brands — ${a.store}`, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Brand", "SKUs", "Facings", "SOS"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
+        h("tbody", {}, [...b.values()].sort((p, q) => q.f - p.f).map((r) => h("tr", {}, h("td", { text: r.k }), h("td", { class: "r num", text: r.s }), h("td", { class: "r num", text: r.f }), h("td", { class: "r num", text: pct(t ? r.f / t : 0) }))))))); };
+    const NS = "http://www.w3.org/2000/svg"; const el = (t, at, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
+    const overlay = el("svg", { viewBox: "0 0 1000 1000", preserveAspectRatio: "none", style: "position:absolute;inset:0;width:100%;height:100%;pointer-events:none", "aria-hidden": "true" });
+    (cur.p.items || []).forEach((it, n) => { if (!it.box) return; const [x, y, w, hh] = it.box.map((v) => v * 1000);
+      overlay.append(el("rect", { x, y, width: w, height: hh, fill: "none", stroke: "#22c55e", "stroke-width": 4, "vector-effect": "non-scaling-stroke" }));
+      overlay.append(el("rect", { x, y: Math.max(0, y - 34), width: 46, height: 34, fill: "#22c55e" })); overlay.append(el("text", { x: x + 23, y: Math.max(0, y - 34) + 25, "text-anchor": "middle", fill: "#fff", "font-size": 26, "font-weight": 700 }, String(n + 1))); });
+    const hasBoxes = (cur.p.items || []).some((it) => it.box);
+    const editFacings = new Map();
+    const saveFacings = async () => { if (!editFacings.size) return toast("Nothing changed"); const items = (cur.p.items || []).map((it) => (editFacings.has(itemKey(it)) ? { ...it, facings: editFacings.get(itemKey(it)) } : it)); try { await cur.save({ ...cur.p, items, counted: true }); toast("Saved"); } catch { toast("Could not save"); } };
+    const setStatus = async (v) => { const np = { ...cur.p, status: v, reviewedAt: new Date().toISOString() };
+      if (cur.app) np.points = v === "approved" ? POINTS_PER_PHOTO : 0;
+      try { await cur.save(np); toast(v === "approved" && cur.app ? `Approved — ${POINTS_PER_PHOTO} points to ${cur.store}` : "Status saved"); } catch { toast("Could not save"); } };
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("admin", "audit-subs") }, "‹ Submissions"), h("h2", { style: "margin-top:8px", text: `Display drilldown — ${a.store}` }), h("div", { class: "muted small", text: `${fmtDate(visit.date)} · ${visit.photos.length} image(s) in this visit` }))),
+      h("div", { class: "grid", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;align-items:start" },
+        h("div", { class: "grid", style: "gap:12px" },
+          h("div", { class: "card", style: "padding:10px" },
+            h("div", { class: "pills", style: "margin-bottom:8px" },
+              h("button", { class: "btn sm", "aria-label": "Zoom in", onclick: () => { drillZoom = Math.min(3, drillZoom + 0.5); render(); } }, "+"), h("button", { class: "btn sm", "aria-label": "Zoom out", onclick: () => { drillZoom = Math.max(1, drillZoom - 0.5); render(); } }, "−"),
+              h("button", { class: "btn sm", onclick: () => openDialog(a.store, h("img", { class: "bigphoto", src: cur.p.url, alt: "Shelf photo" })) }, "Preview"),
+              h("button", { class: "btn sm primary", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI counting facings…"); await scanAuditPhoto(cur); } }, cur.p.counted ? "Re-scan (AI)" : "Count facings (AI)")),
+            h("div", { style: "overflow:auto;max-height:560px;border-radius:8px" }, h("div", { style: `position:relative;width:${drillZoom * 100}%` }, h("img", { src: cur.p.url, alt: `Shelf photo of ${a.store}`, style: "display:block;width:100%" }), overlay)),
+            !hasBoxes ? h("div", { class: "muted small", style: "margin-top:6px", text: cur.p.counted ? "AI gave no boxes for this photo." : "Numbered boxes appear after “Count facings (AI)”." }) : null,
+            visit.photos.length > 1 ? h("div", { class: "pills", style: "margin-top:8px" }, visit.photos.map((x) => h("button", { style: `padding:0;border:2px solid ${x.uid === cur.uid ? "var(--accent)" : "transparent"};border-radius:8px;background:none`, onclick: () => { drillDisplay = x.p.display || "shelf"; go("admin", "audit-d-" + encodeURIComponent(x.uid)); }, "aria-label": "Show photo" }, h("img", { src: x.p.url, alt: "", style: "width:64px;height:48px;object-fit:cover;border-radius:6px;display:block" })))) : null),
+          h("div", { class: "card grid", style: "gap:10px" },
+            h("label", { class: "f" }, "Verification status", h("select", { onchange: (e) => setStatus(e.target.value) }, Object.entries(STATUS).map(([v, [, l]]) => h("option", { value: v, text: l, selected: statusOf(cur) === v || null })))),
+            h("label", { class: "f" }, "Display type", h("select", { onchange: async (e) => { try { await cur.save({ ...cur.p, display: e.target.value }); drillDisplay = e.target.value; toast("Saved"); } catch { toast("Could not save"); } } }, Object.entries(DISPLAYS).map(([v, l]) => h("option", { value: v, text: l, selected: (cur.p.display || "shelf") === v || null })))),
+            h("div", {}, h("div", { class: "label muted small", text: "Outlet information" }), h("div", { style: "font-weight:600", text: a.store }), h("div", { class: "small", text: dir?.address || [a.barangay, a.city].filter(Boolean).join(", ") || "—" })),
+            h("div", {}, h("div", { class: "label muted small", text: "Submission details" }), h("div", { class: "small", text: `${fmtDate(cur.date)} · ${cur.by} · ${cur.src}` }), cur.p.consent ? h("div", { class: "small", text: "Merchant consent given ✓" }) : null, cur.app && cur.p.points ? h("div", { class: "small", text: `${cur.p.points} points rewarded` }) : null))),
+        h("div", { class: "grid", style: "gap:12px" },
+          h("div", { class: "grid", style: "grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px" },
+            kpi("Total images", String(visit.photos.length)), kpi("MSL", String(st.msl), null, "Must-stock SKUs set by KELSON"), kpi("Listing", String(st.listed), null, "Must-stock SKUs this store has ever shown on its shelf"),
+            kpi("MSL%", pct(st.mslPct), `${st.found} out of ${st.msl}`, "Must-stock SKUs seen in this visit / all must-stock SKUs"), kpi("Listing%", pct(st.listPct), `${st.listed} out of ${st.msl}`),
+            kpi("OSA%", pct(st.osa), `${st.found} out of ${st.listed}`, "On-shelf availability: listed SKUs seen in this visit"), kpi("OOS%", pct(st.oos), `${st.listed - st.found} out of ${st.listed}`, "Out of stock: listed SKUs not seen in this visit"),
+            h("div", { class: "card kpi" }, h("div", { class: "label", text: "Brands statistic" }), h("button", { class: "btn sm", style: "margin-top:6px", onclick: brandsDialog }, "Detail"))),
+          !st.msl ? h("div", { class: "note", text: "Set your must-stock list (MSL) to get MSL%, OSA% and OOS%." }) : null,
+          h("div", { class: "card" },
+            h("div", { class: "toolbar", style: "margin-bottom:8px" },
+              h("div", { class: "tabs-admin sub" }, displays.map((d) => h("a", { href: "#", "aria-current": d === disp ? "page" : null, onclick: (e) => { e.preventDefault(); drillDisplay = d; const first = visit.photos.find((x) => (x.p.display || "shelf") === d); go("admin", "audit-d-" + encodeURIComponent(first.uid)); } }, DISPLAYS[d] || d))),
+              h("span", { style: "margin-left:auto" }), h("div", { class: "pills" }, ["sku", "brand"].map((m) => h("button", { class: "btn sm" + (drillMode === m ? " primary" : ""), onclick: () => { drillMode = m; render(); } }, m === "sku" ? "SKU" : "Brand")))),
+            h("h3", { text: "Breakdown", style: "margin-bottom:6px" }),
+            list.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["#", "Brand", drillMode === "sku" ? "SKU name" : "SKUs", "Facing", "SOS"].map((x, i) => h("th", { class: i >= 3 ? "r" : "", text: x })))),
+              h("tbody", {}, list.map((r, n) => h("tr", {}, h("td", { class: "muted", text: String(n + 1) }), h("td", { text: (r.brand || "").toUpperCase() }),
+                h("td", {}, drillMode === "sku" ? h("span", {}, r.name.toUpperCase(), r.msl ? h("span", { class: "sample-tag", style: "color:var(--accent);background:var(--accent-soft)", text: "MSL" }) : null) : String(r.skus)),
+                h("td", { class: "r" }, drillMode === "sku" && inDisp.length === 1 ? h("input", { type: "number", min: 1, max: 200, value: r.facings, style: "width:64px;text-align:right", "aria-label": "Facings of " + r.name, onchange: (e) => editFacings.set(normName(r.name), Math.max(1, Math.round(Number(e.target.value) || 1))) }) : String(r.facings)),
+                h("td", { class: "r num", text: pct(total ? r.facings / total : 0) })))))) : h("div", { class: "empty", text: "Not read yet — tap “Count facings (AI)”." }),
+            list.length && drillMode === "sku" && inDisp.length === 1 ? h("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-top:8px" }, h("span", { class: "muted small", text: cur.p.counted ? "Facings counted by AI — correct any number and Save." : "Facings not counted yet (each SKU shows 1)." }), h("button", { class: "btn primary sm", onclick: saveFacings }, "Save")) : null))));
+  }
+
+  // ----- Out of stock & On shelf (latest visit per store) -----
+  function latestVisits() {
+    const all = auditPhotos(); const vs = visitsOf(all.filter((a) => a.p.items)); const latest = new Map();
+    for (const v of vs) { const cur = latest.get(v.storeKey); if (!cur || (v.date || "") > (cur.date || "")) latest.set(v.storeKey, v); }
+    return { all, latest: [...latest.values()] };
+  }
+  function auditOOS() {
+    const M = S.msl?.items || []; if (!M.length) return h("div", { class: "note", text: "Set your must-stock list first (Must-stock list tab)." });
+    const { all, latest } = latestVisits();
+    const perStore = latest.map((v) => { const seen = new Set(v.photos.flatMap((a) => (a.p.items || []).map(itemKey))); const ever = new Set(all.filter((a) => a.storeKey === v.storeKey).flatMap((a) => (a.p.items || []).map(itemKey)));
+      const listed = M.filter((x) => ever.has(x.k)), oos = listed.filter((x) => !seen.has(x.k)); return { v, listed, oos, osa: listed.length ? (listed.length - oos.length) / listed.length : 0 }; });
+    const byItem = M.map((x) => { const l = perStore.filter((s) => s.listed.some((y) => y.k === x.k)); const o = l.filter((s) => s.oos.some((y) => y.k === x.k)); return { x, listed: l.length, oos: o, rate: l.length ? o.length / l.length : 0 }; })
+      .filter((r) => r.listed).sort((a, b) => b.oos.length - a.oos.length || b.rate - a.rate);
+    return h("div", { class: "view" },
+      h("div", { class: "muted small", text: `Based on each store's latest photographed visit (${latest.length} stores). A SKU is out of stock when the store has shown it before but it is missing now.` }),
+      h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: "Must-stock SKUs most often missing", style: "margin-bottom:6px" }),
+          byItem.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["SKU", "Out of stock in", "OOS%"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
+            h("tbody", {}, byItem.map((r) => h("tr", { class: "click", onclick: () => openDialog(r.x.name, r.oos.length ? h("ul", { class: "list" }, r.oos.map((s) => h("li", {}, h("span", { class: "grow", text: s.v.store }), h("span", { class: "muted small", text: fmtDate(s.v.date) })))) : h("div", { class: "empty", text: "On shelf everywhere it is listed." })) },
+              h("td", { text: r.x.name }), h("td", { class: "r num", text: `${r.oos.length} of ${r.listed} stores` }), h("td", { class: "r num", style: r.rate >= 0.5 ? "color:var(--bad)" : "", text: pct(r.rate) })))))) : h("div", { class: "empty", text: "No must-stock SKU seen yet." })),
+        h("div", { class: "card" }, h("h2", { text: "Stores by on-shelf availability", style: "margin-bottom:6px" }),
+          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Last visit", "OSA%", "Missing"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
+            h("tbody", {}, perStore.sort((a, b) => a.osa - b.osa).map((s) => h("tr", { class: "click", onclick: () => go("admin", "audit-d-" + encodeURIComponent(s.v.photos[0].uid)) },
+              h("td", { text: s.v.store }), h("td", { text: fmtDate(s.v.date) }), h("td", { class: "r num", text: s.listed.length ? pct(s.osa) : "—" }), h("td", { class: "r num", text: s.oos.length })))))))));
+  }
+  function auditOnShelf() {
+    const { latest } = latestVisits(); const M = mslKeys();
+    const m = new Map(); const totals = new Map();
+    for (const v of latest) { let t = 0; const per = new Map(); for (const a of v.photos) for (const it of a.p.items || []) { const k = itemKey(it); per.set(k, (per.get(k) || 0) + facingsOf(it)); t += facingsOf(it); const r = m.get(k) || { name: it.name, brand: it.brand, stores: 0, facings: 0, sos: 0 }; m.set(k, r); }
+      totals.set(v.key, t); for (const [k, f] of per) { const r = m.get(k); r.stores++; r.facings += f; r.sos += t ? f / t : 0; } }
+    const rows = [...m.entries()].map(([k, r]) => ({ ...r, k, msl: M.has(k), avgSos: r.stores ? r.sos / r.stores : 0 })).sort((a, b) => b.stores - a.stores || b.facings - a.facings);
+    return h("div", { class: "view" },
+      h("div", { class: "muted small", text: `What is on display in each store's latest visit (${latest.length} stores).` }),
+      h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["SKU", "Brand", "Stores on shelf", "Distribution", "Facings", "Avg SOS"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
+        h("tbody", {}, rows.slice(0, 150).map((r) => h("tr", {}, h("td", {}, r.name, r.msl ? h("span", { class: "sample-tag", style: "color:var(--accent);background:var(--accent-soft)", text: "MSL" }) : null), h("td", { text: r.brand || "" }),
+          h("td", { class: "r num", text: r.stores }), h("td", { class: "r num", text: pct(latest.length ? r.stores / latest.length : 0) }), h("td", { class: "r num", text: r.facings }), h("td", { class: "r num", text: pct(r.avgSos) })))))),
+        rows.length > 150 ? h("div", { class: "muted small", style: "margin-top:6px", text: `Showing 150 of ${rows.length}.` }) : null));
+  }
+  function auditMSL() {
+    const items = S.msl?.items || []; const have = new Set(items.map((x) => x.k));
+    const seen = new Map(); for (const a of auditPhotos()) for (const it of a.p.items || []) { const k = itemKey(it); const r = seen.get(k) || { k, name: it.name, brand: it.brand || null, stores: new Set() }; r.stores.add(a.storeKey); seen.set(k, r); }
+    const sugg = [...seen.values()].filter((r) => !have.has(r.k)).sort((a, b) => b.stores.size - a.stores.size || a.name.localeCompare(b.name));
+    const save = async (list) => { try { await S.db.doc("admin/msl").set({ items: list, updatedAt: new Date().toISOString() }); } catch { toast("Could not save"); } };
+    const name = h("input", { type: "text", placeholder: "Add a SKU, e.g. Lucky Me Pancit Canton Original 60g", maxlength: 80 });
+    return h("div", { class: "view" },
+      h("div", { class: "banner", text: "Must-stock list (MSL): the SKUs every store should carry. MSL%, OSA% and OOS% are measured against this list." }),
+      h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: `Must-stock SKUs (${items.length})`, style: "margin-bottom:8px" }),
+          h("form", { class: "toolbar", style: "margin-bottom:8px", onsubmit: (e) => { e.preventDefault(); const n = name.value.trim(); if (!n) return; const k = normName(n); if (have.has(k)) return toast("Already in the list"); save([...items, { k, name: n, brand: n.split(" ")[0] }]); } }, name, h("button", { class: "btn", type: "submit" }, "Add")),
+          items.length ? h("ul", { class: "list" }, items.map((x) => h("li", {}, h("span", { class: "grow", text: x.name }), h("button", { class: "btn sm danger", "aria-label": "Remove " + x.name, onclick: () => save(items.filter((y) => y.k !== x.k)) }, "Remove")))) : h("div", { class: "empty", text: "Empty. Add SKUs or use the suggestions." })),
+        h("div", { class: "card" }, h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:8px" }, h("h2", { text: "Suggestions from the photos" }),
+            sugg.some((r) => r.stores.size >= 3) ? h("button", { class: "btn sm primary", onclick: () => save([...items, ...sugg.filter((r) => r.stores.size >= 3).map((r) => ({ k: r.k, name: r.name, brand: r.brand }))]) }, "Add all seen in 3+ stores") : null),
+          sugg.length ? h("ul", { class: "list" }, sugg.slice(0, 60).map((r) => h("li", {}, h("span", { class: "grow" }, r.name, h("span", { class: "muted small", text: ` · ${r.stores.size} store(s)` })), h("button", { class: "btn sm", onclick: () => save([...items, { k: r.k, name: r.name, brand: r.brand }]) }, "+ Add")))) : h("div", { class: "empty", text: "Read photos with AI to get suggestions." }))));
+  }
+
+  // ----- Merchant side: submit shelf photos, earn points (crowdsourced, consent-based) -----
+  let mySubs = [], mySubsWatching = false;
+  function watchMySubs() { if (mySubsWatching || S.owner || !S.db) return; mySubsWatching = true; col("submissions").onSnapshot((snap) => { mySubs = snap.docs.map((d) => ({ ...d.data(), _doc: d.id })); if (view === "home") render(); }, () => {}); }
+  const myPoints = () => mySubs.reduce((a, x) => a + (x.status === "approved" ? x.points || 0 : 0), 0);
+  function shelfCard() {
+    if (S.owner) return null; watchMySubs();
+    return h("button", { class: "card", style: "text-align:left;display:grid;gap:6px", onclick: () => go("home", "shelf") },
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { text: "📸 Shelf photos — earn points" }), h("span", { class: "num", style: "font-weight:700;color:var(--accent)", text: `${myPoints()} pts` })),
+      h("div", { class: "small muted", text: `Send photos of your shelves and fridge. ${POINTS_PER_PHOTO} points for every photo KELSON approves.` }));
+  }
+  function viewShelfSubmit() {
+    watchMySubs();
+    let display = "shelf"; const consent = h("input", { type: "checkbox", id: "shelfConsent" });
+    const submit = async () => {
+      if (!consent.checked) return toast("Please tick the consent box first");
+      const files = await pickFiles(); if (!files.length) return;
+      const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Uploading photos is not available for your access level");
+      let ok = 0;
+      for (const [n, f] of files.entries()) { toast(`Sending photo ${n + 1} of ${files.length}…`);
+        try { const a = await assets.upload(await fitJpeg(f, 1280)); await write("submissions/" + uid(), { id: a.id, url: a.url, display, date: todayKey(), at: new Date().toISOString(), consent: true, status: "pending", points: 0 }); ok++; } catch { /* skip */ } }
+      toast(`${ok} photo(s) sent — waiting for approval`);
+    };
+    const sorted = [...mySubs].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Shelf photos", style: "margin-top:8px" }))),
+      h("div", { class: "grid kpis" }, h("div", { class: "card kpi" }, h("div", { class: "label", text: "Your points" }), h("div", { class: "value num", text: String(myPoints()) }), h("div", { class: "muted small", text: `${sorted.filter((x) => x.status === "approved").length} approved photo(s)` })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Waiting for approval" }), h("div", { class: "value num", text: String(sorted.filter((x) => (x.status || "pending") === "pending").length) }))),
+      h("div", { class: "card grid", style: "gap:12px" },
+        h("h2", { text: "Send new photos" }),
+        h("label", { class: "f" }, "What are you photographing?", h("select", { onchange: (e) => (display = e.target.value) }, Object.entries(DISPLAYS).map(([v, l]) => h("option", { value: v, text: l, selected: v === "shelf" || null })))),
+        h("ul", { class: "small muted", style: "margin:0;padding-left:18px" }, h("li", { text: "Stand back so the whole shelf or fridge fits, in good light." }), h("li", { text: "No people's faces, IDs or receipts with names." })),
+        h("label", { style: "display:flex;gap:10px;align-items:flex-start" }, consent, h("span", { class: "small", text: "I agree that KELSON may use these photos to measure which products are on display and in stock, and to share totals (never my store's name) with other stores. I can ask KELSON to delete them anytime." })),
+        h("button", { class: "btn primary big", onclick: submit }, upIcon(), "Choose photos and send")),
+      h("div", { class: "card" }, h("h2", { text: "Your submissions", style: "margin-bottom:6px" }),
+        sorted.length ? h("ul", { class: "list" }, sorted.map((x) => h("li", {}, h("img", { src: x.url, alt: "", style: "width:56px;height:42px;object-fit:cover;border-radius:6px" }),
+          h("div", { class: "grow" }, h("div", { class: "small", style: "font-weight:600", text: `${DISPLAYS[x.display] || "Shelf"} · ${fmtDate(x.date)}` }), h("div", { class: "muted small", text: x.status === "approved" ? `+${x.points || 0} points` : x.status === "rejected" ? "Not approved" : "Waiting for approval" })),
+          statusChip(STATUS[x.status || "pending"])))) : h("div", { class: "empty", text: "No photos sent yet." })),
+      h("p", { class: "muted small", text: "Points are shown here as KELSON approves each photo. Approved means the photo is clear and shows your shelf." }));
+  }
+
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

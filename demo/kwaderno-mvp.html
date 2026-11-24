@@ -1,0 +1,687 @@
+<title>KWADERNO Tindahan</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: app shell — sticky header + tab bar (desktop) / bottom bar (phone); one view at a time */
+:root {
+  --bg: #f4f8f8; --surface: #ffffff; --surface-2: #eaf2f2; --fg: #14262b; --muted: #5b6f73; --line: #d6e2e3;
+  --accent: #0e7c86; --accent-fg: #ffffff; --accent-soft: #dff1f2;
+  --good: #1f7a4d; --warn: #a66300; --warn-soft: #fff3dc; --bad: #c0392b; --bad-soft: #fdeceb;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1a1d; --surface: #16252a; --surface-2: #1d3036; --fg: #e6f0f1; --muted: #9bb2b6; --line: #2a4047;
+  --accent: #3fb6bf; --accent-fg: #062326; --accent-soft: #173b40;
+  --good: #5fcf95; --warn: #f0b44d; --warn-soft: #3a2e14; --bad: #ff8a7d; --bad-soft: #3d1f1c; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f1a1d; --surface: #16252a; --surface-2: #1d3036; --fg: #e6f0f1; --muted: #9bb2b6; --line: #2a4047;
+  --accent: #3fb6bf; --accent-fg: #062326; --accent-soft: #173b40;
+  --good: #5fcf95; --warn: #f0b44d; --warn-soft: #3a2e14; --bad: #ff8a7d; --bad-soft: #3d1f1c; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.2; margin: 0; text-wrap: balance; }
+h1 { font-size: 1.5rem; } h2 { font-size: 1.1rem; } h3 { font-size: 1rem; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .small { font-size: .82rem; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20; background: var(--surface); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 10px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; letter-spacing: .02em; }
+.brand svg { width: 28px; height: 28px; flex: none; }
+.store-name { color: var(--muted); font-size: .85rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.demo-pill { margin-left: auto; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; background: var(--warn-soft); color: var(--warn); padding: 3px 8px; border-radius: 99px; white-space: nowrap; }
+nav.tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; }
+nav.tabs a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color: var(--muted); font-weight: 500; white-space: nowrap; }
+nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
+nav.bottom { display: none; }
+main { padding-block: 18px 110px; }
+@media (max-width: 760px) {
+  nav.tabs { display: none; }
+  nav.bottom { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
+    padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+  nav.bottom a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 10px; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600; }
+  nav.bottom a[aria-current="page"] { color: var(--accent); }
+  nav.bottom svg { width: 22px; height: 22px; }
+}
+.view { display: grid; gap: 16px; }
+.head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.grid { display: grid; gap: 12px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.kpi .label { color: var(--muted); font-size: .8rem; }
+.kpi .value { font-family: var(--font-display); font-size: 1.45rem; font-weight: 600; margin-top: 2px; }
+.two { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 9px 14px; border-radius: 10px; font-weight: 600; min-height: 42px; }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.btn.danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--line)); }
+.btn.big { width: 100%; min-height: 54px; font-size: 1.05rem; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.sm { min-height: 34px; padding: 5px 10px; font-size: .85rem; }
+input[type=text], input[type=number], input[type=search], input[type=date], input[type=tel], select {
+  width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+label.f { display: grid; gap: 5px; font-size: .85rem; font-weight: 500; }
+.form { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.list { list-style: none; margin: 0; padding: 0; }
+.list > li { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.list > li:last-child { border-bottom: 0; }
+.grow { flex: 1; min-width: 0; }
+.trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 99px; font-size: .75rem; font-weight: 600; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.chip.low { background: var(--warn-soft); color: var(--warn); } .chip.out { background: var(--bad-soft); color: var(--bad); } .chip.ok { background: var(--accent-soft); color: var(--accent); }
+.chip.credit { background: var(--bad-soft); color: var(--bad); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.tile { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px; min-height: 84px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; }
+.tile.in { border-color: var(--accent); background: var(--accent-soft); }
+.tile .n { font-weight: 600; font-size: .88rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tile .r { display: flex; justify-content: space-between; align-items: end; gap: 4px; }
+.sell { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
+@media (max-width: 900px) { .sell { grid-template-columns: 1fr; } }
+.cart { position: sticky; top: 120px; }
+.qty { display: inline-flex; align-items: center; }
+.qty button { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--surface); }
+.qty button:first-child { border-radius: 8px 0 0 8px; } .qty button:last-child { border-radius: 0 8px 8px 0; }
+.qty input { width: 52px; height: 34px; min-height: 34px; border-radius: 0; text-align: center; padding: 0 4px; border-left: 0; border-right: 0; }
+.total { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--line); padding-top: 10px; }
+.total .v { font-family: var(--font-display); font-size: 2rem; font-weight: 700; }
+.methods { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.methods button { min-height: 54px; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; font-weight: 600; }
+.methods button[aria-checked="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.change { padding: 10px 12px; border-radius: 10px; font-weight: 700; font-size: 1.15rem; background: var(--accent-soft); }
+.change.short { background: var(--bad-soft); color: var(--bad); }
+.note { padding: 10px 12px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: .88rem; }
+.note.err { background: var(--bad-soft); color: var(--bad); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { color: var(--muted); font-weight: 500; font-size: .8rem; }
+td.r, th.r { text-align: right; }
+tfoot td { font-weight: 700; }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.pills button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 12px; font-size: .85rem; }
+.pills button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+dialog { border: 0; padding: 0; border-radius: 16px; background: var(--surface); color: var(--fg); width: min(520px, calc(100% - 24px)); max-height: calc(100% - 24px); }
+dialog::backdrop { background: rgb(0 0 0 / .45); }
+dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 0; gap: 10px; }
+dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
+.x { border: 0; background: transparent; font-size: 1.4rem; line-height: 1; padding: 4px 8px; color: var(--muted); }
+.receipt { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .88rem; display: grid; gap: 4px; }
+.receipt .row { display: flex; justify-content: space-between; gap: 8px; }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(88px + env(safe-area-inset-bottom, 0px)); z-index: 50; background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; max-width: calc(100% - 32px); }
+.empty { text-align: center; padding: 26px 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
+.banner { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: .9rem; }
+.mobile-cart { display: none; }
+@media (max-width: 900px) {
+  .cart.desktop { display: none; }
+  .mobile-cart { display: flex; position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 25;
+    background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 14px; padding: 14px 16px; justify-content: space-between; font-weight: 700; box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+}
+@media (prefers-reduced-motion: no-preference) { .tile, .btn { transition: transform .08s ease; } .tile:active, .btn:active { transform: scale(.98); } }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="4" y="3" width="22" height="26" rx="4" fill="#0e7c86"/><rect x="8" y="3" width="2" height="26" fill="#fff" fill-opacity=".35"/><path d="M13 10h9M13 15h9M13 20h6" stroke="#fff" stroke-width="2" stroke-linecap="round"/><rect x="2" y="23.5" width="28" height="2.5" rx="1.25" fill="#f0b429"/></svg>
+      KWADERNO
+    </div>
+    <span class="store-name" id="storeName"></span>
+    <span class="demo-pill" title="Lightweight online version for testing. The full system adds receipt AI, offline mode, roles and the admin portal.">Pilot demo</span>
+  </div>
+  <div class="wrap"><nav class="tabs" aria-label="Main" id="tabs"></nav></div>
+</header>
+
+<main class="wrap"><div id="app"></div></main>
+<nav class="bottom" aria-label="Main" id="bottom"></nav>
+<dialog id="dlg"><div class="dh"><h2 id="dlgTitle"></h2><button class="x" aria-label="Close" data-close>×</button></div><div class="db" id="dlgBody"></div></dialog>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+  "use strict";
+  // ---------- tiny helpers ----------
+  const $ = (s, el = document) => el.querySelector(s);
+  const h = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v == null || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "text") el.textContent = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    return el;
+  };
+  const peso = (c) => "₱" + ((c || 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const qtyFmt = (q) => (Number.isInteger(q) ? q : Math.round(q * 1000) / 1000).toLocaleString("en-PH");
+  const toCentavos = (s) => { const t = String(s ?? "").replace(/[₱,\s]/g, ""); return /^\d+(\.\d{0,2})?$/.test(t) ? Math.round(Number(t) * 100) : null; };
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+  const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+  const todayKey = () => dayKey(new Date().toISOString());
+  const when = (iso) => new Date(iso).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  let toastT;
+  const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2600); };
+
+  // ---------- state ----------
+  // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
+  const S = { db: null, me: null, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
+  let view = "home", sub = null, productFilter = "all", search = "";
+  const VIEWS = [
+    ["home", "Home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
+    ["sell", "Sell", "M3 4h2l2 12h11l2-8H7M9 20a1 1 0 1 0 0 .1M17 20a1 1 0 1 0 0 .1"],
+    ["products", "Stock", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"],
+    ["utang", "Utang", "M16 11a4 4 0 1 0-8 0M4 21a8 8 0 0 1 16 0"],
+    ["reports", "Reports", "M4 20V10M10 20V4M16 20v-7M22 20H2"],
+  ];
+
+  const derived = () => {
+    const stock = new Map(), sold = new Map(), balance = new Map();
+    for (const m of S.moves) stock.set(m.productId, (stock.get(m.productId) || 0) + Number(m.qty || 0));
+    for (const s of S.sales) {
+      if (s.voided) continue;
+      for (const l of s.lines || []) { stock.set(l.productId, (stock.get(l.productId) || 0) - Number(l.qty || 0)); sold.set(l.productId, (sold.get(l.productId) || 0) + Number(l.qty || 0)); }
+      if (s.method === "credit" && s.customerId) balance.set(s.customerId, (balance.get(s.customerId) || 0) + s.total);
+    }
+    for (const p of S.payments) balance.set(p.customerId, (balance.get(p.customerId) || 0) - p.amount);
+    return { stock, sold, balance };
+  };
+  let D = derived();
+  const productById = (id) => S.products.find((p) => p.id === id);
+  const activeProducts = () => S.products.filter((p) => !p.archived).sort((a, b) => a.name.localeCompare(b.name));
+  const stockOf = (id) => Math.round((D.stock.get(id) || 0) * 1000) / 1000;
+
+  // ---------- data ----------
+  const col = (name) => S.db.collection(name);
+  async function write(path, body) {
+    if (!S.db) throw new Error("Not connected");
+    await S.db.doc(path).set(body);
+  }
+  async function boot() {
+    let db = null, user = null;
+    try { [db, user] = await Promise.all([window.claude?.use?.("db"), window.claude?.use?.("user")]); } catch { /* handled below */ }
+    if (!db) { S.error = "nodb"; S.ready = true; render(); return; }
+    S.db = db;
+    try { S.me = user ? await user.id() : null; } catch { S.me = null; }
+    const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
+    let pending = new Set(["products", "moves", "sales", "customers", "payments"]);
+    const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
+    for (const k of ["products", "moves", "sales", "customers", "payments"]) {
+      col(k).onSnapshot((snap) => {
+        S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        D = derived();
+        if (!snap.metadata.fromCache) done(k);
+        render();
+      }, (e) => { S.error = e.code; S.ready = true; clearTimeout(timer); render(); });
+    }
+    db.doc("store/profile").onSnapshot((d) => { if (d.exists) S.store = { ...S.store, ...d.data() }; render(); }, () => {});
+  }
+
+  // ---------- routing ----------
+  function go(v, s = null) { view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); }
+  function readHash() {
+    const raw = location.hash.slice(1);
+    const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
+    view = v ? v[0] : "home";
+    sub = v && raw.length > v[0].length ? raw.slice(v[0].length + 1) : null;
+  }
+  window.addEventListener("hashchange", () => { readHash(); render(); });
+
+  // ---------- dialog ----------
+  const dlg = $("#dlg");
+  dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest("[data-close]")) dlg.close(); });
+  function openDialog(title, body) { $("#dlgTitle").textContent = title; const b = $("#dlgBody"); b.replaceChildren(body); dlg.showModal(); }
+
+  // ---------- shell ----------
+  function navLinks(container, withIcons) {
+    container.replaceChildren(...VIEWS.map(([k, label, d]) => h("a", { href: "#" + k, "aria-current": view === k ? "page" : null, onclick: (e) => { e.preventDefault(); go(k); } },
+      withIcons ? svgIcon(d) : null, label)));
+  }
+  function svgIcon(d) {
+    const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("fill", "none"); s.setAttribute("stroke", "currentColor"); s.setAttribute("stroke-width", "1.8"); s.setAttribute("stroke-linecap", "round"); s.setAttribute("stroke-linejoin", "round"); s.setAttribute("aria-hidden", "true");
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); s.append(p); return s;
+  }
+
+  function render() {
+    $("#storeName").textContent = S.store.name;
+    navLinks($("#tabs"), false); navLinks($("#bottom"), true);
+    const app = $("#app");
+    if (S.error === "nodb") return app.replaceChildren(h("div", { class: "card" }, h("h2", { text: "Sign in to use the store" }), h("p", { class: "muted", text: "This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor)." })));
+    if (!S.ready) return app.replaceChildren(h("div", { class: "empty", text: S.error === "slow" ? "Still connecting… check your internet connection." : "Loading your store…" }));
+    if (S.error && S.error !== "slow") app.prepend?.(h("div", { class: "note err", text: "Some data could not load (" + S.error + "). Reload the page to try again." }));
+    const fns = { home: viewHome, sell: viewSell, products: viewProducts, utang: viewUtang, reports: viewReports };
+    app.replaceChildren(fns[view]());
+  }
+
+  // ---------- HOME ----------
+  function viewHome() {
+    const t = todayKey();
+    const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
+    const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
+    const by = (m) => sum(today.filter((s) => s.method === m), (s) => s.total);
+    const prods = activeProducts();
+    const value = sum(prods, (p) => Math.max(0, stockOf(p.id)) * (p.cost || 0));
+    const low = prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).sort((a, b) => stockOf(a.id) - (a.reorder || 0) - (stockOf(b.id) - (b.reorder || 0)));
+    const owed = [...D.balance.values()].filter((v) => v > 0);
+    const recent = [...S.sales].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+    const kpi = (label, value, hint, onclick) => h(onclick ? "button" : "div", { class: "card kpi", style: onclick ? "text-align:left" : null, onclick }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("div", { class: "muted small", text: new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" }) }), h("h1", { text: "Magandang araw!" })),
+        h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => go("sell") }, "Record a sale"), h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"), h("button", { class: "btn", onclick: () => go("products", "new") }, "Add product"))),
+      h("div", { class: "grid kpis" },
+        kpi("Sales today", peso(sum(today, (s) => s.total)), `${today.length} sale(s)`),
+        kpi("Cash · GCash · Utang", `${peso(by("cash"))}`, `GCash ${peso(by("gcash"))} · Utang ${peso(by("credit"))}`),
+        kpi("Inventory value", peso(value), `${prods.length} products at cost`, () => go("reports")),
+        kpi("Low stock", String(low.length), "At or below reorder level", () => { productFilter = "low"; go("products"); }),
+        kpi("Utang outstanding", peso(sum(owed, (x) => x)), `${owed.length} customer(s)`, () => go("utang"))),
+      h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: "Recent sales" }),
+          recent.length ? h("ul", { class: "list" }, recent.map((s) => h("li", {},
+            h("div", { class: "grow" }, h("div", { class: "trunc", style: s.voided ? "text-decoration:line-through" : null, text: (s.lines || []).map((l) => `${qtyFmt(l.qty)}× ${l.name}`).join(", ") }), h("div", { class: "muted small", text: `${when(s.at)}${s.customerId ? " · " + (custName(s.customerId)) : ""}` })),
+            h("span", { class: "chip " + (s.method === "credit" ? "credit" : ""), text: s.voided ? "voided" : s.method === "credit" ? "utang" : s.method }),
+            h("span", { class: "num", text: peso(s.total) }),
+            h("button", { class: "btn sm", onclick: () => showReceipt(s) }, "View"))))
+            : h("div", { class: "empty", text: "No sales yet. Tap “Record a sale”." })),
+        h("div", { class: "card" }, h("h2", { text: "Low stock" }),
+          low.length ? h("ul", { class: "list" }, low.slice(0, 8).map((p) => h("li", {}, h("span", { class: "grow trunc", text: p.name }), stockChip(p)))) : h("div", { class: "empty", text: prods.length ? "Everything is above its reorder level." : "Add products to start tracking stock." }))));
+  }
+  const custName = (id) => S.customers.find((c) => c.id === id)?.name || "Customer";
+  function stockChip(p) {
+    const q = stockOf(p.id);
+    return h("span", { class: "chip num " + (q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "ok"), text: `${qtyFmt(q)} ${p.unit || "pc"}` });
+  }
+
+  // ---------- SELL ----------
+  function addToCart(p) {
+    const i = cart.lines.findIndex((l) => l.productId === p.id);
+    if (i >= 0) cart.lines[i].qty = String((Number(cart.lines[i].qty) || 0) + 1);
+    else cart.lines.push({ productId: p.id, qty: "1" });
+    render();
+  }
+  function cartCalc() {
+    const lines = cart.lines.map((l) => ({ ...l, p: productById(l.productId), q: Number(l.qty) || 0 })).filter((l) => l.p);
+    const subtotal = lines.reduce((a, l) => a + Math.round(l.q * l.p.price), 0);
+    const disc = toCentavos(cart.discount || "0") ?? 0;
+    const total = Math.max(0, subtotal - disc);
+    const tendered = cart.tendered ? toCentavos(cart.tendered) : null;
+    const short = lines.filter((l) => l.q > stockOf(l.productId));
+    return { lines, subtotal, disc, total, tendered, change: tendered != null ? tendered - total : null, short };
+  }
+  function viewSell() {
+    const prods = activeProducts();
+    const best = [...prods].sort((a, b) => (D.sold.get(b.id) || 0) - (D.sold.get(a.id) || 0) || a.name.localeCompare(b.name));
+    const f = search.trim().toLowerCase();
+    const shown = (f ? best.filter((p) => p.name.toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim())) : best).slice(0, 60);
+    const c = cartCalc();
+    const checkout = () => {
+      currentCheckout = checkout;
+      const box = h("div", { class: "grid", style: "gap:12px" });
+      if (!c.lines.length) { box.append(h("div", { class: "empty", text: "Tap products to add them here." })); return box; }
+      box.append(h("ul", { class: "list" }, c.lines.map((l) => h("li", {},
+        h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: l.p.name }), h("div", { class: "small " + (l.q > stockOf(l.productId) ? "" : "muted"), style: l.q > stockOf(l.productId) ? "color:var(--bad)" : null, text: `${peso(l.p.price)} · ${qtyFmt(stockOf(l.productId))} left` })),
+        h("div", { class: "qty" },
+          h("button", { "aria-label": "Less", onclick: () => { const n = (Number(l.qty) || 0) - 1; if (n <= 0) cart.lines = cart.lines.filter((x) => x.productId !== l.productId); else cart.lines.find((x) => x.productId === l.productId).qty = String(n); render(); } }, "−"),
+          h("input", { type: "text", inputmode: "decimal", value: l.qty, "aria-label": "Quantity", id: "q-" + l.productId, oninput: (e) => { cart.lines.find((x) => x.productId === l.productId).qty = e.target.value; render(); } }),
+          h("button", { "aria-label": "More", onclick: () => { cart.lines.find((x) => x.productId === l.productId).qty = String((Number(l.qty) || 0) + 1); render(); } }, "+")),
+        h("span", { class: "num", style: "width:76px;text-align:right;font-weight:600", text: peso(Math.round(l.q * l.p.price)) })))));
+      box.append(h("label", { class: "f" }, "Discount (optional)", h("input", { type: "text", inputmode: "decimal", id: "disc", value: cart.discount, placeholder: "0.00", oninput: (e) => { cart.discount = e.target.value; render(); } })));
+      box.append(h("div", { class: "total" }, h("span", { class: "muted", text: "Total" }), h("span", { class: "v num", text: peso(c.total) })));
+      box.append(h("div", { class: "methods", role: "radiogroup", "aria-label": "Payment method" }, [["cash", "Cash"], ["gcash", "GCash"], ["credit", "Utang"]].map(([m, label]) =>
+        h("button", { role: "radio", "aria-checked": String(cart.method === m), onclick: () => { cart.method = m; render(); } }, label))));
+      if (cart.method === "cash") {
+        box.append(h("label", { class: "f" }, "Cash received (optional)", h("input", { type: "text", inputmode: "decimal", id: "tend", value: cart.tendered, placeholder: (c.total / 100).toFixed(2), oninput: (e) => { cart.tendered = e.target.value; render(); } })));
+        box.append(h("div", { class: "pills" }, [2000, 5000, 10000, 20000, 50000, 100000].filter((v) => v >= c.total).slice(0, 4).map((v) => h("button", { onclick: () => { cart.tendered = (v / 100).toFixed(2); render(); } }, peso(v)))));
+        if (c.change != null) box.append(h("div", { class: "change num" + (c.change < 0 ? " short" : ""), text: c.change < 0 ? `Kulang ${peso(-c.change)}` : `Sukli: ${peso(c.change)}` }));
+      } else if (cart.method === "gcash") {
+        box.append(h("label", { class: "f" }, "GCash reference no. (optional)", h("input", { type: "text", inputmode: "numeric", id: "ref", value: cart.ref, oninput: (e) => { cart.ref = e.target.value; } })));
+        box.append(h("div", { class: "banner", text: "Recorded only. Check your GCash app to confirm the payment arrived." }));
+      } else {
+        const custs = [...S.customers].sort((a, b) => a.name.localeCompare(b.name));
+        box.append(h("label", { class: "f" }, "Customer", h("select", { id: "cust", onchange: (e) => { cart.customerId = e.target.value; render(); } },
+          h("option", { value: "", text: custs.length ? "Choose customer…" : "No customers yet" }), custs.map((x) => h("option", { value: x.id, selected: cart.customerId === x.id, text: `${x.name} — owes ${peso(D.balance.get(x.id) || 0)}` })))));
+        box.append(h("button", { class: "btn sm", onclick: () => customerForm((id) => { cart.customerId = id; render(); }) }, "+ New customer"));
+        const cust = S.customers.find((x) => x.id === cart.customerId);
+        if (cust?.limit && (D.balance.get(cust.id) || 0) + c.total > cust.limit) box.append(h("div", { class: "note err", text: `This would put ${cust.name} over their utang limit of ${peso(cust.limit)}.` }));
+      }
+      if (c.short.length) box.append(h("div", { class: "note err", text: `Not enough stock: ${c.short.map((l) => `${l.p.name} (${qtyFmt(stockOf(l.productId))} left)`).join(", ")}. Do a stock-in or correct the count first.` }));
+      const cust = S.customers.find((x) => x.id === cart.customerId);
+      const overLimit = cart.method === "credit" && cust?.limit && (D.balance.get(cust.id) || 0) + c.total > cust.limit;
+      const can = c.lines.length && !c.short.length && c.lines.every((l) => l.q > 0) && c.disc <= c.subtotal && (cart.method !== "credit" || (cart.customerId && !overLimit)) && (cart.method !== "cash" || c.change == null || c.change >= 0);
+      box.append(h("button", { class: "btn primary big", disabled: !can, onclick: charge }, cart.method === "credit" ? `Record utang ${peso(c.total)}` : `Charge ${peso(c.total)}`));
+      return box;
+    };
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("h1", { text: "Sell" }), h("span", { class: "muted small", text: "Tap a product, or type/scan its barcode and press Enter." })),
+      h("div", { class: "sell" },
+        h("div", { class: "grid", style: "gap:10px" },
+          h("input", { type: "search", id: "sellSearch", placeholder: "Search product or type barcode", value: search, "aria-label": "Search products",
+            oninput: (e) => { search = e.target.value; render(); },
+            onkeydown: (e) => { if (e.key === "Enter") { const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code) toast("No product with that barcode or name"); } } }),
+          prods.length ? h("div", { class: "tiles", role: "list" }, shown.map((p) => {
+            const inCart = cart.lines.find((l) => l.productId === p.id); const q = stockOf(p.id);
+            return h("button", { class: "tile" + (inCart ? " in" : ""), role: "listitem", onclick: () => addToCart(p) },
+              h("span", { class: "n", text: p.name }),
+              h("span", { class: "r" }, h("b", { class: "num", text: peso(p.price) }), h("span", { class: "small num", style: q <= 0 ? "color:var(--bad)" : "color:var(--muted)", text: inCart ? `×${inCart.qty}` : `${qtyFmt(q)} left` })));
+          })) : h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))),
+        h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
+      c.lines.length ? h("button", { class: "mobile-cart", onclick: () => openDialog("Current sale", checkoutDialog()) }, h("span", { text: `${c.lines.length} item(s)` }), h("span", { class: "num", text: `${peso(c.total)} ›` })) : null);
+    function checkoutDialog() { const wrap = h("div", { id: "mcart" }); wrap.replaceChildren(checkout()); return wrap; }
+  }
+  // The phone cart dialog always re-renders from the CURRENT view's checkout (never a stale closure).
+  let currentCheckout = null;
+  const mobileRefresh = () => { const w = $("#mcart"); if (w && currentCheckout) w.replaceChildren(currentCheckout()); };
+  const _render = render;
+  // re-render the mobile cart dialog together with the page
+  // and keep focus/caret in the field being typed in across live re-renders
+  render = function () {
+    const active = document.activeElement?.id, selStart = document.activeElement?.selectionStart;
+    _render();
+    if (dlg.open && view === "sell") mobileRefresh();
+    if (active) { const el = (dlg.open && dlg.querySelector("#" + CSS.escape(active))) || document.getElementById(active); if (el && el !== document.activeElement) { el.focus(); try { el.setSelectionRange(selStart, selStart); } catch { /* not a text input */ } } }
+  };
+
+  let charging = false;
+  async function charge() {
+    if (charging) return;
+    const c = cartCalc();
+    const sale = {
+      at: new Date().toISOString(), by: S.me || null, method: cart.method, subtotal: c.subtotal, discount: c.disc, total: c.total,
+      tendered: cart.method === "cash" ? c.tendered ?? c.total : null, ref: cart.method === "gcash" ? cart.ref.trim() || null : null,
+      customerId: cart.method === "credit" ? cart.customerId : null, voided: false,
+      lines: c.lines.map((l) => ({ productId: l.productId, name: l.p.name, qty: l.q, price: l.p.price, cost: l.p.cost || 0 })),
+    };
+    charging = true;
+    const id = uid(); // client id: a retried save can never create two sales
+    try {
+      await write("sales/" + id, sale);
+      Object.assign(cart, { lines: [], tendered: "", ref: "", discount: "", customerId: "", method: "cash" });
+      if (dlg.open) dlg.close();
+      showReceipt({ id, ...sale }, c.change);
+    } catch (e) { toast("Could not save the sale: " + (e?.message || e?.code || "try again")); }
+    finally { charging = false; }
+  }
+  function showReceipt(s, change) {
+    const body = h("div", { class: "grid" },
+      h("div", { class: "receipt" },
+        h("div", { style: "text-align:center;font-weight:700", text: S.store.name }),
+        h("div", { class: "muted small", style: "text-align:center", text: when(s.at) + (s.voided ? " · VOIDED" : "") }),
+        h("hr", { style: "border:0;border-top:1px dashed var(--line);width:100%" }),
+        (s.lines || []).map((l) => h("div", { class: "row" }, h("span", { class: "trunc", text: `${qtyFmt(l.qty)} × ${l.name}` }), h("span", { class: "num", text: peso(Math.round(l.qty * l.price)) }))),
+        h("hr", { style: "border:0;border-top:1px dashed var(--line);width:100%" }),
+        s.discount ? h("div", { class: "row" }, h("span", { text: "Discount" }), h("span", { class: "num", text: "−" + peso(s.discount) })) : null,
+        h("div", { class: "row", style: "font-weight:700;font-size:1.05rem" }, h("span", { text: "TOTAL" }), h("span", { class: "num", text: peso(s.total) })),
+        h("div", { class: "row" }, h("span", { text: s.method === "credit" ? "Utang — " + custName(s.customerId) : s.method === "gcash" ? "GCash" + (s.ref ? " ref " + s.ref : "") : "Cash" }), h("span", { class: "num", text: peso(s.method === "cash" ? s.tendered ?? s.total : s.total) })),
+        change != null && change > 0 ? h("div", { class: "row", style: "font-weight:700" }, h("span", { text: "Sukli" }), h("span", { class: "num", text: peso(change) })) : null,
+        h("div", { class: "muted small", style: "text-align:center", text: "Salamat po! · Not an official receipt" })),
+      h("button", { class: "btn primary big", onclick: () => dlg.close() }, "New sale"),
+      !s.voided && s.id ? h("button", { class: "btn danger", onclick: () => voidSale(s) }, "Void this sale") : null);
+    openDialog(s.method === "credit" ? "Utang recorded" : "Sale", body);
+  }
+  function voidSale(s) {
+    const reason = h("input", { type: "text", id: "voidReason", placeholder: "Reason (required), e.g. wrong item" });
+    const btn = h("button", { class: "btn danger big", onclick: async () => {
+      if (reason.value.trim().length < 3) return toast("Give a short reason");
+      btn.disabled = true;
+      try { await S.db.doc("sales/" + s.id).update({ voided: true, voidReason: reason.value.trim(), voidedAt: new Date().toISOString(), voidedBy: S.me || null }); dlg.close(); toast("Sale voided — stock and utang restored"); }
+      catch (e) { btn.disabled = false; toast("Could not void: " + (e?.code || "try again")); }
+    } }, "Void sale");
+    openDialog("Void this sale?", h("div", { class: "grid" }, h("p", { class: "muted", text: "Stock comes back and any utang from it is removed. The sale stays in history marked as voided." }), reason, btn));
+  }
+
+  // ---------- PRODUCTS & STOCK ----------
+  function viewProducts() {
+    if (sub === "new") return productForm(null);
+    if (sub === "stockin") return stockIn();
+    if (sub && sub.startsWith("p-")) { const p = productById(sub.slice(2)); if (p) return productDetail(p); }
+    const f = search.trim().toLowerCase();
+    let list = activeProducts().filter((p) => !f || p.name.toLowerCase().includes(f) || (p.category || "").toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim()));
+    if (productFilter === "low") list = list.filter((p) => stockOf(p.id) <= (p.reorder || 0));
+    if (productFilter === "out") list = list.filter((p) => stockOf(p.id) <= 0);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("h1", { text: "Products & stock" }), h("div", { class: "pills" }, h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"), h("button", { class: "btn primary", onclick: () => go("products", "new") }, "+ Add product"))),
+      h("input", { type: "search", id: "prodSearch", placeholder: "Search name, category or barcode", value: search, "aria-label": "Search products", oninput: (e) => { search = e.target.value; render(); } }),
+      h("div", { class: "pills" }, [["all", "All"], ["low", "Low stock"], ["out", "Out of stock"]].map(([k, l]) => h("button", { "aria-pressed": String(productFilter === k), onclick: () => { productFilter = k; render(); } }, l))),
+      list.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, list.map((p) => h("li", {},
+        h("button", { class: "grow", style: "text-align:left;border:0;background:none;padding:0", onclick: () => go("products", "p-" + p.id) }, h("div", { class: "trunc", style: "font-weight:600", text: p.name }), h("div", { class: "muted small trunc", text: [p.category, (p.barcodes || [])[0]].filter(Boolean).join(" · ") || "—" })),
+        h("span", { class: "num", style: "font-weight:600", text: peso(p.price) }), stockChip(p)))))
+        : h("div", { class: "empty", text: S.products.length ? "No matching products." : "No products yet. Add your first product." }));
+  }
+  function productForm(p) {
+    const v = p || { name: "", unit: "pc", price: 0, cost: 0, reorder: 5, category: "", barcodes: [] };
+    const i = (id, label, val, extra = {}) => h("label", { class: "f" }, label, h("input", { type: "text", id, value: val ?? "", ...extra }));
+    const form = h("form", { class: "card grid", style: "gap:14px", onsubmit: async (e) => {
+      e.preventDefault();
+      const name = $("#pf-name").value.trim(); const price = toCentavos($("#pf-price").value); const cost = toCentavos($("#pf-cost").value || "0");
+      const reorder = Number($("#pf-reorder").value || 0); const opening = Number($("#pf-open")?.value || 0);
+      const code = $("#pf-code").value.trim();
+      if (!name) return toast("Enter the product name");
+      if (price == null) return toast("Enter a valid selling price, e.g. 16.00");
+      if (cost == null) return toast("Enter a valid cost");
+      if (code && S.products.some((x) => x.id !== p?.id && (x.barcodes || []).includes(code))) return toast("That barcode is already used by another product");
+      const id = p?.id || uid();
+      const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString() };
+      try {
+        await write("products/" + id, body);
+        if (!p && opening > 0) await write("moves/" + uid(), { productId: id, kind: "opening", qty: opening, cost, reason: "Opening stock", at: new Date().toISOString(), by: S.me || null });
+        toast(p ? "Product saved" : "Product added"); go("products", "p-" + id);
+      } catch (err) { toast("Could not save: " + (err?.code || "try again")); }
+    } },
+      h("div", { class: "form" },
+        i("pf-name", "Product name", v.name, { placeholder: "e.g. Lucky Me Pancit Canton 60g", required: true }),
+        i("pf-cat", "Category (optional)", v.category, { placeholder: "e.g. Noodles" }),
+        i("pf-unit", "Counted in", v.unit, { placeholder: "pc, pack, sachet, can, kg" }),
+        i("pf-price", "Selling price (₱)", (v.price / 100).toFixed(2), { inputmode: "decimal" }),
+        i("pf-cost", "Cost / puhunan (₱)", (v.cost / 100).toFixed(2), { inputmode: "decimal" }),
+        i("pf-reorder", "Low-stock alert at", v.reorder, { inputmode: "decimal" }),
+        i("pf-code", "Barcode (optional)", (v.barcodes || [])[0] || "", { inputmode: "numeric" }),
+        p ? null : i("pf-open", "Stock on hand now", "0", { inputmode: "decimal" })),
+      h("div", { class: "pills" }, h("button", { class: "btn primary", type: "submit" }, p ? "Save changes" : "Add product"), h("button", { class: "btn", type: "button", onclick: () => go("products", p ? "p-" + p.id : null) }, "Cancel")));
+    return h("div", { class: "view" }, h("h1", { text: p ? "Edit product" : "Add product" }), form);
+  }
+  function productDetail(p) {
+    const hist = [
+      ...S.moves.filter((m) => m.productId === p.id).map((m) => ({ at: m.at, label: KIND[m.kind] || m.kind, qty: Number(m.qty), note: m.reason || m.supplier || "" })),
+      ...S.sales.filter((s) => !s.voided).flatMap((s) => (s.lines || []).filter((l) => l.productId === p.id).map((l) => ({ at: s.at, label: s.method === "credit" ? "Sale (utang)" : "Sale", qty: -l.qty, note: s.customerId ? custName(s.customerId) : "" }))),
+    ].sort((a, b) => b.at.localeCompare(a.at));
+    const margin = p.price - (p.cost || 0);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: p.name, style: "margin-top:8px" }), h("div", { class: "muted small", text: [p.category, (p.barcodes || [])[0] && "Barcode " + p.barcodes[0]].filter(Boolean).join(" · ") })),
+        h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => adjustDialog(p) }, "Adjust stock"), h("button", { class: "btn", onclick: () => go("products", "edit-" + p.id) }, "Edit"),
+          h("button", { class: "btn danger", onclick: async () => { await write("products/" + p.id, { ...strip(p), archived: true }); toast("Archived — history kept"); go("products"); } }, "Archive"))),
+      h("div", { class: "grid kpis" },
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "In stock" }), h("div", { class: "value" }, stockChip(p))),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Price" }), h("div", { class: "value num", text: peso(p.price) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Cost" }), h("div", { class: "value num", text: peso(p.cost) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: `Margin per ${p.unit}` }), h("div", { class: "value num", style: margin < 0 ? "color:var(--bad)" : "color:var(--good)", text: peso(margin) }))),
+      h("div", { class: "card" }, h("h2", { text: "Stock history", style: "margin-bottom:6px" }),
+        hist.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", { text: "When" }), h("th", { text: "What" }), h("th", { class: "r", text: "Change" }), h("th", { text: "Note" }))),
+          h("tbody", {}, hist.slice(0, 200).map((x) => h("tr", {}, h("td", { class: "muted", text: when(x.at) }), h("td", { text: x.label }), h("td", { class: "r num", style: x.qty > 0 ? "color:var(--good)" : "color:var(--bad)", text: (x.qty > 0 ? "+" : "") + qtyFmt(x.qty) }), h("td", { class: "muted", text: x.note }))))))
+          : h("div", { class: "empty", text: "No stock movements yet." })));
+  }
+  const strip = (p) => { const { id, ...rest } = p; return rest; };
+  const KIND = { opening: "Opening stock", stock_in: "Stock-in", damaged: "Damaged", expired: "Expired", correction: "Count correction", customer_return: "Customer return", supplier_return: "Return to supplier" };
+  function adjustDialog(p) {
+    const types = [["damaged", "Damaged / sira", -1], ["expired", "Expired", -1], ["supplier_return", "Returned to supplier", -1], ["customer_return", "Customer returned item", 1], ["stock_in", "Received stock (no receipt)", 1], ["correction", "Correct the count to…", 0]];
+    const sel = h("select", { id: "adjType" }, types.map(([k, l]) => h("option", { value: k, text: l })));
+    const qty = h("input", { type: "text", inputmode: "decimal", id: "adjQty", placeholder: p.unit });
+    const reason = h("input", { type: "text", id: "adjReason", placeholder: "Reason (required), e.g. punit ang sachet" });
+    const hint = h("div", { class: "muted small" });
+    const upd = () => { const t = types.find((x) => x[0] === sel.value); const n = Number(qty.value); const now = stockOf(p.id); const after = t[2] === 0 ? n : now + t[2] * (n || 0); hint.textContent = `On record: ${qtyFmt(now)} ${p.unit}. ` + (qty.value ? `After: ${qtyFmt(after)} ${p.unit}` : ""); };
+    sel.onchange = upd; qty.oninput = upd; upd();
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      const t = types.find((x) => x[0] === sel.value); const n = Number(qty.value);
+      if (!(n >= 0) || (t[2] !== 0 && !(n > 0))) return toast("Enter a quantity");
+      if (reason.value.trim().length < 3) return toast("Give a short reason");
+      const delta = t[2] === 0 ? n - stockOf(p.id) : t[2] * n;
+      if (delta === 0) return toast("No change to record");
+      if (stockOf(p.id) + delta < 0) return toast(`Not enough stock: only ${qtyFmt(stockOf(p.id))} on record`);
+      btn.disabled = true;
+      try { await write("moves/" + uid(), { productId: p.id, kind: t[2] === 0 ? "correction" : t[0], qty: delta, reason: reason.value.trim(), at: new Date().toISOString(), by: S.me || null }); dlg.close(); toast("Stock updated"); }
+      catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, "Record");
+    openDialog("Adjust stock — " + p.name, h("div", { class: "grid" }, h("label", { class: "f" }, "What happened?", sel), h("label", { class: "f" }, "Quantity", qty), h("label", { class: "f" }, "Reason", reason), hint, btn));
+  }
+  const stockLines = [];
+  function stockIn() {
+    const prods = activeProducts();
+    const pick = h("select", { id: "siPick", onchange: (e) => { const p = productById(e.target.value); if (p && !stockLines.find((l) => l.productId === p.id)) stockLines.push({ productId: p.id, qty: "1", cost: (p.cost / 100).toFixed(2) }); e.target.value = ""; render(); } },
+      h("option", { value: "", text: "Add a product to this delivery…" }), prods.map((p) => h("option", { value: p.id, text: p.name })));
+    const total = stockLines.reduce((a, l) => a + Math.round((Number(l.qty) || 0) * (toCentavos(l.cost) || 0)), 0);
+    const ok = stockLines.length && stockLines.every((l) => Number(l.qty) > 0 && toCentavos(l.cost) != null);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: "Stock-in", style: "margin-top:8px" }), h("div", { class: "muted small", text: "Record a delivery. Stock increases when you confirm." }))),
+      h("div", { class: "card grid", style: "gap:12px" },
+        h("div", { class: "form" }, h("label", { class: "f" }, "Supplier (optional)", h("input", { type: "text", id: "siSup", placeholder: "e.g. Super8, Suy Sing" })), h("label", { class: "f" }, "Receipt / invoice no. (optional)", h("input", { type: "text", id: "siRef" }))),
+        pick,
+        stockLines.length ? h("ul", { class: "list" }, stockLines.map((l) => { const p = productById(l.productId); return h("li", { style: "flex-wrap:wrap" },
+          h("span", { class: "grow trunc", style: "font-weight:600", text: p?.name || "?" }),
+          h("label", { class: "f", style: "width:96px" }, "Qty", h("input", { type: "text", inputmode: "decimal", id: "siq-" + l.productId, value: l.qty, oninput: (e) => { l.qty = e.target.value; render(); } })),
+          h("label", { class: "f", style: "width:110px" }, "Unit cost ₱", h("input", { type: "text", inputmode: "decimal", id: "sic-" + l.productId, value: l.cost, oninput: (e) => { l.cost = e.target.value; render(); } })),
+          h("button", { class: "btn sm danger", "aria-label": "Remove", onclick: () => { stockLines.splice(stockLines.indexOf(l), 1); render(); } }, "×")); })) : h("div", { class: "empty", text: "Add the products in this delivery." }),
+        h("div", { class: "total" }, h("span", { class: "muted", text: "Total cost" }), h("span", { class: "v num", style: "font-size:1.4rem", text: peso(total) })),
+        h("button", { class: "btn primary big", disabled: !ok, onclick: async (e) => {
+          e.target.disabled = true;
+          const supplier = $("#siSup").value.trim() || null, ref = $("#siRef").value.trim() || null, at = new Date().toISOString(), batch = uid();
+          try {
+            for (const l of stockLines) {
+              const cost = toCentavos(l.cost);
+              await write("moves/" + uid(), { productId: l.productId, kind: "stock_in", qty: Number(l.qty), cost, supplier, ref, batch, at, by: S.me || null, reason: [supplier, ref && "#" + ref].filter(Boolean).join(" ") || "Stock-in" });
+              const p = productById(l.productId); if (p && cost > 0 && cost !== p.cost) await write("products/" + p.id, { ...strip(p), cost });
+            }
+            toast(`Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; go("products");
+          } catch (err) { e.target.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
+        } }, "Confirm stock-in")));
+  }
+
+  // ---------- UTANG ----------
+  function customerForm(after) {
+    const name = h("input", { type: "text", id: "cfName", placeholder: "Name" });
+    const phone = h("input", { type: "tel", id: "cfPhone", placeholder: "09171234567 (optional)" });
+    const limit = h("input", { type: "text", inputmode: "decimal", id: "cfLimit", placeholder: "No limit" });
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      if (!name.value.trim()) return toast("Enter the customer's name");
+      if (phone.value.trim() && !/^(\+?63|0)9\d{9}$/.test(phone.value.trim())) return toast("Use a PH mobile number like 09171234567");
+      const lim = limit.value.trim() ? toCentavos(limit.value) : null;
+      if (limit.value.trim() && lim == null) return toast("Enter a valid limit");
+      const id = uid(); btn.disabled = true;
+      try { await write("customers/" + id, { name: name.value.trim(), phone: phone.value.trim() || null, limit: lim, createdAt: new Date().toISOString() }); dlg.close(); toast("Customer added"); after?.(id); }
+      catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, "Add customer");
+    openDialog("New customer", h("div", { class: "grid" }, h("label", { class: "f" }, "Name", name), h("label", { class: "f" }, "Mobile", phone), h("label", { class: "f" }, "Utang limit ₱ (optional)", limit), btn));
+  }
+  function viewUtang() {
+    if (sub && sub.startsWith("c-")) { const c = S.customers.find((x) => x.id === sub.slice(2)); if (c) return customerDetail(c); }
+    const list = [...S.customers].map((c) => ({ ...c, bal: D.balance.get(c.id) || 0 })).sort((a, b) => b.bal - a.bal || a.name.localeCompare(b.name));
+    const total = list.reduce((a, c) => a + Math.max(0, c.bal), 0);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("h1", { text: "Customers & utang" }), h("button", { class: "btn primary", onclick: () => customerForm((id) => go("utang", "c-" + id)) }, "+ Add customer")),
+      h("div", { class: "card kpi" }, h("div", { class: "label", text: "Total utang outstanding" }), h("div", { class: "value num", style: "color:var(--bad)", text: peso(total) }), h("div", { class: "muted small", text: `${list.filter((c) => c.bal > 0).length} customer(s) owe` })),
+      list.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, list.map((c) => h("li", {},
+        h("button", { class: "grow", style: "text-align:left;border:0;background:none;padding:0", onclick: () => go("utang", "c-" + c.id) }, h("div", { class: "trunc", style: "font-weight:600", text: c.name }), h("div", { class: "muted small", text: c.phone || "No mobile" })),
+        h("span", { class: "num", style: c.bal > 0 ? "color:var(--bad);font-weight:700" : "color:var(--muted)", text: peso(c.bal) })))))
+        : h("div", { class: "empty", text: "No customers yet. Add the people who buy on utang." }));
+  }
+  function customerDetail(c) {
+    const bal = D.balance.get(c.id) || 0;
+    const rows = [
+      ...S.sales.filter((s) => s.customerId === c.id && s.method === "credit").map((s) => ({ at: s.at, label: s.voided ? "Utang sale (voided)" : "Utang sale", amt: s.voided ? 0 : s.total, note: (s.lines || []).map((l) => `${qtyFmt(l.qty)}× ${l.name}`).join(", "), sale: s })),
+      ...S.payments.filter((p) => p.customerId === c.id).map((p) => ({ at: p.at, label: "Payment · " + (p.method === "gcash" ? "GCash" : "Cash"), amt: -p.amount, note: p.ref || "" })),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+    let run = 0; for (const r of rows) { run += r.amt; r.after = run; }
+    rows.reverse();
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("utang") }, "‹ Customers"), h("h1", { text: c.name, style: "margin-top:8px" }), h("div", { class: "muted small", text: [c.phone, c.limit ? "Limit " + peso(c.limit) : null].filter(Boolean).join(" · ") || "" })),
+        bal > 0 ? h("button", { class: "btn primary", onclick: () => paymentDialog(c, bal) }, "Record payment") : null),
+      h("div", { class: "card kpi" }, h("div", { class: "label", text: "Utang balance" }), h("div", { class: "value num", style: bal > 0 ? "color:var(--bad)" : null, text: peso(bal) })),
+      h("div", { class: "card" }, h("h2", { text: "Utang history", style: "margin-bottom:6px" }),
+        rows.length ? h("ul", { class: "list" }, rows.map((r) => h("li", {},
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: r.label }), h("div", { class: "muted small trunc", text: `${when(r.at)}${r.note ? " · " + r.note : ""}` })),
+          h("div", { style: "text-align:right" }, h("div", { class: "num", style: r.amt > 0 ? "color:var(--bad);font-weight:600" : "color:var(--good);font-weight:600", text: (r.amt > 0 ? "+" : r.amt < 0 ? "−" : "") + peso(Math.abs(r.amt)) }), h("div", { class: "muted small num", text: "Balance " + peso(r.after) }))))) : h("div", { class: "empty", text: "No utang yet." })));
+  }
+  function paymentDialog(c, bal) {
+    const amt = h("input", { type: "text", inputmode: "decimal", id: "payAmt", placeholder: (bal / 100).toFixed(2) });
+    let method = "cash";
+    const methods = h("div", { class: "methods", style: "grid-template-columns:1fr 1fr" });
+    const drawM = () => methods.replaceChildren(...[["cash", "Cash"], ["gcash", "GCash"]].map(([m, l]) => h("button", { role: "radio", "aria-checked": String(method === m), onclick: () => { method = m; drawM(); } }, l)));
+    drawM();
+    const ref = h("input", { type: "text", id: "payRef", placeholder: "GCash ref (optional)" });
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      const a = toCentavos(amt.value);
+      if (!a) return toast("Enter the amount paid");
+      if (a > bal) return toast(`That is more than ${c.name} owes (${peso(bal)})`);
+      btn.disabled = true;
+      try { await write("payments/" + uid(), { customerId: c.id, amount: a, method, ref: method === "gcash" ? ref.value.trim() || null : null, at: new Date().toISOString(), by: S.me || null }); dlg.close(); toast(a === bal ? `${c.name} is fully paid` : `Payment recorded. Remaining ${peso(bal - a)}`); }
+      catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, "Record payment");
+    openDialog("Payment from " + c.name, h("div", { class: "grid" }, h("div", { class: "muted", text: `Owes ${peso(bal)}` }), h("label", { class: "f" }, "Amount paid ₱", amt), h("button", { class: "btn sm", onclick: () => (amt.value = (bal / 100).toFixed(2)) }, `Pay full ${peso(bal)}`), methods, ref, btn));
+  }
+
+  // ---------- REPORTS ----------
+  let range = 7;
+  function viewReports() {
+    const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - (range - 1));
+    const sales = S.sales.filter((s) => !s.voided && new Date(s.at) >= since);
+    const days = new Map();
+    for (let i = 0; i < range; i++) { const d = new Date(since); d.setDate(d.getDate() + i); days.set(dayKey(d.toISOString()), { n: 0, cash: 0, gcash: 0, credit: 0, total: 0, profit: 0 }); }
+    const byProduct = new Map();
+    for (const s of sales) {
+      const r = days.get(dayKey(s.at)); if (!r) continue;
+      r.n++; r[s.method] += s.total; r.total += s.total;
+      const cost = (s.lines || []).reduce((a, l) => a + Math.round(l.qty * (l.cost || 0)), 0); r.profit += s.total - cost;
+      for (const l of s.lines || []) { const x = byProduct.get(l.productId) || { name: l.name, qty: 0, revenue: 0, profit: 0 }; x.qty += l.qty; x.revenue += Math.round(l.qty * l.price); x.profit += Math.round(l.qty * (l.price - (l.cost || 0))); byProduct.set(l.productId, x); }
+    }
+    const dayRows = [...days.entries()].reverse();
+    const tot = dayRows.reduce((a, [, r]) => ({ n: a.n + r.n, cash: a.cash + r.cash, gcash: a.gcash + r.gcash, credit: a.credit + r.credit, total: a.total + r.total, profit: a.profit + r.profit }), { n: 0, cash: 0, gcash: 0, credit: 0, total: 0, profit: 0 });
+    const prodRows = [...byProduct.values()].sort((a, b) => b.revenue - a.revenue);
+    const inv = activeProducts().map((p) => ({ p, q: stockOf(p.id) }));
+    const csv = () => {
+      const esc = (v) => { let s = String(v ?? ""); if (/^[=+\-@]/.test(s) && !/^-?\d/.test(s)) s = "'" + s; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const lines = [["Date", "Sales", "Cash", "GCash", "Utang", "Total", "Gross profit"].join(",")];
+      for (const [d, r] of dayRows) lines.push([d, r.n, r.cash / 100, r.gcash / 100, r.credit / 100, r.total / 100, r.profit / 100].map(esc).join(","));
+      lines.push(""); lines.push(["Product", "Qty sold", "Revenue", "Profit"].join(","));
+      for (const r of prodRows) lines.push([r.name, r.qty, r.revenue / 100, r.profit / 100].map(esc).join(","));
+      return "﻿" + lines.join("\r\n");
+    };
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("h1", { text: "Reports" }), h("div", { class: "pills" },
+        [[1, "Today"], [7, "7 days"], [30, "30 days"]].map(([n, l]) => h("button", { "aria-pressed": String(range === n), onclick: () => { range = n; render(); } }, l)),
+        h("button", { class: "btn sm", onclick: () => exportCsv(csv()) }, "Download CSV"))),
+      h("div", { class: "grid kpis" },
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Sales" }), h("div", { class: "value num", text: peso(tot.total) }), h("div", { class: "muted small", text: `${tot.n} sale(s)` })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Gross profit" }), h("div", { class: "value num", style: "color:var(--good)", text: peso(tot.profit) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Utang given" }), h("div", { class: "value num", text: peso(tot.credit) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Stock value now" }), h("div", { class: "value num", text: peso(inv.reduce((a, x) => a + Math.max(0, x.q) * (x.p.cost || 0), 0)) }))),
+      h("div", { class: "card" }, h("h2", { text: "Daily sales", style: "margin-bottom:6px" }), h("div", { class: "table-wrap" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Date", "Sales", "Cash", "GCash", "Utang", "Total", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
+        h("tbody", {}, dayRows.map(([d, r]) => h("tr", {}, h("td", { text: new Date(d + "T00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) }), h("td", { class: "r num", text: r.n }), [r.cash, r.gcash, r.credit, r.total, r.profit].map((v) => h("td", { class: "r num", text: peso(v) }))))),
+        h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", { class: "r num", text: tot.n }), [tot.cash, tot.gcash, tot.credit, tot.total, tot.profit].map((v) => h("td", { class: "r num", text: peso(v) }))))))),
+      h("div", { class: "card" }, h("h2", { text: "Sales by product", style: "margin-bottom:6px" }),
+        prodRows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Product", "Qty", "Revenue", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
+          h("tbody", {}, prodRows.map((r) => h("tr", {}, h("td", { text: r.name }), h("td", { class: "r num", text: qtyFmt(r.qty) }), h("td", { class: "r num", text: peso(r.revenue) }), h("td", { class: "r num", text: peso(r.profit) }))))))
+          : h("div", { class: "empty", text: "No sales in this period." })));
+  }
+  async function exportCsv(text) {
+    try {
+      const dl = await window.claude?.use?.("downloads");
+      if (!dl) return toast("Download isn't available here");
+      await dl.save({ filename: `kwaderno-report-${todayKey()}.csv`, data: text });
+    } catch (e) { if (e?.code !== "dismissed") toast("Download was not saved"); }
+  }
+
+  // edit route lives under products
+  const _viewProducts = viewProducts;
+  viewProducts = function () { if (sub && sub.startsWith("edit-")) { const p = productById(sub.slice(5)); if (p) return productForm(p); } return _viewProducts(); };
+
+  readHash();
+  render();
+  boot();
+})();
+</script>

@@ -42,14 +42,13 @@ nav.tabs a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 nav.bottom { display: none; }
 main { padding-block: 18px 110px; }
-@media all { /* phone-app layout on every screen size */
-  nav.tabs, .wrap:has(> nav.tabs) { display: none; }
-  nav.bottom { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
+/* Phone-app layout (data-layout="phone"): bottom tabs, floating cart. Desktop layout keeps the top tabs and side cart. */
+:root[data-layout="phone"] nav.tabs, :root[data-layout="phone"] .wrap:has(> nav.tabs) { display: none; }
+:root[data-layout="phone"] nav.bottom { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; background: var(--surface); border-top: 1px solid var(--line);
     padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
-  nav.bottom a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 10px; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600; }
-  nav.bottom a[aria-current="page"] { color: var(--accent); }
-  nav.bottom svg { width: 22px; height: 22px; }
-}
+:root[data-layout="phone"] nav.bottom a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 10px; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600; }
+:root[data-layout="phone"] nav.bottom a[aria-current="page"] { color: var(--accent); }
+:root[data-layout="phone"] nav.bottom svg { width: 22px; height: 22px; }
 .view { display: grid; gap: 16px; }
 .head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
@@ -90,7 +89,8 @@ label.f { display: grid; gap: 5px; font-size: .85rem; font-weight: 500; }
 .tile .n { font-weight: 600; font-size: .88rem; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .tile .r { display: flex; justify-content: space-between; align-items: end; gap: 4px; }
 .sell { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 360px; align-items: start; }
-@media all { .sell { grid-template-columns: 1fr; } }
+:root[data-layout="phone"] .sell { grid-template-columns: 1fr; }
+@media (max-width: 900px) { .sell { grid-template-columns: 1fr; } .cart.desktop { display: none; } }
 .cart { position: sticky; top: 120px; }
 .qty { display: inline-flex; align-items: center; }
 .qty button { width: 34px; height: 34px; border: 1px solid var(--line); background: var(--surface); }
@@ -126,11 +126,9 @@ dialog .db * { min-width: 0; }
 .empty { text-align: center; padding: 26px 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 12px; }
 .banner { padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font-size: .9rem; }
 .mobile-cart { display: none; }
-@media all {
-  .cart.desktop { display: none; }
-  .mobile-cart { display: flex; position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 25;
+:root[data-layout="phone"] .cart.desktop { display: none; }
+:root[data-layout="phone"] .mobile-cart { display: flex; position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 25;
     background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 14px; padding: 14px 16px; justify-content: space-between; font-weight: 700; box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
-}
 .admin-link { font-size: .8rem; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 99px; white-space: nowrap; }
 .chart { position: relative; }
 .chart svg { width: 100%; height: auto; display: block; }
@@ -147,20 +145,40 @@ dialog .db * { min-width: 0; }
 /* On a tablet or computer, show the app inside a phone-shaped screen. Fixed bars (bottom tabs,
    cart button, toast) pin to the phone because #phone is transformed and does not scroll. */
 @media (min-width: 520px) {
-  html, body { height: 100%; }
-  body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
-  body::before { display: none; }
-  #phone { position: relative; transform: translateZ(0); width: 410px; height: min(880px, calc(100dvh - 32px)); background: var(--bg);
+  :root[data-layout="phone"], :root[data-layout="phone"] body { height: 100%; }
+  :root[data-layout="phone"] body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
+  :root[data-layout="phone"] body::before { display: none; }
+  :root[data-layout="phone"] #phone { position: relative; transform: translateZ(0); width: 410px; height: min(880px, calc(100dvh - 32px)); background: var(--bg);
     border: 11px solid #121619; border-radius: 44px; overflow: hidden; box-shadow: 0 0 0 2px #3a4248, 0 30px 70px rgb(0 0 0 / .35); }
-  #screen { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  #screen::-webkit-scrollbar { display: none; }
-  #phone::after { content: ""; position: absolute; top: 8px; left: 50%; width: 92px; height: 24px; margin-left: -46px; border-radius: 99px; background: #121619; z-index: 40; pointer-events: none; }
-  #phone header.top .wrap { padding-top: 38px; }
-  dialog { width: 372px; max-height: min(800px, calc(100dvh - 90px)); }
+  :root[data-layout="phone"] #screen { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  :root[data-layout="phone"] #screen::-webkit-scrollbar { display: none; }
+  :root[data-layout="phone"] #phone::after { content: ""; position: absolute; top: 8px; left: 50%; width: 92px; height: 24px; margin-left: -46px; border-radius: 99px; background: #121619; z-index: 40; pointer-events: none; }
+  :root[data-layout="phone"] #phone header.top .wrap { padding-top: 38px; }
+  :root[data-layout="phone"] dialog { width: 372px; max-height: min(800px, calc(100dvh - 90px)); }
 }
 /* phone screens are narrow: give the store name the room the demo tag took */
-.demo-pill { display: none; }
-.admin-link { margin-left: auto; }
+:root[data-layout="phone"] .demo-pill { display: none; }
+:root[data-layout="phone"] .admin-link { margin-left: auto; }
+.layout-toggle[hidden] { display: none; }
+a.btn { text-decoration: none; }
+.kpis.wide { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.cart.desktop * { min-width: 0; }
+.cart.desktop .grid, dialog .db .grid { grid-template-columns: minmax(0, 1fr); }
+.layout-toggle { position: fixed; right: 16px; bottom: 16px; z-index: 60; box-shadow: 0 6px 18px rgb(0 0 0 / .15); }
+.status { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.status.on { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.status.week { background: var(--accent-soft); color: var(--accent); }
+.status.idle { background: var(--warn-soft); color: var(--warn); }
+.status.off { background: var(--surface-2); color: var(--muted); }
+tr.click { cursor: pointer; } tr.click:hover td { background: var(--surface-2); }
+th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(--fg); }
+.feed { list-style: none; margin: 0; padding: 0; display: grid; }
+.feed li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .88rem; }
+.feed li:last-child { border-bottom: 0; }
+.feed .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); align-self: center; }
+.sample-tag { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar input[type=search] { flex: 1 1 220px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 :root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; } }
 :root[data-theme="dark"] { --s1: #3987e5; --s2: #d95926; --s3: #199e70; }
@@ -187,6 +205,7 @@ dialog .db * { min-width: 0; }
 <dialog id="dlg"><div class="dh"><h2 id="dlgTitle"></h2><button class="x" aria-label="Close" data-close>×</button></div><div class="db" id="dlgBody"></div></dialog>
 <div class="toast" id="toast" hidden role="status"></div>
 </div>
+<button class="btn layout-toggle" id="layoutToggle" type="button" hidden></button>
 
 <script>
 (() => {
@@ -217,7 +236,7 @@ dialog .db * { min-width: 0; }
 
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
-  const S = { db: null, me: null, owner: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "";
@@ -246,10 +265,13 @@ dialog .db * { min-width: 0; }
   const stockOf = (id) => Math.round((D.stock.get(id) || 0) * 1000) / 1000;
 
   // ---------- data ----------
-  const col = (name) => S.db.collection(name);
+  // Each merchant's store lives under stores/<their id>/ (private to them; the app owner can read all).
+  // The owner's own demo store keeps the original top-level paths.
+  const col = (name) => S.db.collection(S.base + name);
+  const ref = (path) => S.db.doc(S.base + path);
   async function write(path, body) {
     if (!S.db) throw new Error("Not connected");
-    await S.db.doc(path).set(body);
+    await ref(path).set(body);
   }
   async function boot() {
     let db = null, user = null;
@@ -258,6 +280,9 @@ dialog .db * { min-width: 0; }
     S.db = db;
     try { S.me = user ? await user.id() : null; } catch { S.me = null; }
     try { S.owner = user ? !!(await user.isOwner()) : false; } catch { S.owner = false; }
+    if (!S.owner && !S.me) { S.error = "nodb"; S.ready = true; render(); return; }
+    S.base = S.owner ? "" : `stores/${S.me}/`;
+    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
     let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries"]);
@@ -267,22 +292,37 @@ dialog .db * { min-width: 0; }
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
         if (!snap.metadata.fromCache) done(k);
-        render();
+        render(); queueSummary();
       }, (e) => { S.error = e.code; S.ready = true; clearTimeout(timer); render(); });
     }
-    db.doc("store/profile").onSnapshot((d) => { if (d.exists) S.store = { ...S.store, ...d.data() }; render(); }, () => {});
+    ref("store/profile").onSnapshot((d) => { S.profileLoaded = true; S.hasProfile = d.exists; if (d.exists) S.store = { ...S.store, ...d.data() }; render(); queueSummary(); }, () => { S.profileLoaded = true; render(); });
   }
 
   // ---------- routing ----------
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
   function readHash() {
     const raw = location.hash.slice(1);
-    if (raw === "admin") { view = "admin"; sub = null; return; }
+    if (raw === "phone" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
+    if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
     const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
     view = v ? v[0] : "home";
     sub = v && raw.length > v[0].length ? raw.slice(v[0].length + 1) : null;
   }
   window.addEventListener("hashchange", () => { readHash(); render(); });
+
+  // ---------- layout: phone app or desktop ----------
+  let layoutChoice = "phone";
+  try { layoutChoice = localStorage.getItem("kw-layout") || "phone"; } catch { /* private mode */ }
+  function setLayout(l) { layoutChoice = l; try { localStorage.setItem("kw-layout", l); } catch { /* ignore */ } }
+  function applyLayout() {
+    const narrow = window.innerWidth < 760; // a real phone always gets the phone layout
+    document.documentElement.dataset.layout = narrow ? "phone" : view === "admin" ? "desktop" : layoutChoice;
+    const t = $("#layoutToggle");
+    t.hidden = narrow || view === "admin";
+    t.textContent = layoutChoice === "phone" ? "Switch to desktop view" : "Switch to phone view";
+  }
+  $("#layoutToggle").addEventListener("click", () => { setLayout(layoutChoice === "phone" ? "desktop" : "phone"); render(); });
+  window.addEventListener("resize", () => applyLayout());
 
   // ---------- dialog ----------
   const dlg = $("#dlg");
@@ -301,6 +341,7 @@ dialog .db * { min-width: 0; }
   }
 
   function render() {
+    applyLayout();
     $("#storeName").textContent = S.store.name;
     navLinks($("#tabs"), false); navLinks($("#bottom"), true);
     const app = $("#app");
@@ -311,6 +352,7 @@ dialog .db * { min-width: 0; }
     const route = view + "/" + sub;
     if (route === lastRoute && app.querySelector("[data-keep]")) return; // keep what's typed in an open form
     lastRoute = route;
+    if (!S.owner && S.profileLoaded && !S.hasProfile && S.ready) { lastRoute = ""; return app.replaceChildren(viewSetup()); }
     const fns = { home: viewHome, sell: viewSell, products: viewProducts, utang: viewUtang, reports: viewReports, admin: viewAdmin };
     app.replaceChildren(fns[view]());
   }
@@ -619,7 +661,7 @@ dialog .db * { min-width: 0; }
     const btn = h("button", { class: "btn danger big", onclick: async () => {
       if (reason.value.trim().length < 3) return toast("Give a short reason");
       btn.disabled = true;
-      try { await S.db.doc("sales/" + s.id).update({ voided: true, voidReason: reason.value.trim(), voidedAt: new Date().toISOString(), voidedBy: S.me || null }); dlg.close(); toast("Sale voided — stock and utang restored"); }
+      try { await ref("sales/" + s.id).update({ voided: true, voidReason: reason.value.trim(), voidedAt: new Date().toISOString(), voidedBy: S.me || null }); dlg.close(); toast("Sale voided — stock and utang restored"); }
       catch (e) { btn.disabled = false; toast("Could not void: " + (e?.code || "try again")); }
     } }, "Void sale");
     openDialog("Void this sale?", h("div", { class: "grid" }, h("p", { class: "muted", text: "Stock comes back and any utang from it is removed. The sale stays in history marked as voided." }), reason, btn));
@@ -917,7 +959,7 @@ ${catalog}`;
       btn.disabled = true;
       try {
         await write("moves/" + uid(), { productId: p.id, kind: "expired", qty: -n, reason: `Expired ${e.date}`, at: new Date().toISOString(), by: S.me || null });
-        await S.db.doc("expiries/" + e.id).update({ status: "cleared", clearReason: "disposed", clearedAt: new Date().toISOString() });
+        await ref("expiries/" + e.id).update({ status: "cleared", clearReason: "disposed", clearedAt: new Date().toISOString() });
         dlg.close(); toast(`Removed ${qtyFmt(n)} ${p.unit} from stock`);
       } catch (err) { btn.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
     } }, "Remove from stock");
@@ -934,7 +976,7 @@ ${catalog}`;
           e.labelPhoto?.url?.startsWith("/_blob/") || e.labelPhoto?.url?.startsWith("https://") ? h("img", { src: e.labelPhoto.url, alt: "Expiry label", loading: "lazy", style: "width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--line)" }) : null,
           h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: p.name }), h("div", { class: "muted small", text: `Expires ${new Date(e.date + "T00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}${e.qty ? ` · ${qtyFmt(e.qty)} ${p.unit}` : ""} · ${qtyFmt(stockOf(p.id))} in stock` })),
           h("span", { class: "chip " + (d < 0 ? "out" : d <= 7 ? "low" : ""), text: d < 0 ? `${-d} day(s) ago` : d === 0 ? "Today" : `${d} day(s) left` }),
-          h("button", { class: "btn sm", onclick: async () => { await S.db.doc("expiries/" + e.id).update({ status: "cleared", clearReason: "sold_out", clearedAt: new Date().toISOString() }); toast("Batch closed"); } }, "Sold out"),
+          h("button", { class: "btn sm", onclick: async () => { await ref("expiries/" + e.id).update({ status: "cleared", clearReason: "sold_out", clearedAt: new Date().toISOString() }); toast("Batch closed"); } }, "Sold out"),
           h("button", { class: "btn sm danger", onclick: () => disposeDialog(e) }, "Dispose")); }))) : null; })
         : h("div", { class: "empty" }, "No expiry dates tracked yet. Start with milk, bread, eggs and sauces. ", h("button", { class: "btn sm", onclick: () => expiryCapture() }, "Track an item")));
   }
@@ -1056,72 +1098,207 @@ ${catalog}`;
 
 
   // ---------- KELSON SUPER-ADMIN (owner only) ----------
-  function viewAdmin() {
-    if (!S.owner) return h("div", { class: "card" }, h("h2", { text: "Owner only" }), h("p", { class: "muted", text: "The KELSON network dashboard is visible only to the owner of this app." }));
-    const ok = (s) => !s.voided;
-    const now = new Date(); const start = (n) => { const d = new Date(now); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - (n - 1)); return d; };
-    const inLast = (n) => S.sales.filter((s) => ok(s) && new Date(s.at) >= start(n));
-    const sum = (a, f) => a.reduce((x, y) => x + f(y), 0);
-    const profit = (s) => s.total - sum(s.lines || [], (l) => Math.round(l.qty * (l.cost || 0)));
-    const t1 = inLast(1), t7 = inLast(7), t30 = inLast(30);
+  // ---------- store summary → Super Admin ----------
+  // Each store keeps one small summary document (stores/<id>) that the owner's dashboard reads.
+  // Detailed records stay in the store; the summary has totals, 30 daily totals and recent activity.
+  let summaryT = null, lastSummary = "";
+  function queueSummary() {
+    if (!S.ready || !S.me || !S.profileLoaded || (!S.owner && !S.hasProfile)) return;
+    clearTimeout(summaryT); summaryT = setTimeout(writeSummary, 2500);
+  }
+  function buildSummary() {
+    const ok = S.sales.filter((s) => !s.voided);
+    const days = [];
+    for (let i = 29; i >= 0; i--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i); days.push({ d: dayKey(d.toISOString()), t: 0, n: 0 }); }
+    const byDay = new Map(days.map((x) => [x.d, x]));
+    const mix = { cash: 0, gcash: 0, credit: 0 };
+    for (const s of ok) { const r = byDay.get(dayKey(s.at)); if (r) { r.t += s.total; r.n++; if (s.method in mix) mix[s.method] += s.total; } }
     const prods = activeProducts();
-    const invValue = sum(prods, (p) => Math.max(0, stockOf(p.id)) * (p.cost || 0));
-    const low = prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).length;
     const owed = [...D.balance.values()].filter((v) => v > 0);
+    const events = [
+      ...ok.map((s) => ({ at: s.at, kind: "sale", text: `Sale ${peso(s.total)} · ${s.method === "credit" ? "utang" : s.method === "gcash" ? "GCash" : "cash"}` })),
+      ...S.sales.filter((s) => s.voided && s.voidedAt).map((s) => ({ at: s.voidedAt, kind: "void", text: `Voided a sale of ${peso(s.total)}` })),
+      ...S.moves.filter((m) => m.kind === "stock_in").map((m) => ({ at: m.at, kind: "stock", text: `Stock-in ${qtyFmt(Number(m.qty))} × ${productById(m.productId)?.name || "item"}` })),
+      ...S.payments.map((p) => ({ at: p.at, kind: "payment", text: `Utang payment ${peso(p.amount)}` })),
+      ...S.products.filter((p) => p.createdAt && !String(p.id).startsWith("p0")).map((p) => ({ at: p.createdAt, kind: "product", text: `Added product ${p.name}` })),
+    ].filter((e) => e.at).sort((a, b) => b.at.localeCompare(a.at));
+    return {
+      name: S.store.name || "Unnamed store", barangay: S.store.barangay || null, city: S.store.city || null,
+      joinedAt: S.store.createdAt || null, ownerStore: S.owner,
+      products: prods.length, lowStock: prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).length,
+      stockValue: prods.reduce((a, p) => a + Math.max(0, stockOf(p.id)) * (p.cost || 0), 0),
+      customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
+      days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10),
+    };
+  }
+  async function writeSummary() {
+    const body = buildSummary(); const key = JSON.stringify(body);
+    if (key === lastSummary) return;
+    try { await S.db.doc("stores/" + S.me).set({ ...body, updatedAt: new Date().toISOString() }); lastSummary = key; } catch { /* retried on the next change */ }
+  }
+
+  // ---------- new merchant: set up the store ----------
+  function viewSetup() {
+    const f = (id, label, ph, req) => h("label", { class: "f" }, label, h("input", { type: "text", id, placeholder: ph, required: req || null, maxlength: 80 }));
+    return h("div", { class: "view", style: "max-width:520px" },
+      h("div", {}, h("div", { class: "muted small", text: "Welcome to KWADERNO" }), h("h1", { text: "Set up your store" })),
+      h("p", { class: "muted", text: "Your products, sales and utang are private to you. KELSON sees only store totals (sales, stock, utang) to support the network." }),
+      h("form", { class: "card grid", style: "gap:14px", onsubmit: async (e) => {
+        e.preventDefault();
+        const name = $("#su-name").value.trim(); if (!name) return toast("Enter your store name");
+        try { await write("store/profile", { name, barangay: $("#su-brgy").value.trim() || null, city: $("#su-city").value.trim() || null, createdAt: new Date().toISOString() }); toast("Store ready!"); go("home"); }
+        catch (err) { toast(err?.code === "permission_denied" ? "Ask the app owner to give you access to use the app (not just view)" : "Could not save: " + (err?.code || "try again")); }
+      } },
+        f("su-name", "Store name", "e.g. Aling Nena Sari-sari Store", true),
+        f("su-brgy", "Barangay", "e.g. Bagong Pag-asa"),
+        f("su-city", "City / municipality", "e.g. Quezon City"),
+        h("button", { class: "btn primary big", type: "submit" }, "Start using KWADERNO")));
+  }
+
+  // ---------- SUPER ADMIN: every store on the network ----------
+  let adminQ = "", adminSort = { k: "d30", dir: -1 }, adminLimit = 25, adminSample = true;
+  const DAYMS = 864e5;
+  function lastKeys(n) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i); out.push({ key: dayKey(d.toISOString()), d }); } return out; }
+  function storeStats(st, k7, k30, today) {
+    const m = new Map((st.days || []).map((x) => [x.d, x]));
+    const tot = (keys) => keys.reduce((a, k) => a + (m.get(k)?.t || 0), 0), cnt = (keys) => keys.reduce((a, k) => a + (m.get(k)?.n || 0), 0);
+    const ago = st.lastActiveAt ? (Date.now() - new Date(st.lastActiveAt)) / DAYMS : Infinity;
+    const status = st.lastActiveAt && dayKey(st.lastActiveAt) === today ? ["on", "Active today"] : ago <= 7 ? ["week", "Active this week"] : ago <= 30 ? ["idle", "Idle"] : ["off", "Inactive"];
+    return { today: m.get(today)?.t || 0, d7: tot(k7), d30: tot(k30), n30: cnt(k30), ago, status, area: [st.barangay, st.city].filter(Boolean).join(", ") || "—" };
+  }
+  const statusChip = (s) => h("span", { class: "status " + s[0], text: s[1] });
+  const relTime = (iso) => { if (!iso) return "never"; const m = (Date.now() - new Date(iso)) / 6e4; return m < 1 ? "just now" : m < 60 ? Math.floor(m) + " min ago" : m < 1440 ? Math.floor(m / 60) + " h ago" : Math.floor(m / 1440) + " d ago"; };
+
+  function viewAdmin() {
+    if (!S.owner) return h("div", { class: "card" }, h("h2", { text: "Owner only" }), h("p", { class: "muted", text: "The KELSON Super Admin dashboard is visible only to the owner of this app." }));
+    const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
+    const samples = S.stores.filter((x) => x.sample).length;
+    const stores = S.stores.filter((x) => adminSample || !x.sample).map((x) => ({ ...x, st: storeStats(x, keys7, keys30, today) }));
+    if (sub && sub.startsWith("s-")) { const one = stores.find((x) => x.id === sub.slice(2)) || S.stores.find((x) => x.id === sub.slice(2)); if (one) return adminStore(one.st ? one : { ...one, st: storeStats(one, keys7, keys30, today) }, k30); }
+    const sum = (a, f) => a.reduce((x, y) => x + f(y), 0);
     const kpi = (label, value, hint) => h("div", { class: "card kpi" }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
-
-    // 30-day trend
-    const days = []; for (let i = 0; i < 30; i++) { const d = start(30); d.setDate(d.getDate() + i); days.push({ key: dayKey(d.toISOString()), d, total: 0, n: 0 }); }
-    const byDay = new Map(days.map((x) => [x.key, x]));
-    for (const s of t30) { const r = byDay.get(dayKey(s.at)); if (r) { r.total += s.total; r.n++; } }
-
-    // payment mix (30 days): categorical slots 1-3, fixed order
-    const mix = [["cash", "Cash", "var(--s1)"], ["gcash", "GCash", "var(--s2)"], ["credit", "Utang", "var(--s3)"]].map(([k, l, c]) => ({ k, l, c, v: sum(t30.filter((s) => s.method === k), (s) => s.total) }));
+    const activeToday = stores.filter((x) => x.st.status[0] === "on").length, active7 = stores.filter((x) => x.st.ago <= 7).length;
+    const newMonth = stores.filter((x) => x.joinedAt && Date.now() - new Date(x.joinedAt) <= 30 * DAYMS).length;
+    const d30 = sum(stores, (x) => x.st.d30), n30 = sum(stores, (x) => x.st.n30);
+    // network daily totals
+    const days = k30.map(({ key, d }) => ({ key, d, total: 0, n: 0 })); const byKey = new Map(days.map((x) => [x.key, x]));
+    for (const x of stores) for (const r of x.days || []) { const t = byKey.get(r.d); if (t) { t.total += r.t; t.n += r.n; } }
+    const mix = [["cash", "Cash", "var(--s1)"], ["gcash", "GCash", "var(--s2)"], ["credit", "Utang", "var(--s3)"]].map(([k, l, c]) => ({ l, c, v: sum(stores, (x) => x.mix?.[k] || 0) }));
     const mixMax = Math.max(1, ...mix.map((m) => m.v));
-
-    // top products (30 days)
-    const top = new Map();
-    for (const s of t30) for (const l of s.lines || []) { const x = top.get(l.productId) || { name: l.name, qty: 0, rev: 0, prof: 0 }; x.qty += l.qty; x.rev += Math.round(l.qty * l.price); x.prof += Math.round(l.qty * (l.price - (l.cost || 0))); top.set(l.productId, x); }
-    const topRows = [...top.values()].sort((a, b) => b.rev - a.rev).slice(0, 8);
-
-    // pilot network
-    const pins = S.pilot?.pins || [];
-    const areas = [...new Set(pins.map((p) => p.area))];
-    const byArea = areas.map((a) => { const ps = pins.filter((p) => p.area === a); return { a, n: ps.length, signed: ps.filter((p) => p.signed).length, retained: ps.filter((p) => p.retention === "retain").length }; });
+    // by area
+    const areas = new Map(); for (const x of stores) { const a = x.barangay || "Not set"; const r = areas.get(a) || { a, n: 0, v: 0 }; r.n++; r.v += x.st.d30; areas.set(a, r); }
+    const areaRows = [...areas.values()].sort((a, b) => b.v - a.v).slice(0, 8); const areaMax = Math.max(1, ...areaRows.map((r) => r.v));
+    // activity across the network
+    const feed = stores.flatMap((x) => (x.recent || []).map((e) => ({ ...e, store: x }))).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 15);
+    // stores table
+    const q = adminQ.trim().toLowerCase();
+    const cols = [["name", "Store"], ["area", "Area"], ["ago", "Status"], ["today", "Today", 1], ["d30", "30 days", 1], ["n30", "Sales #", 1], ["products", "Products", 1], ["lowStock", "Low stock", 1], ["utang", "Utang", 1]];
+    const val = (x, k) => k === "name" ? x.name.toLowerCase() : k === "area" ? x.st.area.toLowerCase() : k in x.st ? x.st[k] : x[k] || 0;
+    const rows = stores.filter((x) => !q || (x.name + " " + x.st.area).toLowerCase().includes(q))
+      .sort((a, b) => { const va = val(a, adminSort.k), vb = val(b, adminSort.k); return (va < vb ? -1 : va > vb ? 1 : 0) * adminSort.dir; });
+    const th = ([k, label, r]) => h("th", { class: "sort" + (r ? " r" : ""), "aria-sort": adminSort.k === k ? (adminSort.dir > 0 ? "ascending" : "descending") : null, tabindex: 0,
+      onclick: () => { adminSort = { k, dir: adminSort.k === k ? -adminSort.dir : k === "name" || k === "area" || k === "ago" ? 1 : -1 }; render(); } }, label + (adminSort.k === k ? (adminSort.dir > 0 ? " ▲" : " ▼") : ""));
+    const open = (x) => go("admin", "s-" + x.id);
 
     return h("div", { class: "view" },
       h("div", { class: "head" },
-        h("div", {}, h("div", { class: "muted small", text: "KELSON · Super-Admin · visible only to you" }), h("h1", { text: "Network dashboard" })),
-        h("a", { class: "btn", href: "#home", onclick: (e) => { e.preventDefault(); go("home"); } }, "‹ Back to store")),
-      h("div", { class: "banner", text: "Live from the store database. The network has 1 store on KWADERNO today; every new store that joins adds to these totals." }),
-      h("div", { class: "grid kpis" },
-        kpi("Sales today", peso(sum(t1, (s) => s.total)), `${t1.length} sale(s)`),
-        kpi("Sales · 7 days", peso(sum(t7, (s) => s.total)), `${t7.length} sale(s)`),
-        kpi("Sales · 30 days", peso(sum(t30, (s) => s.total)), `avg basket ${peso(t30.length ? Math.round(sum(t30, (s) => s.total) / t30.length) : 0)}`),
-        kpi("Gross profit · 30 days", peso(sum(t30, profit))),
-        kpi("Utang outstanding", peso(sum(owed, (x) => x)), `${owed.length} customer(s)`),
-        kpi("Inventory value", peso(invValue), `${prods.length} products · ${low} low`),
-        kpi("Pilot stores on app", `${0} / ${pins.length || "—"}`, pins.length ? "surveyed stores not yet onboarded" : "pilot data not loaded")),
-      h("div", { class: "card" }, h("h2", { text: "Daily sales — last 30 days" }), h("div", { class: "muted small", text: "All stores · tap or hover a bar", style: "margin-bottom:8px" }), salesChart(days)),
+        h("div", {}, h("div", { class: "muted small", text: "KELSON · Super Admin · visible only to you" }), h("h1", { text: "All stores" })),
+        h("div", { class: "pills" }, h("a", { class: "btn", href: "#home", onclick: (e) => { e.preventDefault(); go("home"); } }, "‹ My store"))),
+      samples ? h("div", { class: "banner", style: "display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between" },
+        h("span", {}, adminSample ? `Includes ${samples} SAMPLE stores with made-up numbers, so you can see how 100 stores look. Real stores appear here as merchants sign up.` : `Sample stores hidden — showing ${stores.length} real store(s).`),
+        h("span", { class: "pills" },
+          h("button", { class: "btn sm", onclick: () => { adminSample = !adminSample; render(); } }, adminSample ? "Hide sample stores" : "Show sample stores"),
+          h("button", { class: "btn sm danger", onclick: removeSamples }, "Delete sample stores"))) : null,
+      h("div", { class: "grid kpis wide" },
+        kpi("Stores", String(stores.length), `${newMonth} joined in 30 days`),
+        kpi("Active today", String(activeToday), `${active7} active in 7 days`),
+        kpi("Sales today", peso(sum(stores, (x) => x.st.today)), "all stores"),
+        kpi("Sales · 7 days", peso(sum(stores, (x) => x.st.d7))),
+        kpi("Sales · 30 days", peso(d30), `${n30.toLocaleString("en-PH")} transactions`),
+        kpi("Utang outstanding", peso(sum(stores, (x) => x.utang || 0)), `${sum(stores, (x) => x.debtors || 0)} customers owe`),
+        kpi("Stock value", peso(sum(stores, (x) => x.stockValue || 0)), `${stores.filter((x) => x.lowStock > 0).length} stores with low stock`)),
+      h("div", { class: "card" }, h("h2", { text: "Network sales — last 30 days" }), h("div", { class: "muted small", text: "All stores combined · hover or tap a bar", style: "margin-bottom:8px" }), salesChart(days)),
       h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: "Sales by barangay · 30 days", style: "margin-bottom:10px" }),
+          h("div", { class: "grid", style: "gap:8px" }, areaRows.map((r) => h("div", { class: "bar-row", style: "grid-template-columns:130px 1fr auto" },
+            h("span", { class: "trunc", text: `${r.a} (${r.n})` }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(r.v / areaMax) * 100}%;background:var(--s1)` })), h("span", { class: "num", text: peso(r.v) }))))),
         h("div", { class: "card" }, h("h2", { text: "Payment mix · 30 days", style: "margin-bottom:10px" }),
           h("div", { class: "grid", style: "gap:8px" }, mix.map((m) => h("div", { class: "bar-row" },
             h("span", { text: m.l }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(m.v / mixMax) * 100}%;background:${m.c}` })), h("span", { class: "num", text: peso(m.v) })))),
-          h("p", { class: "muted small", style: "margin:10px 0 0", text: "GCash is as recorded by the store, not verified." })),
-        h("div", { class: "card" }, h("h2", { text: "Top products · 30 days", style: "margin-bottom:6px" }),
-          topRows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Product", "Qty", "Revenue", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
-            h("tbody", {}, topRows.map((r) => h("tr", {}, h("td", { class: "trunc", style: "max-width:180px", text: r.name }), h("td", { class: "r num", text: qtyFmt(r.qty) }), h("td", { class: "r num", text: peso(r.rev) }), h("td", { class: "r num", text: peso(r.prof) })))))) : h("div", { class: "empty", text: "No sales in the last 30 days yet." }))),
+          h("p", { class: "muted small", style: "margin:10px 0 0", text: "GCash is as recorded by each store, not verified." }))),
       h("div", { class: "card" },
+        h("div", { class: "toolbar", style: "margin-bottom:10px" }, h("h2", { text: `Stores (${rows.length})`, style: "margin-right:auto" }),
+          h("input", { type: "search", id: "admSearch", placeholder: "Search store or barangay", value: adminQ, "aria-label": "Search stores",
+            oninput: (e) => { adminQ = e.target.value; adminLimit = 25; render(); const el = $("#admSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } })),
+        rows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, cols.map(th))),
+          h("tbody", {}, rows.slice(0, adminLimit).map((x) => h("tr", { class: "click", tabindex: 0, onclick: () => open(x), onkeydown: (e) => { if (e.key === "Enter") open(x); } },
+            h("td", { style: "font-weight:600" }, x.name, x.sample ? h("span", { class: "sample-tag", text: "sample" }) : null, x.ownerStore ? h("span", { class: "sample-tag", style: "color:var(--accent);background:var(--accent-soft)", text: "yours" }) : null),
+            h("td", { class: "muted", text: x.st.area }),
+            h("td", {}, statusChip(x.st.status), h("div", { class: "muted small", text: relTime(x.lastActiveAt) })),
+            h("td", { class: "r num", text: peso(x.st.today) }), h("td", { class: "r num", text: peso(x.st.d30) }), h("td", { class: "r num", text: x.st.n30 }),
+            h("td", { class: "r num", text: x.products || 0 }), h("td", { class: "r num", style: x.lowStock ? "color:var(--warn)" : "", text: x.lowStock || 0 }), h("td", { class: "r num", text: peso(x.utang) })))))) 
+          : h("div", { class: "empty", text: S.stores.length ? "No store matches your search." : "No stores yet. When merchants open the app and set up their store, they appear here." }),
+        rows.length > adminLimit ? h("button", { class: "btn", style: "margin-top:10px", onclick: () => { adminLimit += 25; render(); } }, `Show more (${rows.length - adminLimit} left)`) : null),
+      h("div", { class: "card" }, h("h2", { text: "Latest activity — all stores", style: "margin-bottom:6px" }),
+        feed.length ? h("ul", { class: "feed" }, feed.map((e) => h("li", {}, h("span", { class: "dot", style: `background:${e.kind === "sale" ? "var(--s1)" : e.kind === "payment" ? "var(--s3)" : e.kind === "void" ? "var(--bad)" : "var(--s2)"}` }),
+          h("span", {}, h("a", { href: "#admin-s-" + e.store.id, style: "font-weight:600;color:inherit", onclick: (ev) => { ev.preventDefault(); open(e.store); }, text: e.store.name }), " · ", e.text),
+          h("span", { class: "muted small", text: relTime(e.at) })))) : h("div", { class: "empty", text: "No activity yet." })),
+      pilotSection(kpi));
+  }
+
+  function adminStore(x, k30) {
+    const st = x.st; const m = new Map((x.days || []).map((r) => [r.d, r]));
+    const days = k30.map(({ key, d }) => ({ key, d, total: m.get(key)?.t || 0, n: m.get(key)?.n || 0 }));
+    const kpi = (label, value, hint) => h("div", { class: "card kpi" }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
+    const mix = [["cash", "Cash", "var(--s1)"], ["gcash", "GCash", "var(--s2)"], ["credit", "Utang", "var(--s3)"]].map(([k, l, c]) => ({ l, c, v: x.mix?.[k] || 0 })); const mixMax = Math.max(1, ...mix.map((r) => r.v));
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {},
+        h("button", { class: "btn sm", onclick: () => go("admin") }, "‹ All stores"),
+        h("h1", { style: "margin-top:8px" }, x.name, x.sample ? h("span", { class: "sample-tag", text: "sample" }) : null),
+        h("div", { class: "muted small", text: [st.area, x.joinedAt ? "joined " + new Date(x.joinedAt).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : null, "last active " + relTime(x.lastActiveAt)].filter(Boolean).join(" · ") })),
+        statusChip(st.status)),
+      h("div", { class: "grid kpis wide" },
+        kpi("Sales today", peso(st.today)), kpi("Sales · 7 days", peso(st.d7)), kpi("Sales · 30 days", peso(st.d30), `${st.n30} sales · avg ${peso(st.n30 ? Math.round(st.d30 / st.n30) : 0)}`),
+        kpi("Products", String(x.products || 0), `${x.lowStock || 0} low on stock`), kpi("Stock value", peso(x.stockValue || 0)),
+        kpi("Utang outstanding", peso(x.utang || 0), `${x.debtors || 0} of ${x.customers || 0} customers`)),
+      h("div", { class: "card" }, h("h2", { text: "Daily sales — last 30 days", style: "margin-bottom:8px" }), salesChart(days)),
+      h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: "Recent activity", style: "margin-bottom:6px" }),
+          (x.recent || []).length ? h("ul", { class: "feed" }, x.recent.map((e) => h("li", {}, h("span", { class: "dot" }), h("span", { text: e.text }), h("span", { class: "muted small", text: when(e.at) })))) : h("div", { class: "empty", text: "No activity yet." })),
+        h("div", { class: "card" }, h("h2", { text: "Payment mix · 30 days", style: "margin-bottom:10px" }),
+          h("div", { class: "grid", style: "gap:8px" }, mix.map((r) => h("div", { class: "bar-row" }, h("span", { text: r.l }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(r.v / mixMax) * 100}%;background:${r.c}` })), h("span", { class: "num", text: peso(r.v) })))))),
+      h("p", { class: "muted small", text: `Summary updated ${relTime(x.updatedAt)}. The store's detailed records (each sale, customer names) stay private to the store.` }));
+  }
+
+  async function removeSamples() {
+    const ids = S.stores.filter((x) => x.sample).map((x) => x.id);
+    if (!ids.length) return;
+    openDialog("Delete sample stores?", h("div", { class: "grid" },
+      h("p", { text: `This removes the ${ids.length} sample stores with made-up numbers. Real stores are not affected.` }),
+      h("button", { class: "btn danger big", onclick: async () => {
+        dlg.close(); toast("Deleting sample stores…");
+        for (const id of ids) { try { await S.db.doc("stores/" + id).delete(); } catch { /* keep going */ } }
+        toast("Sample stores deleted");
+      } }, "Delete sample stores"),
+      h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel")));
+  }
+
+  function pilotSection(kpi) {
+    const pins = S.pilot?.pins || [];
+    const areas = [...new Set(pins.map((p) => p.area))];
+    const byArea = areas.map((a) => { const ps = pins.filter((p) => p.area === a); return { a, n: ps.length, signed: ps.filter((p) => p.signed).length, retained: ps.filter((p) => p.retention === "retain").length }; });
+    const realStores = S.stores.filter((x) => !x.sample && !x.ownerStore).length;
+    return h("div", { class: "card" },
         h("h2", { text: "Pilot network — field-surveyed stores" }),
         pins.length ? [
           h("div", { class: "grid kpis", style: "margin:10px 0" },
-            kpi("Surveyed", String(pins.length)), kpi("Signed in survey", String(pins.filter((p) => p.signed).length)), kpi("Retained in survey", String(pins.filter((p) => p.retention === "retain").length)), kpi("On KWADERNO", "0")),
+            kpi("Surveyed", String(pins.length)), kpi("Signed in survey", String(pins.filter((p) => p.signed).length)), kpi("Retained in survey", String(pins.filter((p) => p.retention === "retain").length)), kpi("Merchants on KWADERNO", String(realStores))),
           h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Survey area", "Stores", "Signed", "Retained"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
             h("tbody", {}, byArea.map((r) => h("tr", {}, h("td", { text: r.a }), h("td", { class: "r num", text: r.n }), h("td", { class: "r num", text: r.signed }), h("td", { class: "r num", text: r.retained })))))),
           h("div", { class: "legend", style: "margin:14px 0 8px" }, h("span", {}, h("i", { style: "background:var(--s1)" }), "Signed in survey"), h("span", {}, h("i", { style: "background:var(--s2)" }), "Surveyed, not signed")),
           h("div", { class: "plots" }, areas.map((a) => locationPlot(a, pins.filter((p) => p.area === a)))),
           h("p", { class: "muted small", style: "margin:10px 0 0", text: "Positions are plotted from the survey GPS (north is up). Tap a dot for the store. Owner names and phone numbers are not stored in this app." }),
-        ] : h("div", { class: "empty", text: "Pilot data not loaded yet." })));
+        ] : h("div", { class: "empty", text: "Pilot data not loaded yet." }));
   }
 
   function salesChart(days) {

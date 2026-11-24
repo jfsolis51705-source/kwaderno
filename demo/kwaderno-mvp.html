@@ -160,6 +160,7 @@ dialog .db * { min-width: 0; }
 :root[data-layout="phone"] .demo-pill { display: none; }
 :root[data-layout="phone"] .admin-link { margin-left: auto; }
 .layout-toggle[hidden] { display: none; }
+.admin-mode nav.tabs, .admin-mode .wrap:has(> nav.tabs), .admin-mode nav.bottom { display: none !important; }
 .libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; }
 .libitem { display: grid; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); text-align: left; min-width: 0; }
 .libitem .pimg { border-radius: 6px; }
@@ -194,6 +195,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 .feed .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); align-self: center; }
 .sample-tag { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.toolbar select { width: auto; flex: 0 1 190px; min-width: 0; }
 .toolbar input[type=search] { flex: 1 1 220px; min-width: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 :root { --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --s1: #3987e5; --s2: #d95926; --s3: #199e70; } }
@@ -252,7 +254,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  let insightsT = null;
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "";
@@ -276,6 +279,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return { stock, sold, balance };
   };
   let D = derived();
+  // Product names are matched across stores by a normalised name ("Lucky Me! Pancit Canton 60g" → "lucky me pancit canton 60g").
+  const normName = (n) => String(n || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
   const productById = (id) => S.products.find((p) => p.id === id);
   const activeProducts = () => S.products.filter((p) => !p.archived).sort((a, b) => a.name.localeCompare(b.name));
   const stockOf = (id) => Math.round((D.stock.get(id) || 0) * 1000) / 1000;
@@ -300,7 +305,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     S.base = S.owner ? "" : `stores/${S.me}/`;
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
-    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
+    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
+    if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
     let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries"]);
@@ -360,7 +367,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   function render() {
     applyLayout();
-    $("#storeName").textContent = S.store.name;
+    document.documentElement.classList.toggle("admin-mode", view === "admin");
+    $("#storeName").textContent = view === "admin" ? "KELSON Super Admin" : S.store.name;
     navLinks($("#tabs"), false); navLinks($("#bottom"), true);
     const app = $("#app");
     if (S.error === "nodb") return app.replaceChildren(h("div", { class: "card" }, h("h2", { text: "Sign in to use the store" }), h("p", { class: "muted", text: "This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor)." })));
@@ -378,7 +386,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   // ---------- camera photo → barcode / Claude ----------
   // Live camera is not available inside this page, so scanning uses a photo from the phone camera.
-  let pendingBarcode = "";
+  let pendingBarcode = "", draft = null; // draft: a product suggested by Smart tips
   function pickPhoto(camera = true) {
     return new Promise((resolve) => {
       const i = h("input", { type: "file", accept: "image/*", hidden: true });
@@ -549,7 +557,70 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const claudeError = (e) => ({ not_granted: "You didn't allow Claude for this page.", rate_limited: "Too many requests right now — try again in a minute.", image_rejected: "That photo couldn't be read. Try a clearer one.", invalid_json: "Claude's answer couldn't be read. Try again.", unavailable: "Claude isn't available here.", images_unavailable: "Photo reading isn't available here." })[e?.code] || "Something went wrong. Try again.";
 
   // ---------- HOME ----------
+  // ---------- SMART TIPS: what other stores' combined sales say about this store ----------
+  function computeTips() {
+    const ins = S.insights; if (!ins?.products?.length) return null;
+    const mine = new Map(activeProducts().map((p) => [normName(p.name), p]));
+    const net = new Map(ins.products.map((x) => [x.k, x]));
+    const myS30 = new Map(); const since = Date.now() - 30 * DAYMS;
+    for (const s of S.sales) if (!s.voided && new Date(s.at).getTime() >= since) for (const l of s.lines || []) myS30.set(l.productId, (myS30.get(l.productId) || 0) + Number(l.qty || 0));
+    const minCarry = Math.max(3, Math.round(ins.stores * 0.15));
+    const missing = ins.products.filter((x) => !mine.has(x.k) && x.tag !== "slow" && x.carry >= minCarry).slice(0, 8);
+    const area = (ins.byArea?.[S.store.barangay] || []).map((k) => net.get(k)).filter((x) => x && !mine.has(x.k)).slice(0, 6);
+    const restock = [];
+    for (const p of activeProducts()) {
+      const n = net.get(normName(p.name)); const q = stockOf(p.id); const daily = (myS30.get(p.id) || 0) / 30; const left = daily ? q / daily : null;
+      if (q <= (p.reorder || 0) || (left != null && left <= 3)) restock.push({ p, n, q, left, score: (n?.tag === "fast" ? 2 : 1) + (q <= 0 ? 1 : 0) });
+    }
+    restock.sort((a, b) => b.score - a.score || a.q - b.q);
+    const price = [];
+    for (const p of activeProducts()) { const n = net.get(normName(p.name)); if (!n?.med || !p.price) continue; const d = (p.price - n.med) / n.med; if (Math.abs(d) >= 0.15) price.push({ p, n, d }); }
+    price.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+    const slow = activeProducts().filter((p) => stockOf(p.id) > 0 && !myS30.get(p.id) && net.get(normName(p.name))?.tag === "slow").slice(0, 6);
+    return { ins, missing, area, restock: restock.slice(0, 8), price: price.slice(0, 8), slow, count: missing.length + area.length + restock.length + price.length + slow.length };
+  }
+  function suggestProduct(x) { draft = { name: x.name, price: x.med, cat: x.cat }; go("products", "new"); }
+  function tipsSourceNote(ins) {
+    return `From ${ins.stores} stores on KWADERNO${ins.sampleStores ? ` (incl. ${ins.sampleStores} sample stores for the demo)` : ""} · updated ${relTime(ins.updatedAt)}. Only totals are shared — no store sees another store's sales.`;
+  }
+  function tipsCard() {
+    const T = computeTips(); if (!T || !T.count) return null;
+    const lines = [
+      T.missing[0] && `🔥 ${T.missing[0].name} sells fast in ${T.missing[0].carry} stores — you don't have it yet`,
+      T.restock[0] && `📦 Restock ${T.restock[0].p.name}${T.restock[0].q <= 0 ? " — sold out" : T.restock[0].left != null ? ` — about ${Math.max(0, Math.floor(T.restock[0].left))} day(s) left` : ""}`,
+      T.price[0] && `🏷️ ${T.price[0].p.name}: your price ${peso(T.price[0].p.price)}, most stores ${peso(T.price[0].n.med)}`,
+    ].filter(Boolean);
+    return h("button", { class: "card", style: "text-align:left;display:grid;gap:8px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", onclick: () => go("home", "tips") },
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { text: `Smart tips (${T.count})` }), h("span", { class: "muted small", text: "See all ›" })),
+      lines.map((l) => h("div", { class: "small", text: l })),
+      h("div", { class: "muted small", text: `Learned from ${T.ins.stores} stores` }));
+  }
+  function viewTips() {
+    const T = computeTips();
+    const sec = (title, sub, items) => items.length ? h("div", { class: "card" }, h("h2", { text: title }), h("div", { class: "muted small", style: "margin:2px 0 8px", text: sub }), h("ul", { class: "list" }, items)) : null;
+    const body = !T ? h("div", { class: "empty", text: "Tips appear once enough stores are using KWADERNO." }) : !T.count ? h("div", { class: "empty", text: "No tips right now — your store is in good shape. 🎉" }) : [
+      sec("🔥 Best sellers you don't have yet", "Products that sell fast in many stores. Tap Add to start selling one (price pre-filled with the usual price).",
+        T.missing.map((x) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: `Sold in ${x.carry} stores · ~${x.perWeek} per store a week · usual price ${peso(x.med)}` })),
+          h("button", { class: "btn sm primary", onclick: () => suggestProduct(x) }, "Add")))),
+      S.store.barangay ? sec(`📍 Popular in ${S.store.barangay}`, "Top sellers among stores in your barangay that you don't carry.",
+        T.area.map((x) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: `usual price ${peso(x.med)}` })), h("button", { class: "btn sm", onclick: () => suggestProduct(x) }, "Add")))) : null,
+      sec("📦 Restock soon", "Low or about to run out, based on your own sales. Fast movers first.",
+        T.restock.map(({ p, n, q, left }) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: p.name }),
+          h("div", { class: "muted small", text: [q <= 0 ? "Sold out" : `${qtyFmt(q)} left`, left != null && q > 0 ? `about ${Math.max(0, Math.floor(left))} day(s) at your pace` : null, n?.tag === "fast" ? "fast mover in other stores" : null].filter(Boolean).join(" · ") })),
+          h("button", { class: "btn sm", onclick: () => go("products", "stockin") }, "Stock in")))),
+      sec("🏷️ Price check", "Your price is 15% or more away from what most stores charge.",
+        T.price.map(({ p, n, d }) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: p.name }),
+          h("div", { class: "muted small", text: `You ${peso(p.price)} · most stores ${peso(n.med)} (${peso(n.min)}–${peso(n.max)}) · ${d > 0 ? "higher — buyers may go elsewhere" : "lower — you could earn more"}` })),
+          h("button", { class: "btn sm", onclick: () => go("products", "edit-" + p.id) }, "Edit price")))),
+      sec("🐢 Slow sellers", "No sales in 30 days here and slow in other stores too — think twice before reordering.",
+        T.slow.map((p) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: p.name }), h("div", { class: "muted small", text: `${qtyFmt(stockOf(p.id))} in stock` }))))),
+    ];
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Smart tips", style: "margin-top:8px" }))),
+      body, T ? h("p", { class: "muted small", text: tipsSourceNote(T.ins) }) : null);
+  }
   function viewHome() {
+    if (sub === "tips") return viewTips();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
     const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
@@ -566,6 +637,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "head" }, h("div", {}, h("div", { class: "muted small", text: new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" }) }), h("h1", { text: "Magandang araw!" })),
         h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => go("sell") }, "Record a sale"), h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in / receipt"), h("button", { class: "btn", onclick: () => go("products", "new") }, "Add product"), h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"))),
       expired || soon ? h("button", { class: "note" + (expired ? " err" : ""), style: "text-align:left;border:0", onclick: () => go("products", "expiry") }, expired ? `${expired} batch(es) expired` + (soon ? `, ${soon} more expire this week` : "") + " — check the expiry list" : `${soon} batch(es) expire within 7 days — check the expiry list`) : null,
+      tipsCard(),
       h("div", { class: "grid kpis" },
         kpi("Sales today", peso(sum(today, (s) => s.total)), `${today.length} sale(s)`),
         kpi("Cash · GCash · Utang", `${peso(by("cash"))}`, `GCash ${peso(by("gcash"))} · Utang ${peso(by("credit"))}`),
@@ -756,7 +828,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         : h("div", { class: "empty", text: S.products.length ? "No matching products." : "No products yet. Add your first product." }));
   }
   function productForm(p) {
-    const v = p || { name: "", unit: "pc", price: 0, cost: 0, reorder: 5, category: "", barcodes: [] };
+    const v = p || { name: draft?.name || "", unit: "pc", price: draft?.price || 0, cost: 0, reorder: 5, category: draft?.cat || "", barcodes: [] };
+    if (!p) draft = null;
     const i = (id, label, val, extra = {}) => h("label", { class: "f" }, label, h("input", { type: "text", id, value: val ?? "", ...extra }));
     const pid = p?.id || "new";
     if (formPhoto && formPhoto.pid !== pid) formPhoto = null;
@@ -1152,16 +1225,17 @@ ${catalog}`;
           h("tbody", {}, prodRows.map((r) => h("tr", {}, h("td", { text: r.name }), h("td", { class: "r num", text: qtyFmt(r.qty) }), h("td", { class: "r num", text: peso(r.revenue) }), h("td", { class: "r num", text: peso(r.profit) }))))))
           : h("div", { class: "empty", text: "No sales in this period." })));
   }
-  async function exportCsv(text) {
+  async function exportCsv(text, name = "kwaderno-report") {
     try {
       const dl = await window.claude?.use?.("downloads");
       if (!dl) return toast("Download isn't available here");
-      await dl.save({ filename: `kwaderno-report-${todayKey()}.csv`, data: text });
+      await dl.save({ filename: `${name}-${todayKey()}.csv`, data: text });
     } catch (e) { if (e?.code !== "dismissed") toast("Download was not saved"); }
   }
 
 
   // ---------- KELSON SUPER-ADMIN (owner only) ----------
+  const DAYMS = 864e5;
   // ---------- store summary → Super Admin ----------
   // Each store keeps one small summary document (stores/<id>) that the owner's dashboard reads.
   // Detailed records stay in the store; the summary has totals, 30 daily totals and recent activity.
@@ -1179,6 +1253,11 @@ ${catalog}`;
     for (const s of ok) { const r = byDay.get(dayKey(s.at)); if (r) { r.t += s.total; r.n++; if (s.method in mix) mix[s.method] += s.total; } }
     const prods = activeProducts();
     const owed = [...D.balance.values()].filter((v) => v > 0);
+    const t30 = Date.now() - 30 * DAYMS, t7 = Date.now() - 7 * DAYMS, s30 = new Map(), r30 = new Map(), s7 = new Map();
+    for (const s of ok) { const at = new Date(s.at).getTime(); if (at < t30) continue;
+      for (const l of s.lines || []) { s30.set(l.productId, (s30.get(l.productId) || 0) + Number(l.qty || 0)); r30.set(l.productId, (r30.get(l.productId) || 0) + Math.round(Number(l.qty || 0) * l.price)); if (at >= t7) s7.set(l.productId, (s7.get(l.productId) || 0) + Number(l.qty || 0)); } }
+    const items = prods.slice(0, 300).map((p) => ({ k: normName(p.name), name: p.name.slice(0, 80), cat: p.category || null, price: p.price, cost: p.cost || 0,
+      stock: Math.max(0, stockOf(p.id)), reorder: p.reorder || 0, s30: s30.get(p.id) || 0, s7: s7.get(p.id) || 0, r30: r30.get(p.id) || 0, bc: (p.barcodes || [])[0] || null }));
     const events = [
       ...ok.map((s) => ({ at: s.at, kind: "sale", text: `Sale ${peso(s.total)} · ${s.method === "credit" ? "utang" : s.method === "gcash" ? "GCash" : "cash"}` })),
       ...S.sales.filter((s) => s.voided && s.voidedAt).map((s) => ({ at: s.voidedAt, kind: "void", text: `Voided a sale of ${peso(s.total)}` })),
@@ -1192,7 +1271,7 @@ ${catalog}`;
       products: prods.length, lowStock: prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).length,
       stockValue: prods.reduce((a, p) => a + Math.max(0, stockOf(p.id)) * (p.cost || 0), 0),
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
-      days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10),
+      days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10), items,
     };
   }
   async function writeSummary() {
@@ -1221,7 +1300,6 @@ ${catalog}`;
 
   // ---------- SUPER ADMIN: every store on the network ----------
   let adminQ = "", adminSort = { k: "d30", dir: -1 }, adminLimit = 25, adminSample = true;
-  const DAYMS = 864e5;
   function lastKeys(n) { const out = []; for (let i = n - 1; i >= 0; i--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - i); out.push({ key: dayKey(d.toISOString()), d }); } return out; }
   function storeStats(st, k7, k30, today) {
     const m = new Map((st.days || []).map((x) => [x.d, x]));
@@ -1238,6 +1316,8 @@ ${catalog}`;
     if (sub === "visual") return adminPage("visual", "Visual inventory", viewVisual());
     if (sub && sub.startsWith("v-")) { const v = S.visual.find((x) => x.id === sub.slice(2)); if (v) return adminPage("visual", v.name, viewVisualStore(v), true); }
     if (sub === "library") return adminPage("library", "Product photo library", viewLibrary());
+    if (sub === "products") return adminPage("products", "Products across all stores", viewNetworkProducts());
+    if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
     const stores = S.stores.filter((x) => adminSample || !x.sample).map((x) => ({ ...x, st: storeStats(x, keys7, keys30, today) }));
@@ -1314,10 +1394,187 @@ ${catalog}`;
       pilotSection(kpi));
   }
 
+  // ---------- NETWORK PRODUCT INTELLIGENCE ----------
+  // Combines every store's product numbers. Fast/steady/slow is by units sold per carrying store per week.
+  function aggregateProducts(stores) {
+    const m = new Map();
+    for (const st of stores) for (const it of st.items || []) {
+      if (!it.k) continue;
+      const r = m.get(it.k) || { k: it.k, name: it.name, cat: it.cat, rows: [], s30: 0, r30: 0 };
+      r.rows.push({ store: st, price: it.price, stock: it.stock, s30: it.s30, s7: it.s7, reorder: it.reorder, cost: it.cost });
+      r.s30 += it.s30; r.r30 += it.r30 || 0; if (!r.cat && it.cat) r.cat = it.cat; m.set(it.k, r);
+    }
+    const out = [...m.values()].map((r) => {
+      const prices = r.rows.map((x) => x.price).filter((x) => x > 0).sort((a, b) => a - b);
+      const carry = r.rows.length, perWeek = carry ? (r.s30 / carry) * (7 / 30) : 0;
+      return { ...r, carry, perWeek, med: prices.length ? prices[Math.floor(prices.length / 2)] : 0, min: prices[0] || 0, max: prices.at(-1) || 0,
+        low: r.rows.filter((x) => x.stock <= Math.max(x.reorder || 0, 0)).length, idle: r.rows.filter((x) => x.stock > 0 && !x.s30).length };
+    });
+    const ranked = out.filter((x) => x.carry >= 3).sort((a, b) => b.perWeek - a.perWeek);
+    const fastCut = ranked[Math.floor(ranked.length * 0.2)]?.perWeek ?? Infinity, slowCut = ranked[Math.floor(ranked.length * 0.7)]?.perWeek ?? 0;
+    for (const x of out) x.tag = x.carry < 3 ? "few" : x.perWeek >= fastCut && x.perWeek > 0 ? "fast" : x.perWeek <= slowCut ? "slow" : "steady";
+    return out;
+  }
+  const TAGS = { fast: ["on", "Fast moving"], steady: ["week", "Steady"], slow: ["idle", "Slow moving"], few: ["off", "Few stores"] };
+  const tagChip = (t) => statusChip(TAGS[t] || TAGS.few);
+  let prodQ = "", prodCat = "", prodBrgy = "", prodSort = { k: "s30", dir: -1 }, prodLimit = 40;
+  function viewNetworkProducts() {
+    const base = S.stores.filter((x) => adminSample || !x.sample);
+    const stores = base.filter((x) => !prodBrgy || x.barangay === prodBrgy);
+    const all = aggregateProducts(stores);
+    const cats = [...new Set(all.map((x) => x.cat).filter(Boolean))].sort(), brgys = [...new Set(base.map((x) => x.barangay).filter(Boolean))].sort();
+    const q = prodQ.trim().toLowerCase();
+    const rows = all.filter((x) => (!q || x.name.toLowerCase().includes(q)) && (!prodCat || x.cat === prodCat))
+      .sort((a, b) => { const va = prodSort.k === "name" ? a.name.toLowerCase() : a[prodSort.k], vb = prodSort.k === "name" ? b.name.toLowerCase() : b[prodSort.k]; return (va < vb ? -1 : va > vb ? 1 : 0) * prodSort.dir; });
+    const fast = all.filter((x) => x.tag === "fast").sort((a, b) => b.perWeek - a.perWeek);
+    const restock = fast.flatMap((p) => p.rows.filter((r) => r.stock <= Math.max(r.reorder || 0, 0)).map((r) => ({ p, r }))).sort((a, b) => b.p.perWeek - a.p.perWeek);
+    const dead = all.flatMap((p) => p.rows.filter((r) => r.stock > 0 && !r.s30).map((r) => ({ p, r, value: r.stock * (r.cost || 0) }))).sort((a, b) => b.value - a.value);
+    const units = all.reduce((a, x) => a + x.s30, 0);
+    const th = ([k, label, r]) => h("th", { class: "sort" + (r ? " r" : ""), "aria-sort": prodSort.k === k ? (prodSort.dir > 0 ? "ascending" : "descending") : null, tabindex: 0,
+      onclick: () => { prodSort = { k, dir: prodSort.k === k ? -prodSort.dir : k === "name" ? 1 : -1 }; render(); } }, label + (prodSort.k === k ? (prodSort.dir > 0 ? " ▲" : " ▼") : ""));
+    const sel = (id, label, val, opts, set) => h("select", { id, "aria-label": label, onchange: (e) => { set(e.target.value); prodLimit = 40; render(); } }, h("option", { value: "", text: label }), opts.map((o) => h("option", { value: o, text: o, selected: val === o || null })));
+    const fmax = Math.max(1, ...fast.slice(0, 10).map((x) => x.perWeek));
+    return h("div", { class: "view" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox("Products tracked", String(all.length), `in ${stores.length} store(s)`),
+        kpiBox("Fast-moving products", String(fast.length), "top 20% by sales per store"),
+        kpiBox("Units sold · 30 days", units.toLocaleString("en-PH"), "all tracked products"),
+        kpiBox("Restock opportunities", String(restock.length), "stores low or out of a fast mover"),
+        kpiBox("Not selling (30 days)", String(dead.length), `${peso(dead.reduce((a, x) => a + x.value, 0))} stock at cost`)),
+      h("div", { class: "grid two" },
+        h("div", { class: "card" }, h("h2", { text: "Fastest movers — per store per week", style: "margin-bottom:10px" }),
+          fast.length ? h("div", { class: "grid", style: "gap:8px" }, fast.slice(0, 10).map((x) => h("div", { class: "bar-row", style: "grid-template-columns:minmax(0,170px) 1fr auto" },
+            h("span", { class: "trunc", text: x.name }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(x.perWeek / fmax) * 100}%;background:var(--s1)` })), h("span", { class: "num", text: x.perWeek.toFixed(1) }))))
+            : h("div", { class: "empty", text: "Not enough sales data yet." })),
+        h("div", { class: "card" }, h("h2", { text: "Restock opportunities", style: "margin-bottom:6px" }), h("div", { class: "muted small", style: "margin-bottom:6px", text: "Stores low or out of a fast mover — sales they are missing." }),
+          restock.length ? h("ul", { class: "feed" }, restock.slice(0, 8).map(({ p, r }) => h("li", {}, h("span", { class: "dot", style: `background:${r.stock <= 0 ? "var(--bad)" : "var(--warn)"}` }),
+            h("span", {}, h("b", { text: r.store.name }), " · ", p.name), h("span", { class: "muted small", text: r.stock <= 0 ? "out" : `${qtyFmt(r.stock)} left` }))))
+            : h("div", { class: "empty", text: "None right now." }))),
+      h("div", { class: "card" },
+        h("div", { class: "toolbar", style: "margin-bottom:10px" }, h("h2", { text: `Products (${rows.length})`, style: "margin-right:auto" }),
+          h("input", { type: "search", id: "prodSearch", placeholder: "Search product", value: prodQ, "aria-label": "Search products",
+            oninput: (e) => { prodQ = e.target.value; prodLimit = 40; render(); const el = $("#prodSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
+          sel("prodCat", "All categories", prodCat, cats, (v) => (prodCat = v)), sel("prodBrgy", "All barangays", prodBrgy, brgys, (v) => (prodBrgy = v))),
+        rows.length ? h("div", { class: "table-wrap" }, h("table", {},
+          h("thead", {}, h("tr", {}, [["name", "Product"], ["tag", "Speed"], ["carry", "Stores", 1], ["s30", "Sold 30d", 1], ["perWeek", "Per store/wk", 1], ["med", "Usual price", 1], ["low", "Low/out", 1], ["idle", "Not selling", 1]].map(th))),
+          h("tbody", {}, rows.slice(0, prodLimit).map((x) => h("tr", { class: "click", tabindex: 0, onclick: () => productDialog(x, stores.length), onkeydown: (e) => { if (e.key === "Enter") productDialog(x, stores.length); } },
+            h("td", {}, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: x.cat || "" })), h("td", {}, tagChip(x.tag)),
+            h("td", { class: "r num", text: `${x.carry}/${stores.length}` }), h("td", { class: "r num", text: x.s30.toLocaleString("en-PH") }), h("td", { class: "r num", text: x.perWeek.toFixed(1) }),
+            h("td", { class: "r num", text: x.min !== x.max ? `${peso(x.med)} (${peso(x.min)}–${peso(x.max)})` : peso(x.med) }),
+            h("td", { class: "r num", style: x.low ? "color:var(--warn)" : "", text: x.low }), h("td", { class: "r num", text: x.idle })))))) : h("div", { class: "empty", text: "No product data yet. Stores send their product numbers automatically as they use the app." }),
+        rows.length > prodLimit ? h("button", { class: "btn", style: "margin-top:10px", onclick: () => { prodLimit += 40; render(); } }, `Show more (${rows.length - prodLimit} left)`) : null),
+      h("div", { class: "card" }, h("h2", { text: "Not selling in 30 days (has stock)", style: "margin-bottom:6px" }),
+        dead.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Product", "Stock", "Value at cost"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
+          h("tbody", {}, dead.slice(0, 12).map(({ p, r, value }) => h("tr", {}, h("td", { text: r.store.name }), h("td", { text: p.name }), h("td", { class: "r num", text: qtyFmt(r.stock) }), h("td", { class: "r num", text: peso(value) }))))))
+          : h("div", { class: "empty", text: "Nothing stuck. 🎉" })),
+      h("p", { class: "muted small", text: "Products are matched across stores by name. Numbers come from each store's own sales and stock in KWADERNO." }));
+  }
+  function productDialog(x, nStores) {
+    const rows = [...x.rows].sort((a, b) => b.s30 - a.s30);
+    openDialog(x.name, h("div", { class: "grid" },
+      h("div", { class: "pills" }, tagChip(x.tag), h("span", { class: "muted small", text: `${x.carry} of ${nStores} stores · ${x.perWeek.toFixed(1)} per store a week · usual ${peso(x.med)}` })),
+      h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Price", "Stock", "Sold 30d"].map((t, i) => h("th", { class: i ? "r" : "", text: t })))),
+        h("tbody", {}, rows.map((r) => h("tr", {}, h("td", { class: "trunc", style: "max-width:150px", text: r.store.name }), h("td", { class: "r num", text: peso(r.price) }),
+          h("td", { class: "r num", style: r.stock <= (r.reorder || 0) ? "color:var(--warn)" : "", text: qtyFmt(r.stock) }), h("td", { class: "r num", text: r.s30 }))))))));
+  }
+  function storeProductsCard(x) {
+    const net = new Map(aggregateProducts(S.stores.filter((s) => adminSample || !s.sample)).map((p) => [p.k, p]));
+    const items = [...(x.items || [])].sort((a, b) => b.s30 - a.s30);
+    if (!items.length) return h("div", { class: "card" }, h("h2", { text: "Products in this store" }), h("div", { class: "empty", text: "No product data from this store yet." }));
+    return h("div", { class: "card" }, h("h2", { text: `Products in this store (${items.length})`, style: "margin-bottom:6px" }),
+      h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Product", "Network", "Price vs usual", "Stock", "Sold 30d", "Days left"].map((t, i) => h("th", { class: i > 1 ? "r" : "", text: t })))),
+        h("tbody", {}, items.map((it) => { const n = net.get(it.k); const daily = it.s30 / 30; const left = daily ? Math.floor(it.stock / daily) : null; const diff = n?.med ? Math.round(((it.price - n.med) / n.med) * 100) : null;
+          return h("tr", {}, h("td", { text: it.name }), h("td", {}, n ? tagChip(n.tag) : null),
+            h("td", { class: "r num", style: diff != null && Math.abs(diff) >= 15 ? "color:var(--warn)" : "", text: peso(it.price) + (diff ? ` (${diff > 0 ? "+" : ""}${diff}%)` : "") }),
+            h("td", { class: "r num", style: it.stock <= (it.reorder || 0) ? "color:var(--warn)" : "", text: qtyFmt(it.stock) }), h("td", { class: "r num", text: it.s30 }),
+            h("td", { class: "r num", style: left != null && left <= 3 ? "color:var(--bad)" : "", text: left == null ? (it.stock > 0 ? "no sales" : "—") : left > 99 ? "99+" : String(left) })); })))));
+  }
+
+  // ---------- network tips published for every store (owner builds, everyone reads) ----------
+  // Only products sold in at least 3 stores are shared, and only as totals, so no single store's numbers are revealed.
+  let lastInsights = "";
+  function publishInsights() {
+    if (!S.owner || !S.stores.length) return;
+    const stores = S.stores; const all = aggregateProducts(stores).filter((x) => x.carry >= 3);
+    const products = all.sort((a, b) => b.perWeek - a.perWeek).slice(0, 250).map((x) => ({ k: x.k, name: x.name, cat: x.cat || null, carry: x.carry, perWeek: Math.round(x.perWeek * 10) / 10, med: x.med, min: x.min, max: x.max, tag: x.tag }));
+    const byArea = {};
+    for (const b of new Set(stores.map((x) => x.barangay).filter(Boolean))) {
+      const inArea = stores.filter((x) => x.barangay === b); if (inArea.length < 3) continue;
+      byArea[b] = aggregateProducts(inArea).filter((x) => x.carry >= 3).sort((p, q) => q.perWeek - p.perWeek).slice(0, 10).map((x) => x.k);
+    }
+    const body = { stores: stores.length, sampleStores: stores.filter((x) => x.sample).length, products, byArea };
+    const key = JSON.stringify(body); if (key === lastInsights) return;
+    lastInsights = key;
+    S.db.doc("network/insights").set({ ...body, updatedAt: new Date().toISOString() }).catch(() => { lastInsights = ""; });
+  }
+
+  // ---------- STORE DIRECTORY: every surveyed store, grouped by city and barangay (owner only) ----------
+  let dirQ = "", dirCity = "", dirBrgy = "", dirStatus = "";
+  const NOT_SET = "Not stated";
+  function albumFor(d) {
+    const n = normName(d.name);
+    return S.visual.find((v) => normName(v.name) === n) || S.visual.find((v) => normName(v.name).split(" ")[0] === n.split(" ")[0] && (v.barangay || "").toLowerCase() === (d.barangay || "").toLowerCase());
+  }
+  function viewDirectory() {
+    const all = S.directory;
+    if (!all.length) return h("div", { class: "empty", text: "Directory not loaded yet." });
+    const cityOf = (d) => d.city || NOT_SET, brgyOf = (d) => d.barangay || NOT_SET;
+    const cities = [...new Set(all.map(cityOf))].sort();
+    const brgys = [...new Set(all.filter((d) => !dirCity || cityOf(d) === dirCity).map(brgyOf))].sort();
+    const q = dirQ.trim().toLowerCase();
+    const list = all.filter((d) => (!dirCity || cityOf(d) === dirCity) && (!dirBrgy || brgyOf(d) === dirBrgy)
+      && (!dirStatus || (dirStatus === "signed" ? d.signed : dirStatus === "unsigned" ? !d.signed : dirStatus === "retain" ? d.retention === "retain" : dirStatus === "photos" ? !!albumFor(d) : true))
+      && (!q || [d.name, d.address, d.owner, d.phone, d.barangay, d.city, d.surveyor].filter(Boolean).join(" ").toLowerCase().includes(q)));
+    const groups = new Map();
+    for (const d of list) { const c = cityOf(d), b = brgyOf(d); if (!groups.has(c)) groups.set(c, new Map()); const g = groups.get(c); g.set(b, [...(g.get(b) || []), d]); }
+    const cityOrder = [...groups.keys()].sort((a, b) => (a === NOT_SET) - (b === NOT_SET) || [...groups.get(b).values()].flat().length - [...groups.get(a).values()].flat().length);
+    const sel = (id, label, val, opts, set) => h("select", { id, "aria-label": label, onchange: (e) => { set(e.target.value); render(); } }, h("option", { value: "", text: label }), opts.map((o) => h("option", { value: o, text: o, selected: val === o || null })));
+    const download = () => {
+      const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+      const head = ["City", "Barangay", "Store", "Address", "Owner", "Phone", "Signed", "Retention", "Registration", "Surveyed on", "Surveyor", "Survey area", "Latitude", "Longitude", "Map"];
+      const rows = list.map((d) => [cityOf(d), brgyOf(d), d.name, d.address, d.owner, d.phone, d.signed ? "yes" : "no", d.retention, d.registration, d.surveyedOn, d.surveyor, d.area, d.lat, d.lng, `https://www.google.com/maps?q=${d.lat},${d.lng}`]);
+      exportCsv([head, ...rows].map((r) => r.map(esc).join(",")).join("\n"), "kelson-store-directory");
+    };
+    const row = (d) => { const album = albumFor(d);
+      return h("tr", {},
+        h("td", {}, h("div", { style: "font-weight:600", text: d.name }), d.area ? h("div", { class: "muted small", text: `Survey area: ${d.area}` }) : null),
+        h("td", { style: "white-space:normal;min-width:220px", text: d.address || "—" }),
+        h("td", {}, h("div", { text: d.owner || "—" }), d.phone ? h("a", { href: "tel:" + d.phone.replace(/[^\d+]/g, ""), class: "small", text: d.phone }) : null),
+        h("td", {}, h("div", { class: "chips" }, d.signed ? statusChip(["on", "Signed"]) : statusChip(["off", "Not signed"]), d.retention ? statusChip([d.retention === "retain" ? "week" : "idle", d.retention === "retain" ? "Retained" : d.retention]) : null)),
+        h("td", { class: "small", text: [d.surveyedOn ? fmtDate(d.surveyedOn) : null, d.surveyor].filter(Boolean).join(" · ") || "—" }),
+        h("td", {}, h("div", { class: "pills" },
+          h("a", { class: "btn sm", href: `https://www.google.com/maps?q=${d.lat},${d.lng}`, target: "_blank", rel: "noopener noreferrer" }, "Map"),
+          album ? h("a", { class: "btn sm", href: "#admin-v-" + album.id, onclick: (e) => { e.preventDefault(); go("admin", "v-" + album.id); } }, "Photos") : null))); };
+    return h("div", { class: "view" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox("Stores", String(all.length), `${cities.filter((c) => c !== NOT_SET).length} cities · ${new Set(all.filter((d) => d.barangay).map((d) => d.city + "|" + d.barangay)).size} barangays`),
+        kpiBox("Signed", String(all.filter((d) => d.signed).length), `${all.filter((d) => d.retention === "retain").length} retained`),
+        kpiBox("With contact number", String(all.filter((d) => d.phone).length)),
+        kpiBox("With shelf photos", String(all.filter((d) => albumFor(d)).length), "linked to Visual inventory")),
+      h("div", { class: "toolbar" },
+        h("input", { type: "search", id: "dirSearch", placeholder: "Search name, address, owner, phone", value: dirQ, "aria-label": "Search directory",
+          oninput: (e) => { dirQ = e.target.value; render(); const el = $("#dirSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
+        sel("dirCity", "All cities", dirCity, cities, (v) => { dirCity = v; dirBrgy = ""; }), sel("dirBrgy", "All barangays", dirBrgy, brgys, (v) => (dirBrgy = v)),
+        h("select", { id: "dirStatus", "aria-label": "Status", onchange: (e) => { dirStatus = e.target.value; render(); } },
+          [["", "Any status"], ["signed", "Signed"], ["unsigned", "Not signed"], ["retain", "Retained"], ["photos", "Has shelf photos"]].map(([v, l]) => h("option", { value: v, text: l, selected: dirStatus === v || null }))),
+        h("button", { class: "btn", onclick: download }, "Download CSV")),
+      h("div", { class: "muted small", text: `${list.length} store(s) shown. Owner names and phone numbers are visible only to you.` }),
+      cityOrder.length ? cityOrder.map((c) => { const g = groups.get(c); const n = [...g.values()].flat().length;
+        const bOrder = [...g.keys()].sort((a, b) => (a === NOT_SET) - (b === NOT_SET) || a.localeCompare(b));
+        return h("div", { class: "card" },
+          h("h2", { text: `${c} — ${n} store(s)` }),
+          h("div", { class: "chips", style: "margin:8px 0 4px" }, bOrder.map((b) => h("span", { class: "chip" }, b, h("b", { text: String(g.get(b).length) })))),
+          bOrder.map((b) => h("div", { style: "margin-top:14px" },
+            h("h3", { style: "margin-bottom:6px", text: `Barangay ${b.replace(/^Barangay /, "")} (${g.get(b).length})` }),
+            h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Address", "Owner / contact", "Status", "Surveyed", ""].map((x) => h("th", { text: x })))),
+              h("tbody", {}, g.get(b).sort((x, y) => x.name.localeCompare(y.name)).map(row)))))));
+      }) : h("div", { class: "empty", text: "No store matches." }));
+  }
+
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },
@@ -1361,7 +1618,13 @@ ${catalog}`;
       h("div", { class: "toolbar" },
         h("input", { type: "search", id: "visSearch", placeholder: "Search store, barangay or product seen", value: visQ, "aria-label": "Search visual inventory",
           oninput: (e) => { visQ = e.target.value; render(); const el = $("#visSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
-        h("button", { class: "btn", onclick: newAlbum }, "+ New store album")),
+        h("button", { class: "btn", onclick: newAlbum }, "+ New store album"),
+        photos - scanned ? h("button", { class: "btn primary", onclick: async (e) => {
+          e.currentTarget.disabled = true; const todo = all.flatMap((v) => (v.photos || []).map((p, i) => (p.items ? null : [v, i])).filter(Boolean)); let ok = 0;
+          for (const [n, [v, i]] of todo.entries()) { toast(`AI scanning photo ${n + 1} of ${todo.length} — ${v.name}`); if (await identifyPhoto(v, i, true)) ok++; }
+          toast(`Scan done: ${ok} of ${todo.length} photo(s) read`);
+        } }, `Scan all ${photos - scanned} photo(s) (AI)`) : null),
+      scanned ? shelfPresence(all) : null,
       list.length ? h("div", { class: "vgrid" }, list.map((v) => {
         const cover = (v.photos || [])[0]; const seen = seenItems(v);
         return h("button", { class: "card vcard", onclick: () => go("admin", "v-" + v.id), "aria-label": "Open photos of " + v.name },
@@ -1369,6 +1632,28 @@ ${catalog}`;
           h("div", { class: "vb" }, h("b", { text: v.name }), h("span", { class: "muted small", text: [v.barangay, v.city].filter(Boolean).join(", ") || "—" }),
             h("span", { class: "muted small", text: `${(v.photos || []).length} photo(s) · latest ${fmtDate((v.photos || []).map((p) => p.date).filter(Boolean).sort().at(-1))}${seen.length ? ` · ${seen.length} products seen` : ""}` })));
       })) : h("div", { class: "empty", text: all.length ? "Nothing matches your search." : "No store photos yet." }));
+  }
+  // Shelf presence across all scanned photos: in how many stores each brand / product is on display.
+  function shelfPresence(all) {
+    const brands = new Map(), prods = new Map(), cats = new Map(); let scannedStores = 0;
+    for (const v of all) {
+      const seen = seenItems(v); if (!seen.length) continue; scannedStores++;
+      const bs = new Set(seen.map((x) => (x.brand || x.name.split(" ")[0]).trim()));
+      for (const b of bs) brands.set(b, (brands.get(b) || 0) + 1);
+      for (const it of seen) { const k = it.name.toLowerCase(); const r = prods.get(k) || { name: it.name, cat: it.category, n: 0 }; r.n++; prods.set(k, r); cats.set(it.category, (cats.get(it.category) || 0) + 1); }
+    }
+    const topB = [...brands.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15), topP = [...prods.values()].sort((a, b) => b.n - a.n).slice(0, 15);
+    const catRows = [...cats.entries()].sort((a, b) => b[1] - a[1]); const catTotal = catRows.reduce((a, x) => a + x[1], 0) || 1;
+    const bar = (label, n, max, color, right) => h("div", { class: "bar-row", style: "grid-template-columns:minmax(0,150px) 1fr auto" },
+      h("span", { class: "trunc", text: label }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(n / max) * 100}%;background:${color}` })), h("span", { class: "num", text: right }));
+    return h("div", { class: "grid two" },
+      h("div", { class: "card" }, h("h2", { text: "Brands on display — share of stores" }), h("div", { class: "muted small", style: "margin:2px 0 10px", text: `In how many of the ${scannedStores} scanned stores each brand appears on the shelf` }),
+        h("div", { class: "grid", style: "gap:7px" }, topB.map(([b, n]) => bar(b, n, scannedStores, "var(--s1)", `${n}/${scannedStores} · ${Math.round((n / scannedStores) * 100)}%`)))),
+      h("div", { class: "grid", style: "gap:16px" },
+        h("div", { class: "card" }, h("h2", { text: "Most-stocked products", style: "margin-bottom:10px" }),
+          h("div", { class: "grid", style: "gap:7px" }, topP.slice(0, 10).map((x) => bar(x.name, x.n, scannedStores, "var(--s3)", `${x.n} stores`)))),
+        h("div", { class: "card" }, h("h2", { text: "Shelf mix by category", style: "margin-bottom:10px" }),
+          h("div", { class: "grid", style: "gap:7px" }, catRows.map(([c, n]) => bar(c, n, catRows[0][1], "var(--s2)", `${Math.round((n / catTotal) * 100)}%`))))));
   }
   function newAlbum() {
     const name = h("input", { type: "text", placeholder: "e.g. Vilma store", maxlength: 80 }), brgy = h("input", { type: "text", placeholder: "e.g. Sto Cristo", maxlength: 60 });
@@ -1399,10 +1684,10 @@ ${catalog}`;
     try {
       const blob = await (await fetch(ph.url)).blob();
       const out = await sample.json(`This is a photo of shelves or a fridge in a Filipino sari-sari store. List the distinct products you can clearly read (brand + product + variant or size when readable).
-Reply with JSON only: {"items":[{"name":"Brand Product Variant","category":"${CATS.join('" | "')}"}],"note":"one short sentence describing the shelf"}.
-At most 30 items. Skip anything you cannot read clearly; do not guess.`, { images: [blob], modelTier: "default" });
-      const items = (Array.isArray(out?.items) ? out.items : []).filter((x) => x && typeof x.name === "string" && x.name.trim()).slice(0, 30)
-        .map((x) => ({ name: x.name.trim().slice(0, 80), category: CATS.includes(x.category) ? x.category : "Others" }));
+Reply with JSON only: {"items":[{"name":"Brand Product Variant","brand":"Brand","category":"${CATS.join('" | "')}"}],"note":"one short sentence describing the shelf"}.
+At most 40 items. Skip anything you cannot read clearly; do not guess.`, { images: [blob], modelTier: "default" });
+      const items = (Array.isArray(out?.items) ? out.items : []).filter((x) => x && typeof x.name === "string" && x.name.trim()).slice(0, 40)
+        .map((x) => ({ name: x.name.trim().slice(0, 80), brand: typeof x.brand === "string" && x.brand.trim() ? x.brand.trim().slice(0, 40) : x.name.trim().split(" ")[0], category: CATS.includes(x.category) ? x.category : "Others" }));
       const cur = S.visual.find((x) => x.id === v.id) || v;
       const photos = cur.photos.map((p, i) => (i === idx ? { ...p, items, note: typeof out?.note === "string" ? out.note.slice(0, 200) : null, scannedAt: new Date().toISOString() } : p));
       await saveVisual(cur, photos);
@@ -1507,6 +1792,7 @@ At most 30 items. Skip anything you cannot read clearly; do not guess.`, { image
           (x.recent || []).length ? h("ul", { class: "feed" }, x.recent.map((e) => h("li", {}, h("span", { class: "dot" }), h("span", { text: e.text }), h("span", { class: "muted small", text: when(e.at) })))) : h("div", { class: "empty", text: "No activity yet." })),
         h("div", { class: "card" }, h("h2", { text: "Payment mix · 30 days", style: "margin-bottom:10px" }),
           h("div", { class: "grid", style: "gap:8px" }, mix.map((r) => h("div", { class: "bar-row" }, h("span", { text: r.l }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(r.v / mixMax) * 100}%;background:${r.c}` })), h("span", { class: "num", text: peso(r.v) })))))),
+      storeProductsCard(x),
       h("p", { class: "muted small", text: `Summary updated ${relTime(x.updatedAt)}. The store's detailed records (each sale, customer names) stay private to the store.` }));
   }
 

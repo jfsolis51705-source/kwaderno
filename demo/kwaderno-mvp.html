@@ -198,6 +198,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   const S = { db: null, me: null, owner: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
+  let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "";
   const VIEWS = [
     ["home", "Home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
@@ -252,7 +253,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
   }
 
   // ---------- routing ----------
-  function go(v, s = null) { view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); }
+  function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); }
   function readHash() {
     const raw = location.hash.slice(1);
     if (raw === "admin") { view = "admin"; sub = null; return; }
@@ -286,6 +287,9 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
     if (!S.ready) return app.replaceChildren(h("div", { class: "empty", text: S.error === "slow" ? "Still connecting… check your internet connection." : "Loading your store…" }));
     if (S.error && S.error !== "slow") app.prepend?.(h("div", { class: "note err", text: "Some data could not load (" + S.error + "). Reload the page to try again." }));
     $("#adminLink").hidden = !S.owner || view === "admin";
+    const route = view + "/" + sub;
+    if (route === lastRoute && app.querySelector("[data-keep]")) return; // keep what's typed in an open form
+    lastRoute = route;
     const fns = { home: viewHome, sell: viewSell, products: viewProducts, utang: viewUtang, reports: viewReports, admin: viewAdmin };
     app.replaceChildren(fns[view]());
   }
@@ -299,6 +303,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
       const i = h("input", { type: "file", accept: "image/*", hidden: true });
       if (camera) i.setAttribute("capture", "environment");
       i.addEventListener("change", () => { resolve(i.files?.[0] || null); i.remove(); });
+      i.addEventListener("cancel", () => { resolve(null); i.remove(); });
       document.body.append(i); i.click();
     });
   }
@@ -378,6 +383,38 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
     } catch (e) { toast("Could not save the photo: " + (e?.code || e?.message || "try again")); }
   }
   async function snapProductPhoto(p) { const f = await pickPhoto(true); if (f) await setProductPhoto(p, f); }
+  const upIcon = () => svgIcon("M12 15V4M7 9l5-5 5 5M4 15v5h16v-5");
+  /** Ask: take a photo, upload one from the phone's gallery/files, or remove. Resolves a File, "remove" or null. */
+  function choosePhoto(hasPhoto) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; dlg.close(); resolve(v); };
+      // the file picker must open inside the tap itself, so no await before pickPhoto
+      const pick = (camera) => { if (done) return; done = true; dlg.close(); resolve(pickPhoto(camera)); };
+      openDialog("Product photo", h("div", { class: "grid" },
+        h("button", { class: "btn primary big", onclick: () => pick(false) }, upIcon(), "Upload a photo"),
+        h("p", { class: "muted small", style: "margin:-4px 0 4px", text: "From your gallery, Google Drive, or files. Square photos look best." }),
+        h("button", { class: "btn big", onclick: () => pick(true) }, camIcon(), "Take a photo"),
+        hasPhoto ? h("button", { class: "btn danger", onclick: () => finish("remove") }, "Remove photo") : null,
+        h("button", { class: "btn", onclick: () => finish(null) }, "Cancel")));
+      dlg.addEventListener("close", () => finish(null), { once: true });
+    });
+  }
+  async function removeProductPhoto(p) {
+    const cur = productById(p.id) || p;
+    if (!cur.photo) return;
+    const { photo, ...rest } = strip(cur);
+    try {
+      await write("products/" + p.id, rest);
+      (await window.claude?.use?.("assets"))?.delete(photo.id).catch(() => {});
+      toast("Photo removed");
+    } catch (e) { toast("Could not remove the photo: " + (e?.code || e?.message || "try again")); }
+  }
+  async function editProductPhoto(p) {
+    const r = await choosePhoto(!!(productById(p.id) || p).photo);
+    if (r === "remove") await removeProductPhoto(p);
+    else if (r) { toast("Saving photo…"); await setProductPhoto(p, r); }
+  }
   const camIcon = () => svgIcon("M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z");
   async function askClaudeJson(prompt, images) {
     const sample = await window.claude?.use?.("sample");
@@ -596,7 +633,27 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
   function productForm(p) {
     const v = p || { name: "", unit: "pc", price: 0, cost: 0, reorder: 5, category: "", barcodes: [] };
     const i = (id, label, val, extra = {}) => h("label", { class: "f" }, label, h("input", { type: "text", id, value: val ?? "", ...extra }));
-    const form = h("form", { class: "card grid", style: "gap:14px", onsubmit: async (e) => {
+    const pid = p?.id || "new";
+    if (formPhoto && formPhoto.pid !== pid) formPhoto = null;
+    const preview = () => {
+      if (formPhoto?.file) return h("img", { class: "pimg", src: formPhoto.url, alt: "New photo" });
+      if (formPhoto?.remove) return productImage({ ...v, photo: null, name: $("#pf-name")?.value || v.name || "?" });
+      return productImage({ ...v, photo: p ? productById(p.id)?.photo : null, name: v.name || "?" });
+    };
+    const photoBox = h("div", { class: "hero-photo", style: "width:120px" }, preview());
+    const photoField = h("div", { style: "display:flex;gap:14px;align-items:end;flex-wrap:wrap" }, photoBox,
+      h("div", { class: "grid", style: "gap:6px" },
+        h("span", { class: "small", style: "font-weight:600", text: "Photo" }),
+        h("button", { class: "btn", type: "button", onclick: async () => {
+          const had = formPhoto?.file || (!formPhoto?.remove && p && productById(p.id)?.photo);
+          const r = await choosePhoto(!!had);
+          if (!r) return;
+          if (formPhoto?.url) URL.revokeObjectURL(formPhoto.url);
+          formPhoto = r === "remove" ? { pid, remove: true } : { pid, file: r, url: URL.createObjectURL(r) };
+          photoBox.replaceChildren(preview());
+          toast(r === "remove" ? "Photo will be removed when you save" : "Photo ready — it saves with the product");
+        } }, camIcon(), "Edit photo")));
+    const form = h("form", { class: "card grid", "data-keep": "", style: "gap:14px", onsubmit: async (e) => {
       e.preventDefault();
       const name = $("#pf-name").value.trim(); const price = toCentavos($("#pf-price").value); const cost = toCentavos($("#pf-cost").value || "0");
       const reorder = Number($("#pf-reorder").value || 0); const opening = Number($("#pf-open")?.value || 0);
@@ -606,14 +663,20 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
       if (cost == null) return toast("Enter a valid cost");
       if (code && S.products.some((x) => x.id !== p?.id && (x.barcodes || []).includes(code))) return toast("That barcode is already used by another product");
       const id = p?.id || uid();
-      const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString(), ...(p?.photo ? { photo: p.photo } : {}) };
+      const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString(), };
+      const oldPhoto = p ? productById(p.id)?.photo : null;
+      if (oldPhoto && !formPhoto?.remove) body.photo = oldPhoto;
+      const chosen = formPhoto;
       try {
         await write("products/" + id, body);
+        if (chosen?.file) await setProductPhoto({ id, ...body }, chosen.file);
+        else if (chosen?.remove && oldPhoto) (await window.claude?.use?.("assets"))?.delete(oldPhoto.id).catch(() => {});
         pendingBarcode = "";
         if (!p && opening > 0) await write("moves/" + uid(), { productId: id, kind: "opening", qty: opening, cost, reason: "Opening stock", at: new Date().toISOString(), by: S.me || null });
         toast(p ? "Product saved" : "Product added"); go("products", "p-" + id);
       } catch (err) { toast("Could not save: " + (err?.code || "try again")); }
     } },
+      photoField,
       h("div", { class: "form" },
         i("pf-name", "Product name", v.name, { placeholder: "e.g. Lucky Me Pancit Canton 60g", required: true }),
         i("pf-cat", "Category (optional)", v.category, { placeholder: "e.g. Noodles" }),
@@ -642,7 +705,7 @@ dialog .db { padding: 16px; display: grid; gap: 12px; overflow-y: auto; }
           h("button", { class: "btn danger", onclick: async () => { await write("products/" + p.id, { ...strip(p), archived: true }); toast("Archived — history kept"); go("products"); } }, "Archive"))),
       h("div", { style: "display:flex;gap:14px;align-items:end;flex-wrap:wrap" },
         h("div", { class: "hero-photo" }, productImage(p)),
-        h("button", { class: "btn", onclick: () => snapProductPhoto(p) }, camIcon(), p.photo ? "Change photo" : "Add photo")),
+        h("button", { class: "btn", onclick: () => editProductPhoto(p) }, camIcon(), p.photo ? "Edit photo" : "Add photo")),
       h("div", { class: "grid kpis" },
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "In stock" }), h("div", { class: "value" }, stockChip(p))),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Price" }), h("div", { class: "value num", text: peso(p.price) })),
@@ -770,11 +833,12 @@ ${catalog}`;
     const missing = all.filter((p) => !p.photo);
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: "Add product photos", style: "margin-top:8px" }),
-        h("div", { class: "muted small", text: `${all.length - missing.length} of ${all.length} products have a photo. Tap the camera on each, fill the frame with the item, good light.` }))),
+        h("div", { class: "muted small", text: `${all.length - missing.length} of ${all.length} products have a photo. Upload a photo from your phone or Drive, or tap the camera to take one.` }))),
       missing.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, missing.map((p) => h("li", {},
         h("div", { class: "thumb" }, productImage(p)),
         h("span", { class: "grow trunc", style: "font-weight:600", text: p.name }),
-        h("button", { class: "btn primary", "aria-label": "Take photo of " + p.name, onclick: () => snapProductPhoto(p) }, camIcon(), "Photo")))))
+        h("button", { class: "btn primary", "aria-label": "Upload photo of " + p.name, onclick: async () => { const f = await pickPhoto(false); if (f) { toast("Saving photo…"); await setProductPhoto(p, f); } } }, upIcon(), "Upload"),
+        h("button", { class: "btn", "aria-label": "Take photo of " + p.name, onclick: () => snapProductPhoto(p) }, camIcon())))))
         : h("div", { class: "empty", text: "Every product has a photo. 🎉" }));
   }
 

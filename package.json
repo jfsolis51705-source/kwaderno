@@ -15,10 +15,12 @@
     "pilot:normalize": "python3 -I scripts/pilot/normalize.py data/private/pilot-map.kml data/private/pilot-leads.xlsx data/private/pilot-merchants.json",
     "pilot:import": "node --env-file-if-exists=.env.local --import tsx src/db/pilot-import.ts",
     "e2e": "node e2e/run.mjs",
-    "admin:grant": "node --env-file-if-exists=.env.local --import tsx scripts/grant-admin.ts"
+    "admin:grant": "node --env-file-if-exists=.env.local --import tsx scripts/grant-admin.ts",
+    "vercel-build": "npm run db:migrate && next build"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.2",
+    "@vercel/blob": "^2.9.0",
     "@zxing/browser": "^0.2.1",
     "@zxing/library": "^0.23.0",
     "class-variance-authority": "^0.7.1",

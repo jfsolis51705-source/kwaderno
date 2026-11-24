@@ -14,6 +14,7 @@ export const metadata: Metadata = {
   applicationName: "KWADERNO",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "KWADERNO", statusBarStyle: "default" },
+  icons: { icon: [{ url: "/icon.svg", type: "image/svg+xml" }, { url: "/icon-192.png", sizes: "192x192", type: "image/png" }], apple: "/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {

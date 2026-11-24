@@ -1275,6 +1275,7 @@ ${catalog}`;
       stockValue: prods.reduce((a, p) => a + Math.max(0, stockOf(p.id)) * (p.cost || 0), 0),
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
       days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10), items,
+      exp: activeExpiries().slice(0, 60).map((e) => ({ name: productById(e.productId)?.name || "Product", date: e.date, qty: e.qty || null })),
     };
   }
   async function writeSummary() {
@@ -1444,7 +1445,8 @@ ${catalog}`;
         kpiBox("Fast-moving products", String(fast.length), "top 20% by sales per store"),
         kpiBox("Units sold · 30 days", units.toLocaleString("en-PH"), "all tracked products"),
         kpiBox("Restock opportunities", String(restock.length), "stores low or out of a fast mover"),
-        kpiBox("Not selling (30 days)", String(dead.length), `${peso(dead.reduce((a, x) => a + x.value, 0))} stock at cost`)),
+        kpiBox("Not selling (30 days)", String(dead.length), `${peso(dead.reduce((a, x) => a + x.value, 0))} stock at cost`),
+        kpiBox("Expired / expiring ≤7 days", `${expiryRows(stores).filter((r) => r.left < 0).length} / ${expiryRows(stores).filter((r) => r.left >= 0 && r.left <= 7).length}`, "batches across stores")),
       h("div", { class: "grid two" },
         h("div", { class: "card" }, h("h2", { text: "Fastest movers — per store per week", style: "margin-bottom:10px" }),
           fast.length ? h("div", { class: "grid", style: "gap:8px" }, fast.slice(0, 10).map((x) => h("div", { class: "bar-row", style: "grid-template-columns:minmax(0,170px) 1fr auto" },
@@ -1471,7 +1473,27 @@ ${catalog}`;
         dead.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Product", "Stock", "Value at cost"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
           h("tbody", {}, dead.slice(0, 12).map(({ p, r, value }) => h("tr", {}, h("td", { text: r.store.name }), h("td", { text: p.name }), h("td", { class: "r num", text: qtyFmt(r.stock) }), h("td", { class: "r num", text: peso(value) }))))))
           : h("div", { class: "empty", text: "Nothing stuck. 🎉" })),
+      expiryCard(stores),
       h("p", { class: "muted small", text: "Products are matched across stores by name. Numbers come from each store's own sales and stock in KWADERNO." }));
+  }
+  // Expiring and expired stock across stores (from each store's expiry tracking)
+  function expiryRows(stores) {
+    return stores.flatMap((st) => (st.exp || []).map((e) => ({ st, ...e, left: daysLeft(e.date) }))).sort((a, b) => a.left - b.left);
+  }
+  let expFilter = "soon";
+  function expiryCard(stores) {
+    const rows = expiryRows(stores); const expired = rows.filter((r) => r.left < 0), week = rows.filter((r) => r.left >= 0 && r.left <= 7), month = rows.filter((r) => r.left > 7 && r.left <= 30);
+    const show = expFilter === "expired" ? expired : expFilter === "month" ? month : week;
+    const byProduct = new Map(); for (const r of [...expired, ...week]) byProduct.set(r.name, (byProduct.get(r.name) || 0) + 1);
+    return h("div", { class: "card" },
+      h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("h2", { text: "Expiry — all stores", style: "margin-right:auto" }),
+        h("div", { class: "pills" }, [["expired", `Expired (${expired.length})`], ["soon", `Within 7 days (${week.length})`], ["month", `8–30 days (${month.length})`]].map(([k, l]) => h("button", { class: "btn sm" + (expFilter === k ? " primary" : ""), onclick: () => { expFilter = k; render(); } }, l)))),
+      byProduct.size ? h("div", { class: "chips", style: "margin-bottom:10px" }, h("span", { class: "muted small", text: "Most often expiring:" }), [...byProduct.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([n, c]) => h("span", { class: "chip" }, n, h("b", { text: "×" + c })))) : null,
+      show.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Product", "Expiry date", "Days", "Qty"].map((x, i) => h("th", { class: i > 2 ? "r" : "", text: x })))),
+        h("tbody", {}, show.slice(0, 60).map((r) => h("tr", { class: "click", onclick: () => go("admin", "s-" + r.st.id) }, h("td", {}, r.st.name, r.st.sample ? h("span", { class: "sample-tag", text: "sample" }) : null), h("td", { text: r.name }), h("td", { text: fmtDate(r.date) }),
+          h("td", { class: "r num", style: `color:${r.left < 0 ? "var(--bad)" : r.left <= 7 ? "var(--warn)" : "inherit"}`, text: r.left < 0 ? `${-r.left} ago` : r.left === 0 ? "today" : String(r.left) }), h("td", { class: "r num", text: r.qty ?? "—" }))))))
+        : h("div", { class: "empty", text: "Nothing here." }),
+      show.length > 60 ? h("div", { class: "muted small", style: "margin-top:6px", text: `Showing 60 of ${show.length}.` }) : null);
   }
   function productDialog(x, nStores) {
     const rows = [...x.rows].sort((a, b) => b.s30 - a.s30);
@@ -1577,7 +1599,7 @@ ${catalog}`;
 
   // ---------- SHELF AUDIT: must-stock availability, facings and share of shelf from store photos ----------
   // Photos come from two places: albums imported by KELSON (Visual inventory) and shelf photos merchants submit from their app.
-  // Definitions (per visit = one store on one date):
+  // Definitions (per check-in = one store sending shelf photos on one date; store owners take the photos):
   //   MSL = must-stock SKUs set by KELSON · Found = MSL SKUs seen on this visit's photos
   //   Listed = MSL SKUs this store has ever had on its shelf · OSA% = Found / Listed · OOS% = (Listed − Found) / Listed
   //   Facings = product fronts visible · SOS% (share of shelf) = facings of a SKU / all facings in the display
@@ -1599,10 +1621,10 @@ ${catalog}`;
   function auditPhotos() {
     const out = [];
     for (const v of S.visual) (v.photos || []).forEach((p, i) => { const dir = dirFor(v.name);
-      out.push({ uid: `v~${v.id}~${p.id}`, storeKey: "v:" + v.id, store: v.name, barangay: v.barangay, city: v.city, address: dir?.address || null, by: dir?.surveyor || "KELSON field team", src: "Drive import",
+      out.push({ uid: `v~${v.id}~${p.id}`, storeKey: "v:" + v.id, store: v.name, barangay: v.barangay, city: v.city, address: dir?.address || null, by: "Store owner", src: "Shared photo (Drive)",
         date: p.date || null, p, save: async (np) => { const cur = S.visual.find((x) => x.id === v.id) || v; await saveVisual(cur, cur.photos.map((q) => (q.id === p.id ? np : q))); } }); });
     for (const st of S.stores) for (const sub of subsByStore.get(st.id) || []) {
-      out.push({ uid: `s~${st.id}~${sub._doc}`, storeKey: "s:" + st.id, store: st.name, barangay: st.barangay, city: st.city, address: null, by: "Merchant (store app)", src: "Store app",
+      out.push({ uid: `s~${st.id}~${sub._doc}`, storeKey: "s:" + st.id, store: st.name, barangay: st.barangay, city: st.city, address: null, by: "Store owner", src: "KWADERNO app",
         date: sub.date || (sub.at || "").slice(0, 10) || null, p: sub, app: { storeId: st.id, subId: sub._doc },
         save: async (np) => { const { _doc, ...rest } = np; await S.db.doc(`stores/${st.id}/submissions/${sub._doc}`).set(rest); } });
     }
@@ -1645,7 +1667,7 @@ ${catalog}`;
     const prevM = auditMonth ? months[months.indexOf(auditMonth) - 1] : null;
     const prev = prevM ? all.filter((a) => inM(a, prevM)) : null;
     const stats = (ph) => { const vs = visitsOf(ph); const outlets = new Set(ph.map((a) => a.storeKey)).size; const users = new Set(ph.map((a) => a.by)).size;
-      return { visits: vs.length, images: ph.length, outlets, users, freq: outlets ? vs.length / outlets : 0, perVisit: vs.length ? ph.length / vs.length : 0 }; };
+      return { visits: vs.length, images: ph.length, outlets, users, pending: ph.filter((a) => (a.p.status || "pending") === "pending").length, freq: outlets ? vs.length / outlets : 0, perVisit: vs.length ? ph.length / vs.length : 0 }; };
     const A = stats(cur), B = prev ? stats(prev) : null;
     const delta = (k) => { if (!B || !B[k]) return null; const d = (A[k] - B[k]) / B[k]; return h("div", { class: "small", style: `color:${d >= 0 ? "var(--good)" : "var(--bad)"}`, text: `${d >= 0 ? "▲" : "▼"} ${Math.abs(d * 100).toFixed(1)}% vs ${monthLabel(prevM)}: ${typeof B[k] === "number" && !Number.isInteger(B[k]) ? B[k].toFixed(2) : B[k]}` }); };
     const big = (label, val, k, hint) => h("div", { class: "card kpi", style: "text-align:center" }, h("div", { class: "label", text: label }), h("div", { class: "value num", style: "font-size:2.2rem", text: val }), delta(k), hint ? h("div", { class: "muted small", text: hint }) : null);
@@ -1657,12 +1679,13 @@ ${catalog}`;
       h("div", { class: "toolbar" }, h("select", { "aria-label": "Period", onchange: (e) => { auditMonth = e.target.value; render(); } }, h("option", { value: "", text: "All time" }), months.map((m) => h("option", { value: m, text: monthLabel(m), selected: auditMonth === m || null }))),
         h("span", { class: "muted small", text: `${scanned} of ${all.length} photos read by AI · ${pending} waiting for validation` })),
       h("div", { class: "grid", style: "grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px" },
-        big("Total visits", String(A.visits), "visits", "a store photographed on a day"), big("Total image submissions", String(A.images), "images"),
-        big("Unique outlets", String(A.outlets), "outlets"), big("Unique contributors", String(A.users), "users"),
-        big("Average visit frequency", A.freq.toFixed(2), "freq", "visits per outlet"), big("Average images per visit", A.perVisit.toFixed(2), "perVisit")),
-      h("div", { class: "card" }, h("h2", { text: `Image submissions vs outlets visited — ${auditMonth ? monthLabel(auditMonth) + " by day" : "by month"}` }),
-        h("div", { class: "legend", style: "margin:6px 0 8px" }, h("span", {}, h("i", { style: "background:var(--s1)" }), "Image submissions"), h("span", {}, h("i", { style: "background:var(--s2)" }), "Outlets visited")),
+        big("Shelf check-ins", String(A.visits), "visits", "a store sending shelf photos on a day"), big("Total image submissions", String(A.images), "images"),
+        big("Stores sending photos", String(A.outlets), "outlets"), big("Waiting for approval", String(A.pending), "pending", "photos to check"),
+        big("Check-ins per store", A.freq.toFixed(2), "freq", "how often each store sends photos"), big("Photos per check-in", A.perVisit.toFixed(2), "perVisit")),
+      h("div", { class: "card" }, h("h2", { text: `Photos sent vs stores sending — ${auditMonth ? monthLabel(auditMonth) + " by day" : "by month"}` }),
+        h("div", { class: "legend", style: "margin:6px 0 8px" }, h("span", {}, h("i", { style: "background:var(--s1)" }), "Image submissions"), h("span", {}, h("i", { style: "background:var(--s2)" }), "Stores sending photos")),
         series.length ? comboChart(series) : h("div", { class: "empty", text: "No photos yet." })),
+      liveMapCard(),
       h("div", { class: "card" }, h("h2", { text: "Outlet coverage" }), h("div", { class: "muted small", style: "margin:2px 0 10px", text: "Every surveyed store from the Directory. Blue = has shelf photos, grey = none yet. Hover or tap a dot." }), outletMap()));
   }
   const monthLabel = (m) => (m ? new Date(m + "-15T12:00:00").toLocaleDateString("en-PH", { month: "short", year: "numeric" }) : "");
@@ -1670,19 +1693,29 @@ ${catalog}`;
     const W = 720, H = 240, pl = 40, pr = 12, pt = 14, pb = 44, iw = W - pl - pr, ih = H - pt - pb;
     const max = Math.max(1, ...series.map((x) => Math.max(x.images, x.outlets))); const step = Math.max(1, Math.ceil(max / 4)); const top = step * 4;
     const NS = "http://www.w3.org/2000/svg"; const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Image submissions and outlets visited over time" });
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Photos sent and stores sending over time" });
     const y = (v) => pt + ih - (v / top) * ih, band = iw / series.length, bw = Math.min(36, band * 0.6);
     for (let v = 0; v <= top; v += step) { svg.append(el("line", { x1: pl, x2: W - pr, y1: y(v), y2: y(v), stroke: "var(--line)" })); svg.append(el("text", { x: pl - 6, y: y(v), dy: "0.32em", "text-anchor": "end", fill: "var(--muted)", "font-size": 11 }, String(v))); }
     const tip = h("div", { class: "tip", hidden: true }); const wrap = h("div", { class: "chart" });
     series.forEach((x, i) => { const cx = pl + i * band + band / 2;
       if (x.images) svg.append(el("rect", { x: cx - bw / 2, y: y(x.images), width: bw, height: pt + ih - y(x.images), rx: 3, fill: "var(--s1)" }));
       if (series.length <= 16 || i % Math.ceil(series.length / 12) === 0) svg.append(el("text", { x: cx, y: H - pb + 16, "text-anchor": "middle", fill: "var(--muted)", "font-size": 11 }, x.label));
-      const hit = el("rect", { x: pl + i * band, y: pt, width: band, height: ih, fill: "transparent", tabindex: 0, "aria-label": `${x.label}: ${x.images} images, ${x.outlets} outlets` });
-      const show = () => { tip.hidden = false; tip.replaceChildren(h("b", { text: x.label }), h("div", { text: `${x.images} image(s) · ${x.outlets} outlet(s)` })); tip.style.left = `clamp(0px, calc(${(cx / W) * 100}% - 70px), calc(100% - 160px))`; };
+      const hit = el("rect", { x: pl + i * band, y: pt, width: band, height: ih, fill: "transparent", tabindex: 0, "aria-label": `${x.label}: ${x.images} photos from ${x.outlets} stores` });
+      const show = () => { tip.hidden = false; tip.replaceChildren(h("b", { text: x.label }), h("div", { text: `${x.images} photo(s) from ${x.outlets} store(s)` })); tip.style.left = `clamp(0px, calc(${(cx / W) * 100}% - 70px), calc(100% - 160px))`; };
       for (const ev of ["mouseenter", "focus", "click"]) hit.addEventListener(ev, show); for (const ev of ["mouseleave", "blur"]) hit.addEventListener(ev, () => (tip.hidden = true)); svg.append(hit); });
     svg.append(el("path", { d: series.map((x, i) => `${i ? "L" : "M"}${pl + i * band + band / 2},${y(x.outlets)}`).join(""), fill: "none", stroke: "var(--s2)", "stroke-width": 2.5 }));
     series.forEach((x, i) => svg.append(el("circle", { cx: pl + i * band + band / 2, cy: y(x.outlets), r: 4, fill: "var(--s2)", stroke: "var(--surface)", "stroke-width": 2, "pointer-events": "none" })));
     wrap.append(svg, tip); return wrap;
+  }
+  // Google Maps: claude.ai pages cannot draw map tiles, so we embed the KELSON Google My Maps and link every store to Google Maps.
+  const MYMAP_ID = "1O77S8v61oCs5UbuGDPr92H-zNxWTFC4";
+  const gmapLink = (lat, lng) => h("a", { href: `https://www.google.com/maps/search/?api=1&query=${Number(lat)},${Number(lng)}`, target: "_blank", rel: "noopener noreferrer", style: "font-weight:600" }, "Open in Google Maps ↗");
+  function liveMapCard() {
+    return h("div", { class: "card" },
+      h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("h2", { text: "Live map — Google Maps", style: "margin-right:auto" }),
+        h("a", { class: "btn primary", href: `https://www.google.com/maps/d/viewer?mid=${MYMAP_ID}`, target: "_blank", rel: "noopener noreferrer" }, "Open full map in Google Maps ↗")),
+      h("iframe", { src: `https://www.google.com/maps/d/embed?mid=${MYMAP_ID}`, title: "KELSON store map on Google Maps", loading: "lazy", referrerpolicy: "no-referrer-when-downgrade", style: "width:100%;height:480px;border:0;border-radius:10px;background:var(--surface-2)" }),
+      h("p", { class: "muted small", style: "margin:6px 0 0", text: "Your Google My Maps (pilot survey pins). If the map stays blank here, claude.ai is blocking embedded maps — use the button to open it in Google Maps. Tap any dot below for that store's exact spot." }));
   }
   function outletMap() {
     const NS = "http://www.w3.org/2000/svg"; const el = (t, a, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
@@ -1691,7 +1724,7 @@ ${catalog}`;
     const pts = S.directory.filter((d) => d.lat && d.lng);
     const info = h("div", { class: "muted small", style: "min-height:2.6em", text: `${pts.length} outlets · ${pts.filter(has).length} with shelf photos` });
     const dot = (svg, x, y, d, r) => { const c = el("circle", { cx: x, cy: y, r, fill: has(d) ? "var(--s1)" : "var(--muted)", "fill-opacity": has(d) ? 0.95 : 0.55, stroke: "var(--surface)", "stroke-width": r / 3, tabindex: 0, style: "cursor:pointer" });
-      c.append(el("title", {}, d.name)); const show = () => { info.textContent = `${d.name} · ${[d.barangay, d.city].filter(Boolean).join(", ")}${has(d) ? " · has shelf photos" : ""}`; };
+      c.append(el("title", {}, d.name)); const show = () => { info.replaceChildren(`${d.name} · ${[d.barangay, d.city].filter(Boolean).join(", ")}${has(d) ? " · has shelf photos" : ""} · `, gmapLink(d.lat, d.lng)); };
       c.addEventListener("click", show); c.addEventListener("focus", show); c.addEventListener("mouseenter", show); svg.append(c); };
     // whole country
     const big = el("svg", { viewBox: `0 0 ${PH.W} ${PH.H}`, role: "img", "aria-label": "Map of the Philippines with outlets", style: "max-height:520px;width:100%" });
@@ -1732,7 +1765,7 @@ ${catalog}`;
       list.length ? h("div", { class: "table-wrap card", style: "padding:0" }, h("table", {}, h("thead", {}, h("tr", {}, ["", "Date", "Store", "Display", "From", "SKUs", "Facings", "Status", ""].map((x, i) => h("th", { class: i === 5 || i === 6 ? "r" : "", text: x })))),
         h("tbody", {}, list.map((a) => h("tr", { class: "click", tabindex: 0, onclick: () => go("admin", "audit-d-" + encodeURIComponent(a.uid)), onkeydown: (e) => { if (e.key === "Enter") go("admin", "audit-d-" + encodeURIComponent(a.uid)); } },
           h("td", {}, h("img", { src: a.p.url, alt: "", loading: "lazy", style: "width:56px;height:42px;object-fit:cover;border-radius:6px;display:block" })),
-          h("td", { text: fmtDate(a.date) }), h("td", {}, h("div", { style: "font-weight:600", text: a.store }), h("div", { class: "muted small", text: [a.barangay, a.city].filter(Boolean).join(", ") })),
+          h("td", { text: fmtDate(a.date) }), h("td", {}, h("div", { style: "font-weight:600" }, a.store, a.p.sample ? h("span", { class: "sample-tag", text: "sample" }) : null), h("div", { class: "muted small", text: [a.barangay, a.city].filter(Boolean).join(", ") })),
           h("td", { text: DISPLAYS[a.p.display] || "—" }), h("td", { class: "small", text: a.src }),
           h("td", { class: "r num", text: a.p.items ? a.p.items.length : "—" }), h("td", { class: "r num", text: a.p.items ? a.p.items.reduce((x, it) => x + facingsOf(it), 0) : "—" }),
           h("td", {}, statusChip(STATUS[statusOf(a)])), h("td", {}, h("span", { class: "btn sm" }, "Open")))))))
@@ -1786,7 +1819,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       if (cur.app) np.points = v === "approved" ? POINTS_PER_PHOTO : 0;
       try { await cur.save(np); toast(v === "approved" && cur.app ? `Approved — ${POINTS_PER_PHOTO} points to ${cur.store}` : "Status saved"); } catch { toast("Could not save"); } };
     return h("div", { class: "view" },
-      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("admin", "audit-subs") }, "‹ Submissions"), h("h2", { style: "margin-top:8px", text: `Display drilldown — ${a.store}` }), h("div", { class: "muted small", text: `${fmtDate(visit.date)} · ${visit.photos.length} image(s) in this visit` }))),
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("admin", "audit-subs") }, "‹ Submissions"), h("h2", { style: "margin-top:8px", text: `Display drilldown — ${a.store}` }), h("div", { class: "muted small", text: `${fmtDate(visit.date)} · ${visit.photos.length} photo(s) sent that day` }))),
       h("div", { class: "grid", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;align-items:start" },
         h("div", { class: "grid", style: "gap:12px" },
           h("div", { class: "card", style: "padding:10px" },
@@ -1805,8 +1838,8 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         h("div", { class: "grid", style: "gap:12px" },
           h("div", { class: "grid", style: "grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px" },
             kpi("Total images", String(visit.photos.length)), kpi("MSL", String(st.msl), null, "Must-stock SKUs set by KELSON"), kpi("Listing", String(st.listed), null, "Must-stock SKUs this store has ever shown on its shelf"),
-            kpi("MSL%", pct(st.mslPct), `${st.found} out of ${st.msl}`, "Must-stock SKUs seen in this visit / all must-stock SKUs"), kpi("Listing%", pct(st.listPct), `${st.listed} out of ${st.msl}`),
-            kpi("OSA%", pct(st.osa), `${st.found} out of ${st.listed}`, "On-shelf availability: listed SKUs seen in this visit"), kpi("OOS%", pct(st.oos), `${st.listed - st.found} out of ${st.listed}`, "Out of stock: listed SKUs not seen in this visit"),
+            kpi("MSL%", pct(st.mslPct), `${st.found} out of ${st.msl}`, "Must-stock SKUs seen in these photos / all must-stock SKUs"), kpi("Listing%", pct(st.listPct), `${st.listed} out of ${st.msl}`),
+            kpi("OSA%", pct(st.osa), `${st.found} out of ${st.listed}`, "On-shelf availability: listed SKUs seen in these photos"), kpi("OOS%", pct(st.oos), `${st.listed - st.found} out of ${st.listed}`, "Out of stock: listed SKUs missing from these photos"),
             h("div", { class: "card kpi" }, h("div", { class: "label", text: "Brands statistic" }), h("button", { class: "btn sm", style: "margin-top:6px", onclick: brandsDialog }, "Detail"))),
           !st.msl ? h("div", { class: "note", text: "Set your must-stock list (MSL) to get MSL%, OSA% and OOS%." }) : null,
           h("div", { class: "card" },
@@ -1835,16 +1868,20 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       const listed = M.filter((x) => ever.has(x.k)), oos = listed.filter((x) => !seen.has(x.k)); return { v, listed, oos, osa: listed.length ? (listed.length - oos.length) / listed.length : 0 }; });
     const byItem = M.map((x) => { const l = perStore.filter((s) => s.listed.some((y) => y.k === x.k)); const o = l.filter((s) => s.oos.some((y) => y.k === x.k)); return { x, listed: l.length, oos: o, rate: l.length ? o.length / l.length : 0 }; })
       .filter((r) => r.listed).sort((a, b) => b.oos.length - a.oos.length || b.rate - a.rate);
+    const samples = auditPhotos().filter((a) => a.p.sample);
     return h("div", { class: "view" },
-      h("div", { class: "muted small", text: `Based on each store's latest photographed visit (${latest.length} stores). A SKU is out of stock when the store has shown it before but it is missing now.` }),
+      samples.length ? h("div", { class: "banner", style: "display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between" },
+        h("span", { text: `Includes ${samples.length} SAMPLE check-ins with made-up gaps so you can see how out-of-stock tracking works.` }),
+        h("button", { class: "btn sm danger", onclick: async () => { toast("Removing sample check-ins…"); for (const v of S.visual) { const keep = (v.photos || []).filter((p) => !p.sample); if (keep.length !== (v.photos || []).length) { try { await saveVisual(v, keep); } catch { /* keep going */ } } } toast("Sample check-ins removed"); } }, "Delete sample check-ins")) : null,
+      h("div", { class: "muted small", text: `Based on the latest photos each store sent (${latest.length} stores). A SKU is out of stock when the store has shown it before but it is missing now.` }),
       h("div", { class: "grid two" },
         h("div", { class: "card" }, h("h2", { text: "Must-stock SKUs most often missing", style: "margin-bottom:6px" }),
           byItem.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["SKU", "Out of stock in", "OOS%"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
             h("tbody", {}, byItem.map((r) => h("tr", { class: "click", onclick: () => openDialog(r.x.name, r.oos.length ? h("ul", { class: "list" }, r.oos.map((s) => h("li", {}, h("span", { class: "grow", text: s.v.store }), h("span", { class: "muted small", text: fmtDate(s.v.date) })))) : h("div", { class: "empty", text: "On shelf everywhere it is listed." })) },
               h("td", { text: r.x.name }), h("td", { class: "r num", text: `${r.oos.length} of ${r.listed} stores` }), h("td", { class: "r num", style: r.rate >= 0.5 ? "color:var(--bad)" : "", text: pct(r.rate) })))))) : h("div", { class: "empty", text: "No must-stock SKU seen yet." })),
         h("div", { class: "card" }, h("h2", { text: "Stores by on-shelf availability", style: "margin-bottom:6px" }),
-          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Last visit", "OSA%", "Missing"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
-            h("tbody", {}, perStore.sort((a, b) => a.osa - b.osa).map((s) => h("tr", { class: "click", onclick: () => go("admin", "audit-d-" + encodeURIComponent(s.v.photos[0].uid)) },
+          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Latest photos", "OSA%", "Missing"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
+            h("tbody", {}, perStore.sort((a, b) => (a.listed.length ? a.osa : 2) - (b.listed.length ? b.osa : 2)).map((s) => h("tr", { class: "click", onclick: () => go("admin", "audit-d-" + encodeURIComponent(s.v.photos[0].uid)) },
               h("td", { text: s.v.store }), h("td", { text: fmtDate(s.v.date) }), h("td", { class: "r num", text: s.listed.length ? pct(s.osa) : "—" }), h("td", { class: "r num", text: s.oos.length })))))))));
   }
   function auditOnShelf() {
@@ -1854,7 +1891,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       totals.set(v.key, t); for (const [k, f] of per) { const r = m.get(k); r.stores++; r.facings += f; r.sos += t ? f / t : 0; } }
     const rows = [...m.entries()].map(([k, r]) => ({ ...r, k, msl: M.has(k), avgSos: r.stores ? r.sos / r.stores : 0 })).sort((a, b) => b.stores - a.stores || b.facings - a.facings);
     return h("div", { class: "view" },
-      h("div", { class: "muted small", text: `What is on display in each store's latest visit (${latest.length} stores).` }),
+      h("div", { class: "muted small", text: `What is on display in the latest photos each store sent (${latest.length} stores).` }),
       h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["SKU", "Brand", "Stores on shelf", "Distribution", "Facings", "Avg SOS"].map((x, i) => h("th", { class: i > 1 ? "r" : "", text: x })))),
         h("tbody", {}, rows.slice(0, 150).map((r) => h("tr", {}, h("td", {}, r.name, r.msl ? h("span", { class: "sample-tag", style: "color:var(--accent);background:var(--accent-soft)", text: "MSL" }) : null), h("td", { text: r.brand || "" }),
           h("td", { class: "r num", text: r.stores }), h("td", { class: "r num", text: pct(latest.length ? r.stores / latest.length : 0) }), h("td", { class: "r num", text: r.facings }), h("td", { class: "r num", text: pct(r.avgSos) })))))),
@@ -2067,7 +2104,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
               h("button", { class: "btn sm", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI reading the photo…"); await identifyPhoto(v, i); } }, p.items ? "Read again" : "Identify products"),
               h("button", { class: "btn sm danger", "aria-label": "Delete photo", onclick: () => openDialog("Delete this photo?", h("div", { class: "grid" },
                 h("p", { text: "It is removed from this album. The original stays in your Google Drive." }),
-                h("button", { class: "btn danger big", onclick: async () => { dlg.close(); const cur = S.visual.find((x) => x.id === v.id) || v; try { await saveVisual(cur, cur.photos.filter((_, j) => j !== i)); (await window.claude?.use?.("assets"))?.delete(p.id).catch(() => {}); toast("Photo deleted"); } catch { toast("Could not delete"); } } }, "Delete photo"),
+                h("button", { class: "btn danger big", onclick: async () => { dlg.close(); const cur = S.visual.find((x) => x.id === v.id) || v; try { await saveVisual(cur, cur.photos.filter((_, j) => j !== i)); if (!p.sample) (await window.claude?.use?.("assets"))?.delete(p.id).catch(() => {}); toast("Photo deleted"); } catch { toast("Could not delete"); } } }, "Delete photo"),
                 h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel"))) }, "×"))),
           p.items ? h("div", { class: "chips" }, p.items.length ? p.items.slice(0, 12).map((it) => h("span", { class: "chip", text: it.name })) : h("span", { class: "muted small", text: "No readable products." }), p.items.length > 12 ? h("span", { class: "muted small", text: `+${p.items.length - 12} more` }) : null) : null)))));
   }
@@ -2139,6 +2176,8 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         h("div", { class: "card" }, h("h2", { text: "Payment mix · 30 days", style: "margin-bottom:10px" }),
           h("div", { class: "grid", style: "gap:8px" }, mix.map((r) => h("div", { class: "bar-row" }, h("span", { text: r.l }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(r.v / mixMax) * 100}%;background:${r.c}` })), h("span", { class: "num", text: peso(r.v) })))))),
       storeProductsCard(x),
+      (x.exp || []).length ? h("div", { class: "card" }, h("h2", { text: `Expiry tracking (${x.exp.length})`, style: "margin-bottom:6px" }), h("ul", { class: "list" }, [...x.exp].sort((a, b) => a.date.localeCompare(b.date)).map((e) => { const l = daysLeft(e.date);
+        return h("li", {}, h("span", { class: "grow", text: e.name }), h("span", { class: "muted small", text: fmtDate(e.date) + (e.qty ? ` · ${e.qty} pcs` : "") }), statusChip(l < 0 ? ["off", "Expired"] : l <= 7 ? ["idle", `${l} day(s)`] : ["week", `${l} days`])); }))) : null,
       h("p", { class: "muted small", text: `Summary updated ${relTime(x.updatedAt)}. The store's detailed records (each sale, customer names) stay private to the store.` }));
   }
 
@@ -2162,6 +2201,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const realStores = S.stores.filter((x) => !x.sample && !x.ownerStore).length;
     return h("div", { class: "card" },
         h("h2", { text: "Pilot network — field-surveyed stores" }),
+        h("div", { class: "pills", style: "margin:8px 0" }, h("a", { class: "btn sm primary", href: `https://www.google.com/maps/d/viewer?mid=${MYMAP_ID}`, target: "_blank", rel: "noopener noreferrer" }, "Open live map in Google Maps ↗"), h("a", { class: "btn sm", href: "#admin-audit", onclick: (e) => { e.preventDefault(); go("admin", "audit"); } }, "Map + coverage in Shelf audit")),
         pins.length ? [
           h("div", { class: "grid kpis", style: "margin:10px 0" },
             kpi("Surveyed", String(pins.length)), kpi("Signed in survey", String(pins.filter((p) => p.signed).length)), kpi("Retained in survey", String(pins.filter((p) => p.retention === "retain").length)), kpi("Merchants on KWADERNO", String(realStores))),
@@ -2224,7 +2264,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     for (const p of [...ps].sort((a, b) => Number(a.signed) - Number(b.signed))) {
       const c = el("circle", { cx: px(p.lng), cy: py(p.lat), r: 5.5, fill: p.signed ? "var(--s1)" : "var(--s2)", stroke: "var(--surface)", "stroke-width": 2, tabindex: 0, style: "cursor:pointer" });
       const t = el("title", {}); t.textContent = p.name; c.append(t);
-      const show = () => { info.textContent = `${p.name} · ${[p.barangay, p.city].filter(Boolean).join(", ") || area}${p.signed ? " · signed" : ""}${p.retention ? " · " + p.retention : ""}${p.surveyedOn ? " · surveyed " + p.surveyedOn : ""}`; };
+      const show = () => { info.replaceChildren(`${p.name} · ${[p.barangay, p.city].filter(Boolean).join(", ") || area}${p.signed ? " · signed" : ""}${p.retention ? " · " + p.retention : ""}${p.surveyedOn ? " · surveyed " + p.surveyedOn : ""} · `, gmapLink(p.lat, p.lng)); };
       c.addEventListener("click", show); c.addEventListener("focus", show);
       svg.append(c);
     }

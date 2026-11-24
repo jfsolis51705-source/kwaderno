@@ -1,0 +1,53 @@
+# KWADERNO development / pilot environment.
+#   docker compose up -d db                       # Postgres only (run the app with `npm run dev`)
+#   docker compose --profile app up --build       # Postgres + app + receipt AI service
+#
+# Secrets come from your shell or a .env file next to this compose file (never commit it):
+#   AI_SERVICE_TOKEN=...  GEMINI_API_KEY=...  RECEIPT_PROVIDER=gemini|paddle_qwen|mock
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kwaderno
+      POSTGRES_PASSWORD: kwaderno
+      POSTGRES_DB: kwaderno
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kwaderno"]
+      interval: 5s
+      retries: 10
+
+  ai:
+    build: ./ai-service
+    environment:
+      RECEIPT_PROVIDER: ${RECEIPT_PROVIDER:-mock}
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-only-token}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      QWEN_VL_BASE_URL: ${QWEN_VL_BASE_URL:-}
+      QWEN_VL_MODEL: ${QWEN_VL_MODEL:-Qwen/Qwen3-VL-8B-Instruct}
+    # Not published to the host: only the app talks to it.
+    expose: ["8001"]
+    profiles: ["app"]
+
+  app:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      DATABASE_URL: postgres://kwaderno:kwaderno@db:5432/kwaderno
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      UPLOAD_DIR: /data/uploads
+      AI_SERVICE_URL: http://ai:8001
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev-only-token}
+    ports: ["3000:3000"]
+    volumes:
+      - uploads:/data/uploads
+    profiles: ["app"]
+
+volumes:
+  pgdata:
+  uploads:

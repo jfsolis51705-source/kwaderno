@@ -1,0 +1,9 @@
+node_modules
+.next
+storage
+.env*
+!.env.example
+ai-service
+data
+e2e
+tests

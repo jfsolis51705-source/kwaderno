@@ -1,0 +1,5 @@
+# Optional: local OCR for the paddle_qwen provider (needs a capable CPU/GPU host)
+-r requirements.txt
+paddleocr==2.10.0
+paddlepaddle==3.0.0
+pypdfium2==4.30.1

@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local data
+/storage
+!.env.example
+
+# Private pilot merchant data (personal information) — never commit
+/data/private
+
+# python
+/ai-service/.venv
+__pycache__/
+.pytest_cache/

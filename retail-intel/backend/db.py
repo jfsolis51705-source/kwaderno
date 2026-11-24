@@ -37,6 +37,36 @@ class Store(Base):
     products: Mapped[list["Product"]] = relationship(back_populates="store", cascade="all, delete-orphan")
 
 
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(200))
+    role: Mapped[str] = mapped_column(String(16), default="merchant")  # merchant | ops (KELSON operations)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class StoreMember(Base):
+    __tablename__ = "store_members"
+    __table_args__ = (UniqueConstraint("store_id", "user_id", name="uq_store_member"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16), default="owner")  # owner | staff
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AuthToken(Base):
+    """Bearer sessions. Only the SHA-256 of the token is stored."""
+    __tablename__ = "auth_tokens"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Product(Base):
     __tablename__ = "products"
     __table_args__ = (UniqueConstraint("store_id", "sku", name="uq_store_sku"),)
@@ -91,6 +121,7 @@ class InventoryMovement(Base):
     qty_after: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(24))  # shelf_count | receipt | ledger | barcode | manual | order | sync
     ref: Mapped[str | None] = mapped_column(String(64))
+    user_id: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
@@ -133,6 +164,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
     id: Mapped[int] = mapped_column(primary_key=True)
     store_id: Mapped[int | None] = mapped_column(Integer, index=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, index=True)
     action: Mapped[str] = mapped_column(String(40))
     entity: Mapped[str] = mapped_column(String(30))
     entity_id: Mapped[int | None] = mapped_column(Integer)

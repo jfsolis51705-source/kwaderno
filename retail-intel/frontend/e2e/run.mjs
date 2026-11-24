@@ -39,9 +39,24 @@ try {
   const ctx = await browser.newContext({ ...devices["Pixel 7"] });
   const m = await ctx.newPage();
   m.on("pageerror", (e) => errors.push(e.message));
+  const loginAs = async (page, email) => {
+    const form = page.getByRole("form", { name: "Log in" });
+    await form.getByLabel("Email").fill(email);
+    await form.getByLabel("Password").fill("demo1234");
+    await form.getByRole("button", { name: "Log in" }).click();
+  };
   await m.goto(`${BASE}/store/capture`);
+  await m.getByRole("form", { name: "Log in" }).waitFor();
+  check(m.url().endsWith("/login"), "logged-out visitors are sent to the login page");
+  await m.getByRole("form", { name: "Log in" }).getByLabel("Email").fill("nena@demo.kwaderno.ph");
+  await m.getByRole("form", { name: "Log in" }).getByLabel("Password").fill("wrong-password");
+  await m.getByRole("button", { name: "Log in" }).click();
+  await m.getByRole("alert").filter({ hasText: "Wrong email or password" }).waitFor();
+  check(true, "wrong password is refused");
+  await loginAs(m, "nena@demo.kwaderno.ph");
   await m.getByRole("combobox", { name: "Store" }).waitFor();
-  await m.getByRole("combobox", { name: "Store" }).selectOption({ label: "Aling Nena Sari-sari" });
+  const opts = await m.getByRole("combobox", { name: "Store" }).locator("option").allInnerTexts();
+  check(opts.length === 1 && opts[0] === "Aling Nena Sari-sari", "merchant only sees their own store");
   check(await m.getByText("Online").first().isVisible(), "online indicator shows Online");
 
   // photo capture -> review -> confirm
@@ -108,7 +123,8 @@ try {
   await ctx.setOffline(false);
   await m.evaluate(() => window.dispatchEvent(new Event("online")));
   await m.getByText("Everything is synced.").waitFor();
-  const egg = await (await fetch(`http://127.0.0.1:${API}/api/stores/1/products`)).json();
+  const tok = (await (await fetch(`http://127.0.0.1:${API}/api/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "nena@demo.kwaderno.ph", password: "demo1234" }) })).json()).token;
+  const egg = await (await fetch(`http://127.0.0.1:${API}/api/stores/1/products`, { headers: { Authorization: `Bearer ${tok}` } })).json();
   check(egg.find((p) => p.sku === "EGG-PER-PIECE")?.qty_on_hand === 26, "queued change reached the server once (26)");
 
   // restock order: draft -> submit
@@ -125,10 +141,22 @@ try {
   const pts = Number(await m.getByTestId("points-balance").innerText());
   check(pts >= 10, `rewards balance credited (${pts})`);
   await m.screenshot({ path: join(shots, "phone-rewards.png") });
+  let wide = [];
+  for (const path of ["capture", "catalog", "orders", "rewards", "sync", "account"]) {
+    await m.goto(`${BASE}/store/${path}`); await m.waitForTimeout(400);
+    if (await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)) wide.push(path);
+  }
+  check(!wide.length, `no sideways scrolling on phone screens ${wide.join(",")}`);
+  await m.goto(`${BASE}/portal/overview`);
+  await m.getByText("This area is for KELSON operations accounts.").waitFor();
+  check(true, "merchant cannot open the operations portal");
 
   // ---------- operations portal on desktop ----------
   const d = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
   d.on("pageerror", (e) => errors.push(e.message));
+  await d.goto(`${BASE}/portal/overview`);
+  await loginAs(d, "ops@demo.kwaderno.ph");
+  await d.waitForURL(/\/store\/capture|\/portal/);
   await d.goto(`${BASE}/portal/overview`);
   await d.getByText("Share of shelf by brand").waitFor();
   check((await d.locator("#stores-h + table tbody tr, section:has(#stores-h) tbody tr").count()) === 4, "portal lists 4 stores");

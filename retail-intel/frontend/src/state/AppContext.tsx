@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError, NetworkError } from "../lib/api";
+import { api, ApiError, auth, NetworkError, type Me } from "../lib/api";
 import { applyLocalAdjust, enqueueCapture, enqueueOp, flushQueue, loadCachedProducts, pendingEntries, saveCachedProducts, statusOf } from "../lib/offline";
 import type { Capture, CaptureKind, Product, QueueEntry, Store } from "../lib/types";
-import { kv } from "../lib/idb";
+import { kv, queueStore } from "../lib/idb";
 
 interface Ctx {
+  me: Me | null; authReady: boolean; role: "owner" | "staff" | "ops" | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (b: { email: string; password: string; name: string; store_name: string; barangay?: string; city?: string }) => Promise<void>;
+  logout: () => Promise<void>;
   stores: Store[]; storeId: number | null; setStoreId: (id: number) => void; store: Store | undefined;
   products: Product[]; refreshProducts: () => Promise<void>;
   online: boolean; queue: QueueEntry[]; syncing: boolean; syncNow: () => Promise<void>; refreshQueue: () => Promise<void>;
@@ -20,6 +24,8 @@ const AppCtx = createContext<Ctx | null>(null);
 export const useApp = () => { const c = useContext(AppCtx); if (!c) throw new Error("useApp outside provider"); return c; };
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [me, setMe] = useState<Me | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [stores, setStores] = useState<Store[]>([]);
   const [storeId, setStoreIdState] = useState<number | null>(() => { const v = localStorage.getItem("ri-store"); return v ? Number(v) : null; });
   const [products, setProducts] = useState<Product[]>([]);
@@ -39,7 +45,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setLocal = useCallback(async (sid: number, ps: Product[]) => { setProducts(ps); await saveCachedProducts(sid, ps); }, []);
 
   const refreshProducts = useCallback(async () => {
-    if (!storeId) return;
+    if (!storeId || !auth.token()) return;
     try { const ps = await api.products(storeId); await setLocal(storeId, ps); setOnline(true); }
     catch (e) { if (e instanceof NetworkError) { setOnline(false); setProducts(await loadCachedProducts(storeId)); } }
   }, [storeId, setLocal]);
@@ -53,20 +59,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally { setSyncing(false); await refreshQueue(); }
   }, [refreshProducts, refreshQueue, toast]);
 
-  // boot: stores (cached for offline), health, queue
+  const applyMe = useCallback(async (m: Me) => {
+    setMe(m); setStores(m.stores); await kv.set("me", m);
+    const keep = m.stores.some((s) => s.id === Number(localStorage.getItem("ri-store")));
+    if (!keep && m.stores[0]) setStoreId(m.stores[0].id);
+  }, []);
+
+  // boot: who am I (cached for offline use), vision/distributor info, queue
   useEffect(() => {
     (async () => {
-      const cached = await kv.get<Store[]>("stores");
-      if (cached) setStores(cached);
-      try {
-        const [ss, h] = await Promise.all([api.stores(), api.health()]);
-        setStores(ss); await kv.set("stores", ss); setMeta({ visionProvider: h.vision_provider, distributors: h.distributors });
-        if (!storeId && ss[0]) setStoreId(ss[0].id);
-      } catch (e) { if (e instanceof NetworkError) setOnline(false); }
+      api.health().then((h) => setMeta({ visionProvider: h.vision_provider, distributors: h.distributors })).catch(() => setOnline(false));
+      if (auth.token()) {
+        try { await applyMe(await api.me()); }
+        catch (e) {
+          if (e instanceof NetworkError) { setOnline(false); const cached = await kv.get<Me>("me"); if (cached) { setMe(cached); setStores(cached.stores); } }
+          else auth.set(null);
+        }
+      }
+      setAuthReady(true);
       await refreshQueue();
     })();
+    const onUnauthorized = () => { auth.set(null); setMe(null); };
+    window.addEventListener("ri-unauthorized", onUnauthorized);
+    return () => window.removeEventListener("ri-unauthorized", onUnauthorized);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const login: Ctx["login"] = async (email, password) => { const r = await api.login(email, password); auth.set(r.token); await applyMe(r); };
+  const register: Ctx["register"] = async (b) => { const r = await api.register(b); auth.set(r.token); await applyMe(r); };
+  const logout: Ctx["logout"] = async () => {
+    try { await api.logout(); } catch { /* offline: the token is still forgotten locally */ }
+    auth.set(null); setMe(null); setStores([]); setProducts([]);
+    // forget this account's cached data and unsent changes on this device
+    for (const k of ["me", ...stores.map((s) => `products:${s.id}`), ...stores.map((s) => `orders:${s.id}`), ...stores.map((s) => `rewards:${s.id}`)]) await kv.del(k);
+    await queueStore.clear(); await refreshQueue();
+    localStorage.removeItem("ri-store");
+  };
   useEffect(() => { refreshProducts(); }, [refreshProducts]);
   useEffect(() => {
     const on = () => { setOnline(true); syncNow(); }, off = () => setOnline(false);
@@ -128,10 +156,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return "queued";
   };
 
+  const role = (stores as (Store & { role?: Ctx["role"] })[]).find((s) => s.id === storeId)?.role ?? (me?.user.role === "ops" ? "ops" : null);
   const value = useMemo<Ctx>(() => ({
+    me, authReady, role, login, register, logout,
     stores, storeId, setStoreId, store: stores.find((s) => s.id === storeId), products, refreshProducts, online, queue, syncing, syncNow, refreshQueue,
     adjustStock, saveProduct, editProduct, submitCapture, toast, toastMsg, visionProvider: meta.visionProvider, distributors: meta.distributors,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [stores, storeId, products, online, queue, syncing, toastMsg, meta, refreshProducts, syncNow, refreshQueue, toast]);
+  }), [me, authReady, role, stores, storeId, products, online, queue, syncing, toastMsg, meta, refreshProducts, syncNow, refreshQueue, toast]);
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

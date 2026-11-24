@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import image_checks
+from auth import sign_media
 from db import (AuditLog, Capture, InventoryMovement, OrderLine, Product, RewardEntry, Store, SyncOp, WholesaleOrder,
                 utcnow)
 from vision_service import VisionProvider
@@ -41,11 +42,11 @@ def stock_status(p: Product) -> str:
 def product_out(p: Product) -> dict:
     return {"id": p.id, "store_id": p.store_id, "sku": p.sku, "name": p.name, "brand": p.brand, "variant": p.variant, "barcode": p.barcode,
             "price": p.price_cents / 100, "cost": p.cost_cents / 100, "reorder_level": p.reorder_level, "qty_on_hand": p.qty_on_hand,
-            "status": stock_status(p), "thumbnail_url": p.thumbnail_url, "updated_at": p.updated_at.isoformat() if p.updated_at else None}
+            "status": stock_status(p), "thumbnail_url": sign_media(p.thumbnail_url) if p.thumbnail_url else None, "updated_at": p.updated_at.isoformat() if p.updated_at else None}
 
 
 def capture_out(c: Capture) -> dict:
-    return {"id": c.id, "store_id": c.store_id, "kind": c.kind, "client_id": c.client_id, "image_url": "/media/" + c.image_path,
+    return {"id": c.id, "store_id": c.store_id, "kind": c.kind, "client_id": c.client_id, "image_url": sign_media(c.image_path),
             "sha256": c.sha256, "phash": c.phash, "width": c.width, "height": c.height, "size_bytes": c.size_bytes, "blur_score": c.blur_score,
             "quality_ok": c.quality_ok, "quality_issues": c.quality_issues or [], "duplicate_of": c.duplicate_of, "status": c.status,
             "provider": c.provider, "items": c.items or [], "points_awarded": c.points_awarded, "created_at": c.created_at.isoformat(),
@@ -60,8 +61,13 @@ def order_out(o: WholesaleOrder) -> dict:
             "submitted_at": o.submitted_at.isoformat() if o.submitted_at else None, "fulfilled_at": o.fulfilled_at.isoformat() if o.fulfilled_at else None}
 
 
+def actor(s: Session) -> int | None:
+    """The logged-in user for this request (set on the session by the API layer)."""
+    return s.info.get("user_id")
+
+
 def audit(s: Session, action: str, entity: str, entity_id: int | None, store_id: int | None, **detail) -> None:
-    s.add(AuditLog(action=action, entity=entity, entity_id=entity_id, store_id=store_id, detail=detail))
+    s.add(AuditLog(action=action, entity=entity, entity_id=entity_id, store_id=store_id, user_id=actor(s), detail=detail))
 
 
 # ---------- lookups ----------
@@ -87,7 +93,7 @@ def move(s: Session, p: Product, delta: int, reason: str, ref: str | None = None
     real = new_qty - p.qty_on_hand
     p.qty_on_hand = new_qty
     p.updated_at = utcnow()
-    m = InventoryMovement(store_id=p.store_id, product_id=p.id, delta=real, qty_after=new_qty, reason=reason, ref=ref)
+    m = InventoryMovement(store_id=p.store_id, product_id=p.id, delta=real, qty_after=new_qty, reason=reason, ref=ref, user_id=actor(s))
     s.add(m)
     return m
 
@@ -306,7 +312,7 @@ def rewards(s: Session, store_id: int) -> dict:
 
 
 # ---------- offline sync ----------
-def apply_sync(s: Session, store_id: int, ops: list[dict]) -> list[dict]:
+def apply_sync(s: Session, store_id: int, ops: list[dict], role: str = "owner") -> list[dict]:
     get_store(s, store_id)
     out = []
     for op in ops:
@@ -322,6 +328,8 @@ def apply_sync(s: Session, store_id: int, ops: list[dict]) -> list[dict]:
                 elif op["type"] == "product_upsert":
                     p = upsert_product(s, store_id, pl)
                 else:
+                    if role not in ("owner", "ops"):
+                        raise AppError(403, "Only the store owner can edit product details")
                     p = find_product(s, store_id, pl.get("sku"))
                     if not p:
                         raise AppError(404, "Product not found")
@@ -386,7 +394,7 @@ def audit_list(s: Session, store_id: int | None, limit: int) -> list[dict]:
     q = select(AuditLog).order_by(AuditLog.id.desc()).limit(limit)
     if store_id:
         q = q.where(AuditLog.store_id == store_id)
-    return [{"id": a.id, "store_id": a.store_id, "action": a.action, "entity": a.entity, "entity_id": a.entity_id, "detail": a.detail,
+    return [{"id": a.id, "store_id": a.store_id, "user_id": a.user_id, "action": a.action, "entity": a.entity, "entity_id": a.entity_id, "detail": a.detail,
              "created_at": a.created_at.isoformat()} for a in s.scalars(q)]
 
 

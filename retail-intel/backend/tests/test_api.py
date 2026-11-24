@@ -7,7 +7,8 @@ def products(client, store_id):
     return {p["sku"]: p for p in client.get(f"/api/stores/{store_id}/products").json()}
 
 
-def test_health_reports_mock_provider(client):
+def test_health_reports_mock_provider(anon):
+    client = anon
     r = client.get("/api/health").json()
     assert r["ok"] and r["vision_provider"] == "mock" and "Super8" in r["distributors"]
 
@@ -22,7 +23,7 @@ def test_capture_ingestion_extracts_reviewable_items(client, store):
     for it in c["items"]:
         assert set(["sku", "brand", "variant", "qty", "unit_price", "confidence"]) <= set(it)
         assert 0 <= it["confidence"] <= 1
-    assert c["image_url"].startswith("/media/captures/")
+    assert c["image_url"].startswith("/api/media/captures/") and "sig=" in c["image_url"]
     assert client.get(c["image_url"]).status_code == 200
     # the mock provider is deterministic for the same image
     assert MockVisionProvider().extract(photo(1), "shelf", []).items == MockVisionProvider().extract(photo(1), "shelf", []).items
@@ -45,7 +46,7 @@ def test_exact_and_near_duplicates_are_rejected(client, store):
     assert other["status"] == "pending_review" and other["duplicate_of"] is None
     # a duplicate can never be confirmed (so it can never earn points or move stock)
     assert client.post(f"/api/captures/{again['id']}/confirm", json={"items": []}).status_code == 409
-    log = client.get("/api/portal/audit").json()
+    log = client.get(f"/api/portal/audit?store_id={store['id']}").json()
     assert any(a["action"] == "capture_rejected" and a["detail"].get("reason") == "duplicate_photo" for a in log)
 
 
@@ -55,15 +56,16 @@ def test_offline_retry_with_same_client_id_is_idempotent(client, store):
     assert a["id"] == b["id"] and b["status"] == "pending_review"
 
 
-def test_low_quality_photo_is_flagged_and_earns_no_points(client, store):
+def test_low_quality_photo_is_flagged_and_earns_no_points(client, store, ops):
     c = upload(client, store["id"], photo(30, size=(300, 240), blur=6)).json()
     assert not c["quality_ok"] and {"low_resolution", "blurry"} <= set(c["quality_issues"])
     done = client.post(f"/api/captures/{c['id']}/confirm", json={"items": c["items"]}).json()
     assert done["status"] == "verified" and done["points_awarded"] == 0
     assert client.get(f"/api/stores/{store['id']}/rewards").json()["balance"] == 0
-    # a reviewer can override after checking the photo
+    # only KELSON operations can override after checking the photo
     c2 = upload(client, store["id"], photo(31, size=(300, 240), blur=6)).json()
-    done2 = client.post(f"/api/captures/{c2['id']}/confirm", json={"items": [], "award_low_quality": True}).json()
+    assert client.post(f"/api/captures/{c2['id']}/confirm", json={"items": [], "award_low_quality": True}).status_code == 403
+    done2 = ops.post(f"/api/captures/{c2['id']}/confirm", json={"items": [], "award_low_quality": True}).json()
     assert done2["points_awarded"] == 10
 
 
@@ -105,7 +107,7 @@ def test_product_edit_and_thumbnail(client, store):
     r = client.patch(f"/api/products/{p['id']}", json={"name": "Coke Mismo 290ml", "price": 21, "reorder_level": 12}).json()
     assert r["name"] == "Coke Mismo 290ml" and r["price"] == 21 and r["reorder_level"] == 12
     t = client.post(f"/api/products/{p['id']}/thumbnail", files={"file": ("t.png", photo(50, fmt="PNG"), "image/png")}).json()
-    assert t["thumbnail_url"].startswith("/media/thumbs/") and client.get(t["thumbnail_url"]).status_code == 200
+    assert t["thumbnail_url"].startswith("/api/media/thumbs/") and client.get(t["thumbnail_url"]).status_code == 200
     assert client.post(f"/api/stores/{store['id']}/products", json={"sku": "COKE-MISMO", "name": "dup"}).status_code == 409
 
 
@@ -167,12 +169,13 @@ def test_sync_queue_is_idempotent(client, store):
 
 
 # ---------- portal ----------
-def test_portal_overview_and_alerts(client, store):
+def test_portal_overview_and_alerts(client, store, ops):
     sid = store["id"]
     c = upload(client, sid, photo(70)).json()
     client.post(f"/api/captures/{c['id']}/confirm", json={"items": [{"sku": "COKE-MISMO", "brand": "Coca-Cola", "qty": 6}, {"sku": "LM-PC-ORIG-60", "brand": "Lucky Me", "qty": 2}]}).raise_for_status()
     client.post("/api/orders/draft", json={"store_id": sid})
-    ov = client.get("/api/portal/overview").json()
+    assert client.get("/api/portal/overview").status_code == 403  # merchants can't open the portal
+    ov = ops.get("/api/portal/overview").json()
     row = ov["stores"][0]
     assert row["skus"] == 3 and row["out"] == 1 and row["low"] == 2 and row["points"] == 10  # 6 on hand with reorder level 6 is "low"
     assert {a["sku"] for a in ov["alerts"]} == {"555-SARD-155", "LM-PC-ORIG-60", "COKE-MISMO"}
@@ -185,7 +188,11 @@ def test_demo_seed_starts_with_data(tmp_path):
     from fastapi.testclient import TestClient
     app = create_app(database_url=f"sqlite:///{tmp_path / 'seed.db'}", upload_dir=str(tmp_path / "up"), vision=MockVisionProvider(), seed=True)
     with TestClient(app) as c:
+        tok = c.post("/api/auth/login", json={"email": "ops@demo.kwaderno.ph", "password": "demo1234"}).json()["token"]
+        c.headers["Authorization"] = f"Bearer {tok}"
         ov = c.get("/api/portal/overview").json()
+        nena = c.post("/api/auth/login", json={"email": "nena@demo.kwaderno.ph", "password": "demo1234"}).json()
+        assert [st["name"] for st in nena["stores"]] == ["Aling Nena Sari-sari"]
         assert ov["totals"]["stores"] == 4 and ov["totals"]["skus"] >= 56  # shelf photos can add new products
         assert ov["captures_by_status"]["verified"] == 4 and ov["captures_by_status"]["rejected"] == 1
         assert ov["share_of_shelf"] and ov["order_queue"]

@@ -1,4 +1,7 @@
-import { Link, NavLink, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import type React from "react";
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import AuthPage from "./pages/Auth";
+import Account from "./pages/store/Account";
 import { OnlineBadge, Toast } from "./components/ui";
 import { useApp } from "./state/AppContext";
 import CaptureHub from "./pages/store/Capture";
@@ -20,7 +23,7 @@ const Logo = () => (
 function StorePicker() {
   const { stores, storeId, setStoreId } = useApp();
   return (
-    <select aria-label="Store" className="input w-auto max-w-[11rem] py-1.5" value={storeId ?? ""} onChange={(e) => setStoreId(Number(e.target.value))}>
+    <select aria-label="Store" className="input w-auto min-w-0 max-w-[11rem] py-1.5" value={storeId ?? ""} onChange={(e) => setStoreId(Number(e.target.value))}>
       {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
     </select>
   );
@@ -28,19 +31,31 @@ function StorePicker() {
 
 const STORE_TABS = [["capture", "Capture"], ["catalog", "Stock"], ["orders", "Restock"], ["rewards", "Rewards"], ["sync", "Sync"]] as const;
 
+/** Sends visitors to /login; optionally requires the KELSON operations role. */
+function RequireAuth({ ops, children }: { ops?: boolean; children: React.ReactNode }) {
+  const { me, authReady } = useApp();
+  const loc = useLocation();
+  if (!authReady) return <div className="grid min-h-screen place-items-center text-sm text-slate-500">Loading…</div>;
+  if (!me) return <Navigate to="/login" replace state={{ from: loc.pathname }} />;
+  if (ops && me.user.role !== "ops") return <div className="mx-auto grid min-h-screen max-w-md content-center gap-3 px-4 text-center"><h1 className="text-xl font-bold">Operations portal</h1><p className="text-slate-600">This area is for KELSON operations accounts.</p><Link className="btn-primary" to="/store/capture">Go to my store</Link></div>;
+  return <>{children}</>;
+}
+
 function StoreLayout() {
+  const { me } = useApp();
   return (
     <div className="min-h-screen pb-20 md:pb-6">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5"><Logo /><div className="ml-auto flex items-center gap-2"><StorePicker /><OnlineBadge /></div></div>
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5"><Logo /><div className="ml-auto flex min-w-0 items-center gap-2"><StorePicker /><OnlineBadge /></div></div>
         <nav className="mx-auto hidden max-w-5xl gap-1 px-4 pb-2 md:flex" aria-label="Store">
           {STORE_TABS.map(([to, label]) => <NavLink key={to} to={`/store/${to}`} className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>{label}</NavLink>)}
-          <Link to="/portal" className="ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Operations portal →</Link>
+          <NavLink to="/store/account" className={({ isActive }) => `ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>Account</NavLink>
+          {me?.user.role === "ops" ? <Link to="/portal" className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">Operations portal →</Link> : null}
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-4"><Outlet /></main>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-slate-200 bg-white md:hidden" aria-label="Store">
-        {STORE_TABS.map(([to, label]) => <NavLink key={to} to={`/store/${to}`} className={({ isActive }) => `py-3 text-center text-xs font-semibold ${isActive ? "text-brand-600" : "text-slate-500"}`}>{label}</NavLink>)}
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-slate-200 bg-white md:hidden" aria-label="Store">
+        {[...STORE_TABS, ["account", "Account"] as const].map(([to, label]) => <NavLink key={to} to={`/store/${to}`} className={({ isActive }) => `py-3 text-center text-xs font-semibold ${isActive ? "text-brand-600" : "text-slate-500"}`}>{label}</NavLink>)}
       </nav>
       <Toast />
     </div>
@@ -83,15 +98,18 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/store" element={<StoreLayout />}>
+      <Route path="/login" element={<AuthPage mode="login" />} />
+      <Route path="/register" element={<AuthPage mode="register" />} />
+      <Route path="/store" element={<RequireAuth><StoreLayout /></RequireAuth>}>
         <Route index element={<Navigate to="capture" replace />} />
         <Route path="capture" element={<CaptureHub />} />
         <Route path="catalog" element={<Catalog />} />
         <Route path="orders" element={<StoreOrders />} />
         <Route path="rewards" element={<RewardsPage />} />
         <Route path="sync" element={<SyncQueue />} />
+        <Route path="account" element={<Account />} />
       </Route>
-      <Route path="/portal" element={<PortalLayout />}>
+      <Route path="/portal" element={<RequireAuth ops><PortalLayout /></RequireAuth>}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<Overview />} />
         <Route path="orders" element={<PortalOrders />} />

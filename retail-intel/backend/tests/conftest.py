@@ -13,16 +13,52 @@ from main import create_app  # noqa: E402
 from vision_service import MockVisionProvider  # noqa: E402
 
 
+def register(c, email, store_name="Test Store", password="secret-pass-1"):
+    r = c.post("/api/auth/register", json={"email": email, "password": password, "name": email.split("@")[0], "store_name": store_name, "barangay": "Culiat", "city": "Quezon City"})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def make_ops(app, email="ops@test.ph", password="ops-pass-123"):
+    import auth
+    from db import User
+    with app.state.db.Session() as s:
+        s.add(User(email=email, name="Ops", password_hash=auth.hash_password(password), role="ops"))
+        s.commit()
+
+
 @pytest.fixture()
-def client(tmp_path):
-    app = create_app(database_url=f"sqlite:///{tmp_path / 'test.db'}", upload_dir=str(tmp_path / "uploads"), vision=MockVisionProvider(), seed=False)
+def app(tmp_path):
+    return create_app(database_url=f"sqlite:///{tmp_path / 'test.db'}", upload_dir=str(tmp_path / "uploads"), vision=MockVisionProvider(), seed=False)
+
+
+@pytest.fixture()
+def anon(app):
     with TestClient(app) as c:
         yield c
 
 
 @pytest.fixture()
+def client(app):
+    """Logged in as the owner of 'Test Store'."""
+    with TestClient(app) as c:
+        c.me = register(c, "owner@test.ph")
+        c.headers["Authorization"] = f"Bearer {c.me["token"]}"
+        yield c
+
+
+@pytest.fixture()
+def ops(app, client):
+    make_ops(app)
+    with TestClient(app) as c:
+        tok = c.post("/api/auth/login", json={"email": "ops@test.ph", "password": "ops-pass-123"}).json()["token"]
+        c.headers["Authorization"] = f"Bearer {tok}"
+        yield c
+
+
+@pytest.fixture()
 def store(client):
-    st = client.post("/api/stores", json={"name": "Test Store", "barangay": "Culiat", "city": "Quezon City"}).json()
+    st = client.me["stores"][0]
     for sku, name, brand, barcode, qty, reorder, price in [
         ("LM-PC-ORIG-60", "Lucky Me Pancit Canton Original 60g", "Lucky Me", "4800016644290", 10, 5, 18),
         ("COKE-MISMO", "Coca-Cola Mismo 290ml", "Coca-Cola", "4801981118502", 2, 6, 20),

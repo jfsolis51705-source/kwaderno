@@ -9,7 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 import services as svc
-from db import Store
+import auth
+from db import Store, StoreMember, User
 from vision_service import REFERENCE_SKUS
 
 STORES = [
@@ -18,6 +19,9 @@ STORES = [
     ("Tindahan ni Rosa", "Bagong Pag-asa", "Quezon City", "Rosa"),
     ("Lito Mini Mart", "Tenejero", "Balanga City", "Lito"),
 ]
+# Demo accounts (password for all: DEMO_PASSWORD). Never enable SEED_DEMO in production.
+DEMO_PASSWORD = "demo1234"
+OPS_EMAIL = "ops@demo.kwaderno.ph"
 
 
 def demo_photo(seed: int, kind: str) -> bytes:
@@ -48,11 +52,15 @@ def seed_if_empty(s: Session, upload_dir: str, vision) -> None:
     if s.scalar(select(Store.id).limit(1)):
         return
     rng = random.Random(42)
+    pw = auth.hash_password(DEMO_PASSWORD)
+    s.add(User(email=OPS_EMAIL, name="KELSON Operations", password_hash=pw, role="ops"))
     stores = []
     for name, brgy, city, owner in STORES:
         st = Store(name=name, barangay=brgy, city=city, owner_name=owner)
-        s.add(st)
+        u = User(email=f"{owner.lower()}@demo.kwaderno.ph", name=owner, password_hash=pw, role="merchant")
+        s.add_all([st, u])
         s.flush()
+        s.add(StoreMember(store_id=st.id, user_id=u.id, role="owner"))
         stores.append(st)
         for i, ref in enumerate(rng.sample(REFERENCE_SKUS, 14)):
             svc.upsert_product(s, st.id, {"sku": ref["sku"], "name": ref["name"], "brand": ref["brand"], "variant": ref["variant"],

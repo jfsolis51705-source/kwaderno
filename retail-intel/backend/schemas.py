@@ -88,3 +88,24 @@ class SyncOpIn(BaseModel):
 class SyncIn(BaseModel):
     store_id: int
     ops: list[SyncOpIn] = Field(max_length=500)
+
+
+class RegisterIn(BaseModel):
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=8, max_length=200)
+    name: str = Field(min_length=1, max_length=120)
+    store_name: str = Field(min_length=1, max_length=120)
+    barangay: str | None = Field(default=None, max_length=80)
+    city: str | None = Field(default=None, max_length=80)
+
+
+class LoginIn(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+    password: str = Field(min_length=1, max_length=200)
+
+
+class MemberIn(BaseModel):
+    email: str = Field(min_length=5, max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    name: str = Field(min_length=1, max_length=120)
+    password: str | None = Field(default=None, min_length=8, max_length=200)
+    role: Literal["staff", "owner"] = "staff"

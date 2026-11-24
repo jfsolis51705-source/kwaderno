@@ -7,14 +7,23 @@ export class ApiError extends Error {
 export class NetworkError extends Error {}
 
 const BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
+const TOKEN_KEY = "ri-token";
+export const auth = {
+  token: () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } },
+  set: (t: string | null) => { try { if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY); } catch { /* private mode */ } },
+};
 
-async function call<T>(path: string, init?: RequestInit): Promise<T> {
+async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   let res: Response;
+  const token = auth.token();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
   try {
-    res = await fetch(BASE + path, init);
+    res = await fetch(BASE + path, { ...init, headers });
   } catch {
     throw new NetworkError("Can't reach the server");
   }
+  if (res.status === 401 && !path.startsWith("/api/auth/")) window.dispatchEvent(new Event("ri-unauthorized"));
   const body = res.headers.get("content-type")?.includes("json") ? await res.json() : await res.text();
   if (!res.ok) {
     const d = (body as { detail?: unknown })?.detail;
@@ -24,7 +33,15 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 const json = (method: string, data: unknown): RequestInit => ({ method, headers: { "content-type": "application/json" }, body: JSON.stringify(data) });
 
+export interface Me { user: { id: number; email: string; name: string; role: "merchant" | "ops" }; stores: (Store & { role: "owner" | "staff" | "ops" })[] }
+
 export const api = {
+  register: (b: { email: string; password: string; name: string; store_name: string; barangay?: string; city?: string }) => call<Me & { token: string }>("/api/auth/register", json("POST", b)),
+  login: (email: string, password: string) => call<Me & { token: string }>("/api/auth/login", json("POST", { email, password })),
+  logout: () => call<string>("/api/auth/logout", { method: "POST" }),
+  me: () => call<Me>("/api/auth/me"),
+  members: (storeId: number) => call<{ id: number; name: string; email: string; role: string }[]>(`/api/stores/${storeId}/members`),
+  addMember: (storeId: number, b: { email: string; name: string; password?: string; role?: "staff" | "owner" }) => call<{ id: number }>(`/api/stores/${storeId}/members`, json("POST", b)),
   health: () => call<{ ok: boolean; vision_provider: string; distributors: string[] }>("/api/health"),
   stores: () => call<Store[]>("/api/stores"),
   products: (storeId: number) => call<Product[]>(`/api/stores/${storeId}/products`),

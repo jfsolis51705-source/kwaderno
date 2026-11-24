@@ -27,6 +27,15 @@ Set `SEED_DEMO=0` for an empty database. Copy `.env.example` to `.env` to change
 - Merchant app: http://localhost:5173/store/capture (best on a phone, or in your browser's phone view)
 - Operations portal: http://localhost:5173/portal/overview
 
+**Demo accounts** (seeded only when `SEED_DEMO=1`; all use the password `demo1234`):
+
+| Account | Can do |
+|---|---|
+| `nena@demo.kwaderno.ph`, `ben@…`, `rosa@…`, `lito@…` | Owner of one store each: the merchant app for that store only |
+| `ops@demo.kwaderno.ph` | KELSON operations: every store and the operations portal |
+
+New merchants register at `/register`; that creates their store with them as owner. Owners add staff under **Account**.
+
 ## What it does
 
 ### Merchant app (`/store/...`)
@@ -67,7 +76,30 @@ Set `SEED_DEMO=0` for an empty database. Copy `.env.example` to `.env` to change
 
 To add a provider, implement `extract(image, kind, catalog) -> ExtractionResult` and register it in `get_provider()`. If the provider errors, the photo is kept and the merchant types the lines. Keys are read on the server only.
 
+## Security
+
+- **Passwords:** hashed with scrypt (Python standard library), with a per-user salt and constant-time comparison. Minimum 8 characters.
+- **Sessions:** a random bearer token per login. Only its SHA-256 is stored, it expires after `SESSION_DAYS` (default 30), and logout revokes it.
+- **Roles:**
+  - Store owner: everything for their stores, including prices and the team.
+  - Store staff: capture, scan, adjust stock and orders, but no price or catalog edits and no team changes.
+  - KELSON `ops`: every store, the portal, and awarding points for a flagged photo after review.
+- **Store isolation:** every endpoint checks membership. Another store's data returns **404**, so store ids can't be probed. Single products, photos and orders are checked against their own store.
+- **Photos are not public:** the API returns **signed links that expire** (HMAC, `MEDIA_URL_TTL`, default 1 h). Unsigned, tampered or expired links are refused. Set `MEDIA_SECRET` in production so links survive restarts.
+- **Login rate limit:** 8 attempts per 5 minutes per email and IP. It's kept in memory, so use a shared store such as Redis when running several API instances.
+- **Audit:** every audit entry and stock movement records the user who made it.
+- **Logging out** on a device clears that account's cached catalog, orders and unsent queue (after a warning if anything is unsynced).
+
 ## API (all JSON, under `/api`)
+
+Everything except `/health`, `/auth/register`, `/auth/login` and signed `/media` links needs `Authorization: Bearer <token>`.
+
+- **Accounts:**
+  - `POST /auth/register`
+  - `POST /auth/login`
+  - `POST /auth/logout`
+  - `GET /auth/me`
+  - `GET/POST /stores/{id}/members` (owners add staff)
 
 The full interactive reference is at http://localhost:8100/docs.
 
@@ -98,8 +130,8 @@ The full interactive reference is at http://localhost:8100/docs.
 ## Tests
 
 ```bash
-make test   # pytest (15) + vitest (6) + TypeScript typecheck
-make e2e    # builds the web app, starts the real API on a fresh seeded DB, drives Chromium (18 checks)
+make test   # pytest (23) + vitest (6) + TypeScript typecheck
+make e2e    # builds the web app, starts the real API on a fresh seeded DB, drives Chromium (23 checks)
 ```
 
 **Backend (pytest)**
@@ -117,6 +149,13 @@ make e2e    # builds the web app, starts the real API on a fresh seeded DB, driv
 - Portal analytics.
 - Demo seed.
 - VLM reply parsing and provider fallback.
+- **Security (`tests/test_auth.py`):**
+  - Register, login and logout; password rules and hashing.
+  - Every endpoint requires a login; login rate limit.
+  - **Store isolation** across 11 endpoints (another store's data returns 404, and nothing changes).
+  - Staff permissions.
+  - Signed photo links that expire.
+  - Upload ids can't be reused across stores.
 
 **Frontend (vitest)**
 - Stock rules.
@@ -127,6 +166,7 @@ make e2e    # builds the web app, starts the real API on a fresh seeded DB, driv
 - Queued photos upload with an idempotency key.
 
 **End-to-end (`frontend/e2e/run.mjs`)**
+- **Login:** logged-out visitors go to the login page; a wrong password is refused; a merchant sees only their own store; a merchant can't open the portal.
 - **Merchant flow, on a Pixel 7 viewport:**
   - Photo capture, review, edit, confirm → +10 points.
   - The same photo is rejected as a duplicate.
@@ -143,5 +183,5 @@ make e2e    # builds the web app, starts the real API on a fresh seeded DB, driv
 
 - **Camera barcode scanning** uses the browser's `BarcodeDetector`. That covers Chrome, Edge and Android; on iPhone Safari the merchant types the code or uses a scanner.
 - **Mock vision** produces plausible but made-up lines. It shows the workflow, not accuracy. Use a real provider for real photos.
-- **No login** in this module. Store choice is a selector. In production, put it behind KWADERNO's authentication and scope every endpoint to the user's stores (the main KWADERNO app already does this).
+- **Staff invitations by email** aren't built: the owner sets a starting password and shares it in person.
 - **Rewards redemption** is a preview only.

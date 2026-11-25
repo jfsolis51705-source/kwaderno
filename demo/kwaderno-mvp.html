@@ -248,7 +248,7 @@ dialog .db * { min-width: 0; }
 :root[data-layout="tablet"] header.top { padding-top: env(safe-area-inset-top, 0px); }
 :root[data-layout="tablet"] main.wrap { max-width: 1040px; padding-top: 16px; padding-bottom: 32px; }
 :root[data-layout="tablet"] .apps { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-:root[data-layout="tablet"] .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:root[data-layout="tablet"] .tiles { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
 :root[data-layout="tablet"] .sell { grid-template-columns: minmax(0, 1fr) 320px; }
 :root[data-layout="tablet"] .cart.desktop { display: block; }
 :root[data-layout="tablet"] .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
@@ -275,7 +275,10 @@ dialog .db * { min-width: 0; }
 :root.landscape:not(.admin-mode) .home > .hero { grid-column: 1; grid-row: 1; }
 :root.landscape:not(.admin-mode) .home > .apps-block { grid-column: 2; grid-row: 1; }
 :root[data-layout="tablet"].landscape .home .apps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-:root[data-layout="tablet"].landscape .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+:root[data-layout="tablet"].landscape .tiles { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+@media (max-width: 820px) { :root[data-layout="tablet"]:not(.framed-tab) .sell { grid-template-columns: minmax(0, 1fr) 260px; } }
+:root[data-layout="tablet"]:not(.landscape) .pos-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:root[data-layout="tablet"]:not(.landscape) .sell { grid-template-columns: minmax(0, 1fr) 300px; }
 /* Desktop: use the width of a big monitor — wider page, more product tiles, a roomier current-sale panel. */
 :root[data-layout="desktop"] .wrap { max-width: 1560px; }
 :root[data-layout="desktop"] .tiles { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 10px; }
@@ -294,13 +297,14 @@ dialog .db * { min-width: 0; }
   :root[data-layout="desktop"] .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
 }
 /* Desktop preview of a tablet (upright 3:4 or sideways 4:3) inside a bezel; the rail and buttons stay inside the frame. */
-@media (min-width: 900px) {
+@media (min-width: 520px) {
   :root.framed-tab, :root.framed-tab body { height: 100%; }
   :root.framed-tab body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
   :root.framed-tab body::before { display: none; }
   :root.framed-tab #phone { position: relative; transform: translateZ(0); margin-left: 0; min-height: 0; background: var(--bg); border: 14px solid #121619; border-radius: 30px; overflow: hidden; box-shadow: 0 0 0 2px #3a4248, 0 30px 70px rgb(0 0 0 / .35);
-    height: min(1100px, calc(100dvh - 40px)); width: min(820px, calc((100dvh - 40px) * .75), calc(100vw - 40px)); }
-  :root.framed-tab.framed-tab-land #phone { width: min(1180px, calc(100vw - 40px), calc((100dvh - 40px) * 1.4)); height: min(820px, calc(100dvh - 40px), calc((100vw - 40px) / 1.4)); }
+    /* a real tablet's size (iPad-like), scaled as a whole to fit the window, so the layout inside is never squeezed */
+    flex: none; width: 820px; height: 1100px; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--tabk, 1)); transform-origin: center; }
+  :root.framed-tab.framed-tab-land #phone { width: 1180px; height: 820px; }
   :root.framed-tab #screen { height: 100%; margin-left: 96px; overflow-y: auto; overscroll-behavior: contain; }
   /* the frame's transform makes the rail, + button, pop-ups and lock screen (all position: fixed) sit inside the tablet */
   :root.framed-tab .layout-toggle { right: 16px; bottom: 16px; }
@@ -663,7 +667,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     root.dataset.layout = layout;
     const framed = layout === "phone" && !narrow && innerWidth >= 520; // desktop preview of the phone app
     // desktop preview of a tablet, upright or sideways, inside a tablet frame (a real tablet just fills its screen)
-    const framedTab = layout === "tablet" && !touch() && innerWidth >= 900 && view !== "admin", tabLand = choice === "tablet-land";
+    const framedTab = layout === "tablet" && !touch() && innerWidth >= 520 && view !== "admin", tabLand = choice === "tablet-land";
+    if (framedTab) { const W = tabLand ? 1180 : 820, H = tabLand ? 820 : 1100; root.style.setProperty("--tabk", String(Math.min(1, (innerWidth - 32) / (W + 28), (innerHeight - 32) / (H + 28)))); }
     root.classList.toggle("framed", framed);
     root.classList.toggle("framed-land", framed && landPreview);
     root.classList.toggle("framed-tab", framedTab);

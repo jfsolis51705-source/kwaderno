@@ -69,6 +69,8 @@ nav.bottom { display: none; }
 .tile .pwrap { position: relative; }
 .sell-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sell-head h1 { margin: 0; margin-right: auto; }
+.sell-head .sell-hint { flex: 1 1 240px; min-width: 0; text-align: right; line-height: 1.3; }
+:root[data-layout="phone"].landscape .sell-head .sell-hint { font-size: .72rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cartchip { position: relative; }
 .cartchip b { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; border-radius: 99px; background: var(--bad); color: #fff; font-size: .7rem; display: grid; place-items: center; padding: 0 5px; }
 .pos-dock { display: none; }
@@ -89,6 +91,22 @@ nav.bottom { display: none; }
 .plist .thumbw .pimg, .plist .thumbw .ph { width: 46px; height: 46px; font-size: .9rem; }
 .plist .nm { font-weight: 600; font-size: .9rem; line-height: 1.2; }
 .plist .sub { font-size: .75rem; color: var(--muted); }
+.rc { list-style: none; margin: 0; padding: 0; }
+.rc li { display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) 72px; gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.rc li:last-child { border-bottom: 0; }
+.rc li.done { opacity: .55; }
+.rc li.done .nm { text-decoration: line-through; }
+.rc input[type=checkbox] { width: 26px; height: 26px; margin: 0; }
+.rc .thumb { width: 44px; height: 44px; }
+.rc .nm { font-weight: 600; line-height: 1.2; }
+.rc .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: .76rem; color: var(--muted); margin-top: 3px; }
+.rc .meta .chip { font-size: .72rem; padding: 1px 8px; }
+.rc .buy { display: grid; gap: 2px; text-align: center; }
+.rc .buy input { text-align: center; padding: 8px 4px; min-height: 40px; font-weight: 700; }
+.rc .buy span { font-size: .7rem; color: var(--muted); }
+.trunc2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-sum { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; padding: 12px 14px; }
+.rc-sum b { font-size: 1.25rem; }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -2117,7 +2135,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Stock-in", IC.stockin, "var(--s1)", () => go("products", "stockin")),
         appTile("Logbook photo", IC.logbook, "var(--s2)", () => go("home", "logbook")),
         appTile("Products", IC.products, "var(--s3)", () => { productFilter = "all"; go("products"); }),
-        appTile("Low stock", IC.low, "var(--bad)", () => { productFilter = "low"; go("products"); }, low.length),
+        appTile("Low stock", IC.low, "var(--bad)", () => go("products", "checklist"), low.length),
         appTile("Credit", IC.utang, "var(--bad)", () => go("utang"), owed.length),
         appTile("Cash ledger", IC.cash, "var(--good)", () => go("home", "cash")),
         appTile("Expenses", IC.expense, "var(--warn)", () => go("home", "expenses")),
@@ -2795,7 +2813,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         items.length > 6 ? h("div", { class: "small muted", text: L(`+ ${items.length - 6} pa`, `+ ${items.length - 6} more`) }) : null,
         sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
         h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
-          h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "stockin"); } }, L("Mag-stock-in", "Stock-in")),
+          h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Listahan ng bibilhin", "📋 Restock list")),
           h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
           h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
         why === "demo" ? h("div", { class: "small muted", text: L("Demo lang ang bentang ito — hindi naka-save. Patayin sa Settings.", "This sale is a demo and isn't saved. Turn demo off in Settings.") }) : null));
@@ -3267,11 +3285,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const items = c.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0);
     return h("div", { class: "view selling" + (c.lines.length ? " has-cart" : "") },
       h("div", { class: "sell-head" }, h("h1", { text: "Sell" }),
+        dock ? null : h("span", { class: "muted small sell-hint", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
         dock ? h("button", { class: "btn sm" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + openTabs().length) : null,
         h("button", { class: "btn sm", "aria-label": sellViewMode === "grid" ? L("Ipakita bilang listahan", "Show as a list") : L("Ipakita bilang grid", "Show as a grid"), title: sellViewMode === "grid" ? "List" : "Grid",
           onclick: () => { sellViewMode = sellViewMode === "grid" ? "list" : "grid"; try { localStorage.setItem("kw-sellview", sellViewMode); } catch { /* ignore */ } render(); } }, sellViewMode === "grid" ? "☰" : "▦"),
         dock ? h("button", { class: "btn sm cartchip", "aria-label": L(`Benta: ${items} piraso`, `Sale: ${items} items`), onclick: openCart }, "🛒", items ? h("b", { class: "num", text: qtyFmt(items) }) : null) : null),
-      dock ? null : h("div", { class: "muted small", style: "margin:-6px 0 4px", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
       dock ? h("div", { class: "pos-dock", role: "region", "aria-label": L("Mga aksyon sa benta", "Sale actions") },
         c.lines.length ? h("button", { class: "btn primary paybar", onclick: openCart }, h("span", { text: L(`🛒 ${qtyFmt(items)} piraso`, `🛒 ${qtyFmt(items)} item(s)`) }), h("b", { class: "num", text: L(`Bayaran ${peso(c.total)} ›`, `Charge ${peso(c.total)} ›`) })) : null,
         searchBox(),
@@ -3392,6 +3410,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "stockin") return stockIn();
     if (sub === "expiry") return expiryView();
     if (sub === "photos") return photoMode();
+    if (sub === "checklist") return restockChecklist();
     if (sub && sub.startsWith("p-")) { const p = productById(sub.slice(2)); if (p) return productDetail(p); }
     const f = search.trim().toLowerCase();
     let list = activeProducts().filter((p) => !f || p.name.toLowerCase().includes(f) || (p.category || "").toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim()));
@@ -3400,6 +3419,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("h1", { text: "Products & stock" }), h("div", { class: "pills" },
         scanButton("btn", [camIcon(), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+        h("button", { class: "btn" + (lowCount() ? " cartchip" : ""), onclick: () => go("products", "checklist") }, "📋 " + L("Bibilhin", "Restock list"), lowCount() ? h("b", { class: "num", text: String(lowCount()) }) : null),
         h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"),
         h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"),
         h("button", { class: "btn", onclick: () => go("products", "photos") }, camIcon(), "Add photos"),
@@ -3591,7 +3611,7 @@ ${catalog}`;
           h("button", { class: "btn sm", onclick: () => { si.unmatched = si.unmatched.filter((x) => x.key !== u.key); render(); } }, "Skip")))) : null,
         pick,
         stockLines.length ? h("ul", { class: "list" }, stockLines.map((l) => { const p = productById(l.productId); return h("li", { style: "flex-wrap:wrap" },
-          h("span", { class: "grow trunc", style: "font-weight:600" }, p?.name || "?", l.fromReceipt ? h("span", { class: "muted small", style: "display:block;font-weight:400", text: "Receipt: " + l.fromReceipt }) : null),
+          h("span", { class: "grow trunc", style: "font-weight:600" }, p?.name || "?", l.fromChecklist ? h("span", { class: "muted small", style: "display:block;font-weight:400", text: L("Mula sa listahan ng bibilhin", "From the restock checklist") }) : null, l.fromReceipt ? h("span", { class: "muted small", style: "display:block;font-weight:400", text: "Receipt: " + l.fromReceipt }) : null),
           h("label", { class: "f", style: "width:96px" }, "Qty", h("input", { type: "text", inputmode: "decimal", id: "siq-" + l.productId, value: l.qty, oninput: (e) => { l.qty = e.target.value; render(); } })),
           h("label", { class: "f", style: "width:110px" }, "Unit cost ₱", h("input", { type: "text", inputmode: "decimal", id: "sic-" + l.productId, value: l.cost, oninput: (e) => { l.cost = e.target.value; render(); } })),
           h("button", { class: "btn sm danger", "aria-label": "Remove", onclick: () => { stockLines.splice(stockLines.indexOf(l), 1); render(); } }, "×")); })) : h("div", { class: "empty", text: "Add the products in this delivery." }),
@@ -3612,11 +3632,75 @@ ${catalog}`;
             }
             if (total > 0 && (si.pay === "cash" || si.pay === "gcash")) await write("expenses/" + uid(), { kind: "purchase", amount: total, category: "stock", method: si.pay, note: [supplier, ref && "#" + ref].filter(Boolean).join(" ") || "Stock purchase", date: todayKey(), at, by: S.me || null, deleted: false, batch });
             if (total > 0 && si.pay === "later") { const d = new Date(); d.setDate(d.getDate() + Math.max(0, Math.min(120, parseInt(si.dueDays, 10) || 7))); await write("expenses/" + uid(), { kind: "bill", purchase: true, name: (supplier || "Supplier") + (ref ? " #" + ref : "") + " (stock)", category: "stock", amount: total, due: dayKey(d.toISOString()), repeat: "none", paid: false, deleted: false, at, by: S.me || null, batch }); }
+            if (Object.keys(restockDoc.checked || {}).length) { for (const l of stockLines) { delete restockDoc.checked[l.productId]; delete restockDoc.qty[l.productId]; } await saveRestock(); }
             toast(`Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; Object.assign(si, { supplier: "", ref: "", unmatched: [], note: "" }); go("products");
           } catch (err) { e.target.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
         } }, "Confirm stock-in")));
   }
 
+
+
+  // ---------- RESTOCK CHECKLIST: what to buy, how many, tick as you buy, then stock-in in one go ----------
+  const lowCount = () => activeProducts().filter((p) => ((p.reorder || 0) > 0 || stockOf(p.id) > 0 || D.sold.get(p.id)) && stockOf(p.id) <= (p.reorder || 0)).length;
+  let restockDoc = { checked: {}, qty: {} }, restockSub = null, restockBase = null;
+  function watchRestock() {
+    if (restockBase === S.base) return; restockBase = S.base; try { restockSub?.(); } catch { /* ignore */ }
+    restockSub = ref("store/restocklist").onSnapshot((d) => { restockDoc = d.exists ? { checked: {}, qty: {}, ...d.data() } : { checked: {}, qty: {} }; if (view === "products" && sub === "checklist") render(); }, () => {});
+  }
+  const saveRestock = () => ref("store/restocklist").set({ ...restockDoc, updatedAt: new Date().toISOString() }).catch(() => toast(L("Hindi na-save", "Could not save")));
+  function sold7() { const m = new Map(), t7 = Date.now() - 7 * DAYMS; for (const sl of S.sales) { if (sl.voided || new Date(sl.at).getTime() < t7) continue; for (const l of sl.lines || []) m.set(l.productId, (m.get(l.productId) || 0) + Number(l.qty || 0)); } return m; }
+  function restockItems() {
+    const s7 = sold7();
+    return activeProducts().filter((p) => ((p.reorder || 0) > 0 || stockOf(p.id) > 0 || D.sold.get(p.id)) && stockOf(p.id) <= (p.reorder || 0)).map((p) => {
+      const st = Math.max(0, stockOf(p.id)), perDay = (s7.get(p.id) || 0) / 7;
+      // enough for about two weeks of sales, and never less than twice the reorder level
+      const target = Math.max((p.reorder || 0) * 2, Math.ceil(perDay * 14), (p.reorder || 0) + 1);
+      const suggest = Math.max(1, Math.ceil(target - st)), daysLeft = perDay > 0 ? st / perDay : null;
+      return { p, st, perDay, suggest, daysLeft, qty: restockDoc.qty[p.id] ?? String(suggest), done: !!restockDoc.checked[p.id] };
+    }).sort((a, b) => a.done - b.done || (a.st > 0) - (b.st > 0) || (a.daysLeft ?? 99) - (b.daysLeft ?? 99) || a.p.name.localeCompare(b.p.name));
+  }
+  function restockChecklist() {
+    watchRestock();
+    const items = restockItems(), todo = items.filter((x) => !x.done), done = items.filter((x) => x.done);
+    const cost = (xs) => xs.reduce((a, x) => a + Math.round((Number(x.qty) || 0) * (x.p.cost || 0)), 0);
+    const listText = () => [L(`Bibilhin — ${S.store.name || "Tindahan"} — ${todayKey()}`, `Restock list — ${S.store.name || "Store"} — ${todayKey()}`),
+      ...todo.map((x) => `☐ ${x.qty} ${x.p.unit || "pc"} · ${x.p.name}${x.p.cost ? ` (~${peso(Math.round((Number(x.qty) || 0) * x.p.cost))})` : ""}`),
+      cost(todo) ? L(`Tantiyang gastos: ${peso(cost(todo))}`, `Estimated cost: ${peso(cost(todo))}`) : ""].filter(Boolean).join("\n");
+    const toStockIn = () => {
+      for (const x of done) { const l = stockLines.find((y) => y.productId === x.p.id); const q = String(Number(x.qty) || x.suggest); if (l) l.qty = q; else stockLines.push({ productId: x.p.id, qty: q, cost: ((x.p.cost || 0) / 100).toFixed(2), fromChecklist: true }); }
+      go("products", "stockin");
+    };
+    const row = (x) => {
+      const tag = x.st <= 0 ? h("span", { class: "chip bad", text: L("Ubos", "Out") }) : h("span", { class: "chip warn", text: L(`${qtyFmt(x.st)} na lang`, `${qtyFmt(x.st)} left`) });
+      return h("li", { class: x.done ? "done" : "" },
+        h("input", { type: "checkbox", id: "rc-" + x.p.id, checked: x.done, "aria-label": L(`Nabili na: ${x.p.name}`, `Bought: ${x.p.name}`),
+          onchange: (e) => { if (e.target.checked) restockDoc.checked[x.p.id] = new Date().toISOString(); else delete restockDoc.checked[x.p.id]; saveRestock(); render(); } }),
+        h("div", { class: "thumb" }, productImage(x.p)),
+        h("label", { for: "rc-" + x.p.id, style: "min-width:0;cursor:pointer" }, h("div", { class: "nm trunc2", text: x.p.name }),
+          h("div", { class: "meta" }, tag,
+            x.daysLeft != null && x.st > 0 ? h("span", { text: L(`~${Math.max(0, Math.round(x.daysLeft))} araw pa`, `~${Math.max(0, Math.round(x.daysLeft))} days left`) }) : null,
+            x.p.cost ? h("span", { class: "num", text: "≈ " + peso(Math.round((Number(x.qty) || 0) * x.p.cost)) }) : null)),
+        h("label", { class: "buy" }, h("span", { text: L("Bibilhin", "Buy") }), h("input", { type: "text", inputmode: "decimal", id: "rq-" + x.p.id, value: x.qty, "aria-label": L(`Ilan ang bibilhin: ${x.p.name}`, `How many to buy: ${x.p.name}`),
+          oninput: (e) => { restockDoc.qty[x.p.id] = e.target.value; clearTimeout(restockT); restockT = setTimeout(saveRestock, 600); } })));
+    };
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"),
+        h("h1", { text: L("📋 Listahan ng bibilhin", "📋 Restock checklist"), style: "margin-top:8px" }),
+        h("div", { class: "muted small", text: L("Lahat ng paubos at ubos na. Lagyan ng tsek habang binibili, saka i-stock-in nang sabay-sabay.", "Everything low or out. Tick items as you buy them, then stock them in all at once.") }))),
+      items.length ? h("div", { class: "card rc-sum", role: "status" },
+        h("span", { class: "kpi" }, h("b", { class: "num", text: String(todo.length) }), " ", L("bibilhin pa", "to buy")),
+        h("span", { class: "kpi" }, h("b", { class: "num", text: `${done.length} / ${items.length}` }), " ", L("nabili na", "bought")),
+        h("span", { class: "kpi" }, L("tantiyang gastos ", "est. cost "), h("b", { class: "num", text: peso(cost(todo) + cost(done)) }))) : null,
+      items.length ? h("div", { class: "pills" },
+        h("button", { class: "btn primary", disabled: !done.length, onclick: toStockIn }, "✅ " + L(`I-stock-in ang may tsek (${done.length})`, `Stock in ticked items (${done.length})`)),
+        h("button", { class: "btn", onclick: async () => { const t = listText(); try { await navigator.clipboard.writeText(t); toast(L("Nakopya — i-paste sa Messenger o SMS", "Copied — paste it in Messenger or SMS")); } catch { openDialog(L("Listahan", "List"), h("textarea", { class: "input", rows: 12, style: "width:100%", text: t })); } } }, "📋 " + L("Kopyahin ang listahan", "Copy list")),
+        h("button", { class: "btn", disabled: !todo.length, onclick: () => { for (const x of todo) restockDoc.checked[x.p.id] = new Date().toISOString(); saveRestock(); render(); } }, L("Tsek lahat", "Tick all")),
+        done.length ? h("button", { class: "btn", onclick: () => { restockDoc.checked = {}; saveRestock(); render(); } }, L("Alisin ang tsek", "Untick all")) : null) : null,
+      items.length ? h("div", { class: "card", style: "padding-block:2px" }, h("ul", { class: "rc" }, [...todo, ...done].map(row)))
+        : h("div", { class: "empty", text: L("Walang paubos ngayon. 🎉", "Nothing is running low right now. 🎉") }),
+      h("p", { class: "muted small", text: L("Ang mungkahing dami ay para sa mga 2 linggong benta (hindi bababa sa doble ng reorder level). Puwedeng palitan.", "Suggested amounts cover about two weeks of sales (at least twice the reorder level). You can change them.") }));
+  }
+  let restockT = null;
 
   // ---------- PHOTO MODE: walk the shelf and snap each product ----------
   function photoMode() {

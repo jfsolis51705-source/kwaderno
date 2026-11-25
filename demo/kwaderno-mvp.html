@@ -153,6 +153,15 @@ nav.bottom { display: none; }
   :root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 42px; font-size: .66rem; }
   :root[data-layout="tablet"] nav#bottom .rail-spacer { margin: 2px 10px; }
 }
+/* upright tablet: same bottom dock as the upright phone, next to the side bar */
+:root[data-layout="tablet"]:not(.landscape) .pos-dock { display: grid; gap: 10px; position: fixed; left: var(--rail, 96px); right: 0; bottom: 0; z-index: 19; padding: 12px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(0,0,0,.08); border-radius: 18px 18px 0 0; }
+:root[data-layout="tablet"]:not(.landscape) .pos-dock .acts .btn { min-height: 64px; font-size: .86rem; }
+:root[data-layout="tablet"]:not(.landscape) .pos-dock .paybar { min-height: 54px; font-size: 1.1rem; }
+:root[data-layout="tablet"]:not(.landscape) .view.selling { padding-bottom: 200px; }
+:root[data-layout="tablet"]:not(.landscape) .view.selling.has-cart { padding-bottom: 264px; }
+:root[data-layout="tablet"]:not(.landscape) .view.selling .sell { grid-template-columns: minmax(0, 1fr) !important; }
+:root[data-layout="tablet"]:not(.landscape) .view.selling .cart.desktop { display: none !important; }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -3283,7 +3292,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return { lines, subtotal, disc, discInfo: dc.info, discErr: dc.err || null, total, tendered, change: tendered != null ? tendered - total : null, short };
   }
   let sellViewMode = (() => { try { return localStorage.getItem("kw-sellview") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
-  const phoneDock = () => document.documentElement.dataset.layout === "phone" && !document.documentElement.classList.contains("landscape");
+  // upright phones and upright tablets: actions in a bottom dock (search + Custom item / Scan / Add product)
+  const phoneDock = () => ["phone", "tablet"].includes(document.documentElement.dataset.layout) && !document.documentElement.classList.contains("landscape");
   let sellDrawerOpen = false;
   // phones and tablets held sideways: photos full screen, actions in the swipe-in side panel
   const sellDrawerLayout = () => { const r = document.documentElement; return ["phone", "tablet"].includes(r.dataset.layout) && r.classList.contains("landscape"); };

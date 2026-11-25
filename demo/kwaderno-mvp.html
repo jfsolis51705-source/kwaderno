@@ -42,6 +42,8 @@ nav.tabs a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 nav.bottom { display: none; }
 .lockwait #app { visibility: hidden; }
+.file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
 #stockAlert .sa { width: 100%; max-width: 380px; max-height: 100%; overflow: auto; background: var(--surface); color: var(--text, inherit); border-radius: 18px; padding: 18px; display: grid; gap: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.35); border-top: 6px solid var(--bad); }
 #stockAlert .sa h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
@@ -626,13 +628,31 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- camera photo → barcode / Claude ----------
   // Live camera is not available inside this page, so scanning uses a photo from the phone camera.
   let pendingBarcode = "", draft = null; // draft: a product suggested by Smart tips
+  // Some in-app browsers (e.g. inside the Claude phone app) never open the camera or file picker for a page.
+  // We watch for the picker taking over the screen; if nothing happens, we say so instead of failing silently.
+  function watchPicker(onStuck) {
+    let left = false;
+    const away = () => { left = true; };
+    window.addEventListener("blur", away, { once: true }); document.addEventListener("visibilitychange", away, { once: true });
+    const t = setTimeout(() => { window.removeEventListener("blur", away); document.removeEventListener("visibilitychange", away); if (!left) onStuck(); }, 2500);
+    return () => { clearTimeout(t); window.removeEventListener("blur", away); document.removeEventListener("visibilitychange", away); };
+  }
+  const pickerStuckMsg = (camera) => camera
+    ? L("Hindi nabuksan ang camera dito. Subukan ang \"Pumili sa gallery\", o buksan ang KWADERNO sa Chrome (⋮ → Open in browser).", "The camera didn't open here. Try \"Choose from gallery\", or open KWADERNO in Chrome (⋮ → Open in browser).")
+    : L("Hindi nabuksan ang gallery dito. Buksan ang KWADERNO sa Chrome (⋮ → Open in browser), o i-type ang numero.", "The gallery didn't open here. Open KWADERNO in Chrome (⋮ → Open in browser), or type the number.");
+  const fileInput = (camera) => {
+    // kept in the page (not display:none) and inside an open dialog, so phone browsers treat the tap as real
+    const i = h("input", { type: "file", accept: "image/*", class: "file-hide", tabindex: -1, "aria-hidden": "true" });
+    if (camera) i.setAttribute("capture", camera === "user" ? "user" : "environment");
+    return i;
+  };
   function pickPhoto(camera = true) { // camera: true = back camera, "user" = front camera (selfie)
     return new Promise((resolve) => {
-      const i = h("input", { type: "file", accept: "image/*", hidden: true });
-      if (camera) i.setAttribute("capture", camera === "user" ? "user" : "environment");
-      i.addEventListener("change", () => { resolve(i.files?.[0] || null); i.remove(); });
-      i.addEventListener("cancel", () => { resolve(null); i.remove(); });
-      document.body.append(i); i.click();
+      const i = fileInput(camera);
+      const stop = watchPicker(() => toast(pickerStuckMsg(camera)));
+      i.addEventListener("change", () => { stop(); resolve(i.files?.[0] || null); i.remove(); });
+      i.addEventListener("cancel", () => { stop(); resolve(null); i.remove(); });
+      (dlg.open ? $("#dlgBody") : document.body).append(i); i.click();
     });
   }
   // ---------- scanner sounds: a short high beep when a code is read, a low double buzz when it isn't ----------
@@ -763,10 +783,18 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           setTimeout(() => typed.focus(), 50);
         }
       };
+      // the button IS the file picker (a label around the input): the most reliable way to open the camera on phones
+      const pickLabel = (camera, cls, kids) => {
+        const i = fileInput(camera); let stop = () => {};
+        i.addEventListener("change", () => { stop(); const f = i.files?.[0]; i.value = ""; if (f) tryFile(f); });
+        i.addEventListener("cancel", () => stop());
+        return h("label", { class: cls, role: "button", tabindex: 0, onclick: () => { stop(); stop = watchPicker(() => { status.style.color = "var(--bad)"; status.textContent = pickerStuckMsg(camera); }); },
+          onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.click(); } } }, i, ...kids);
+      };
       const showChoices = () => {
         openDialog(opts.title || L("Magdagdag ng barcode", "Add barcode"), h("div", { class: "grid" },
-          h("button", { class: "btn primary big", onclick: async () => tryFile(await pickPhoto(true)) }, camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")),
-          h("button", { class: "btn", onclick: async () => tryFile(await pickPhoto(false)) }, L("🖼️ Pumili sa gallery", "🖼️ Choose from gallery")),
+          pickLabel(true, "btn primary big", [camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")]),
+          pickLabel(false, "btn", [L("🖼️ Pumili sa gallery", "🖼️ Choose from gallery")]),
           thumb, status,
           h("label", { class: "f" }, L("O i-type ang numero sa ilalim ng barcode", "Or type the number under the barcode"), typed),
           h("button", { class: "btn", onclick: useTyped }, L("Gamitin ang numerong ito", "Use this number")),
@@ -2416,7 +2444,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         .concat(items.length > 3 ? [L(`At ${items.length - 3} pa.`, `And ${items.length - 3} more.`)] : []).concat([L("Mag-restock na po.", "Time to restock.")]), lang };
   }
   function showStockAlert(items, why) {
-    if (!items.length || !alertsOn() || view === "admin" || document.getElementById("lock")) return;
+    if (!items.length || !alertsOn() || view === "admin" || document.getElementById("lock") || dlg.open) return;
     document.getElementById("stockAlert")?.remove();
     const sale = why === "demo" ? SA.lastSale : null;
     const close = () => { box.remove(); SA.open = false; window.speechSynthesis?.cancel(); voice.tts?.stop?.(); };

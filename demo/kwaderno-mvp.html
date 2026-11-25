@@ -1436,22 +1436,32 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("button", { class: canShare ? "btn" : "btn primary big", onclick: copy }, "Kopyahin (Copy)"),
       h("p", { class: "muted small", text: canShare ? "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app." : "Kopyahin at i-paste sa AI app o assistant ng computer mo." })));
   }
+  // Settings stay out of the way; the defaults are Auto reply language, British English voice, and voice on.
+  function aiSettings() {
+    const body = h("div", { class: "grid" });
+    const draw = () => body.replaceChildren(
+      h("div", { class: "f" }, h("span", { class: "small", style: "font-weight:600", text: L("Wika ng sagot", "Reply language") }),
+        h("div", { class: "pills", role: "radiogroup", "aria-label": L("Wika ng sagot", "Reply language") }, [["auto", L("Auto (wika ng tanong)", "Auto (question's language)")], ["tl", "Tagalog"], ["en", "English"]].map(([k, l2]) =>
+          h("button", { role: "radio", "aria-checked": String(replyPref === k), "aria-pressed": String(replyPref === k), onclick: () => { replyPref = k; try { localStorage.setItem("kw-reply", k); } catch { /* ignore */ }
+            if (askState.res && askState.q) { const rl = replyLangFor(askState.q); askState.res = withLang(rl, () => answerQuestion(askState.q, null)); if (askState.res) askState.res.lang = rl; }
+            render(); draw(); } }, l2)))),
+      h("label", { class: "f" }, L("Boses sa English", "English voice"),
+        h("select", { id: "aiVoiceStyle", onchange: (e) => { voice.style = e.target.value; try { localStorage.setItem("kw-voice-style", voice.style); } catch { /* ignore */ } } },
+          h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" }))),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "aiAutoChk", checked: voice.auto, onchange: (e) => { voice.auto = e.target.checked; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ } if (!voice.auto) { window.speechSynthesis?.cancel(); voice.speaking = false; } render(); } }),
+        L("Basahin nang malakas ang bawat sagot", "Read every answer aloud")),
+      h("button", { class: "btn primary big", onclick: () => dlg.close() }, L("Tapos", "Done")));
+    draw(); openDialog(L("Mga setting ng Kwaderno", "Kwaderno settings"), body);
+  }
   function aiCard() {
     voiceInit();
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Datos ng tindahan + gabay sa negosyo" })),
-      h("div", { class: "toolbar", style: "gap:6px" },
-        h("span", { class: "small muted", text: L("Sagot sa:", "Reply in:") }),
-        h("div", { class: "pills", role: "radiogroup", "aria-label": L("Wika ng sagot", "Reply language") }, [["auto", L("Auto (wika ng tanong)", "Auto (question's language)")], ["tl", "Tagalog"], ["en", "English"]].map(([k, l2]) =>
-          h("button", { role: "radio", "aria-checked": String(replyPref === k), "aria-pressed": String(replyPref === k), onclick: () => { replyPref = k; try { localStorage.setItem("kw-reply", k); } catch { /* ignore */ }
-            if (askState.res && askState.q) { const rl = replyLangFor(askState.q); askState.res = withLang(rl, () => answerQuestion(askState.q, null)); if (askState.res) askState.res.lang = rl; }
-            render(); if (voice.auto && askState.res) speakNow(askState.res); } }, l2))),
-        h("label", { class: "small muted", style: "display:inline-flex;gap:6px;align-items:center;margin-left:auto" }, L("Boses sa English:", "English voice:"),
-          h("select", { id: "aiVoiceStyle", style: "width:auto;min-height:34px;padding:4px 8px", onchange: (e) => { voice.style = e.target.value; try { localStorage.setItem("kw-voice-style", voice.style); } catch { /* ignore */ } } },
-            h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" }))),
-        h("button", { class: "btn sm", id: "aiAuto", "aria-pressed": String(voice.auto), onclick: () => { voice.auto = !voice.auto; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ }
-          if (!voice.auto) { window.speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; } render(); } }, voice.auto ? L("🔊 Boses: naka-on", "🔊 Voice on") : L("🔇 Naka-mute", "🔇 Muted"))),
+      h("div", { style: "display:flex;gap:6px;align-items:center" }, h("h2", { text: "🧠 Tanong kay Kwaderno", style: "margin-right:auto" }),
+        h("button", { class: "btn sm", id: "aiAuto", style: "min-height:34px;padding:4px 10px", "aria-pressed": String(voice.auto), "aria-label": voice.auto ? L("I-mute ang boses", "Mute voice") : L("Buksan ang boses", "Turn voice on"), title: voice.auto ? L("I-mute ang boses", "Mute voice") : L("Buksan ang boses", "Turn voice on"),
+          onclick: () => { voice.auto = !voice.auto; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ } if (!voice.auto) { window.speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; } render(); } }, voice.auto ? "🔊" : "🔇"),
+        h("button", { class: "btn sm", id: "aiSettings", style: "min-height:34px;padding:4px 10px", "aria-label": L("Mga setting", "Settings"), title: L("Mga setting", "Settings"), onclick: aiSettings }, "⚙️")),
+      h("div", { class: "muted small", style: "margin-top:-6px", text: "Datos ng tindahan + gabay sa negosyo" }),
       h("div", { style: "display:flex;gap:6px" }, input,
         h("button", { class: "btn", id: "aiMic", "aria-label": L("Magsalita", "Speak"), title: L("Magsalita", "Speak"), "aria-pressed": String(voice.listening), onclick: listen }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
         h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),

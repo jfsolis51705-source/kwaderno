@@ -129,6 +129,11 @@ dialog .db * { min-width: 0; }
 :root[data-layout="phone"] .cart.desktop { display: none; }
 :root[data-layout="phone"] .mobile-cart { display: flex; position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(74px + env(safe-area-inset-bottom, 0px)); z-index: 25;
     background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 14px; padding: 14px 16px; justify-content: space-between; font-weight: 700; box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
+.lang-toggle { margin-left: auto; flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 3px; display: inline-flex; gap: 2px; font-size: .75rem; font-weight: 700; }
+.lang-toggle span { padding: 3px 9px; border-radius: 99px; color: var(--muted); }
+.lang-toggle span.on { background: var(--accent); color: var(--accent-fg); }
+.admin-mode .lang-toggle { display: none; }
+:root[data-layout="phone"] .lang-toggle + .demo-pill { display: none; }
 .admin-link { font-size: .8rem; font-weight: 600; color: var(--accent); text-decoration: none; padding: 4px 10px; border: 1px solid var(--accent); border-radius: 99px; white-space: nowrap; }
 .chart { position: relative; }
 .chart svg { width: 100%; height: auto; display: block; }
@@ -311,6 +316,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       KWADERNO
     </div>
     <span class="store-name" id="storeName"></span>
+    <button class="lang-toggle" id="langToggle" type="button" aria-label="Language / Wika"></button>
     <span class="demo-pill" title="Lightweight online version for testing. The full system adds receipt AI, offline mode, roles and the admin portal.">Pilot demo</span>
   </div>
   <div class="wrap"><nav class="tabs" aria-label="Main" id="tabs"></nav></div>
@@ -329,16 +335,34 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   "use strict";
   // ---------- tiny helpers ----------
   const $ = (s, el = document) => el.querySelector(s);
+  // ---------- LANGUAGE: Tagalog or English for the store app (the Super Admin stays in English) ----------
+  let lang = "tl";
+  try { lang = localStorage.getItem("kw-lang") === "en" ? "en" : "tl"; } catch { /* private mode */ }
+  const L = (tl, en) => (lang === "en" ? en : tl); // bilingual text written in place
+  const I18N = (() => {
+    const toTl = new Map(), toEn = new Map();
+    for (const [en, tl] of [["Sign in to use the store", "Mag-sign in para magamit ang tindahan"], ["This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor).", "Sine-save ng app ang paninda, benta at utang online. Buksan ito sa claude.ai habang naka-sign in (bilang may-ari, o Contributor o Editor na binahagian)."], ["Search product", "Hanapin ang produkto"], ["Search the photo library", "Hanapin sa photo library"], ["From your gallery, Google Drive, or files. Square photos look best.", "Mula sa gallery, Google Drive o files. Mas maganda ang parisukat na litrato."], ["See all ›", "Tingnan lahat ›"], ["Tips appear once enough stores are using KWADERNO.", "Lalabas ang tips kapag sapat na ang tindahang gumagamit ng KWADERNO."], ["No tips right now — your store is in good shape. 🎉", "Walang tips ngayon — maayos ang tindahan mo. 🎉"], ["Today", "Ngayon"], ["Your store ledger", "Kwaderno ng tindahan mo"], ["Store tools", "Mga gamit ng tindahan"], ["Recent sales", "Mga huling benta"], ["No sales yet. Tap “Sell”.", "Wala pang benta. Pindutin ang “Magbenta”."], ["Low stock", "Paubos na"], ["Quick add", "Mabilisang dagdag"], ["This month", "Ngayong buwan"], ["Net profit this month", "Net na kita ngayong buwan"], ["Sales − cost of goods − expenses", "Benta − puhunan ng nabenta − gastos"], ["Add expense", "Magdagdag ng gastos"], ["Category", "Kategorya"], ["e.g. Meralco bill October", "hal. Meralco bill ng Oktubre"], ["History", "Kasaysayan"], ["Delete expense", "Burahin ang gastos"], ["No expenses yet. Add bills, rent, transport and other costs to see your real profit.", "Wala pang gastos. Idagdag ang bills, upa, pamasahe at iba pa para makita ang tunay na kita."], ["Cash sale", "Benta (cash)"], ["Utang payment", "Bayad sa utang"], ["Stock purchase", "Pambili ng paninda"], ["Opening cash", "Panimulang cash"], ["Expected cash in the drawer", "Inaasahang pera sa kaha"], ["Counts cash sales, cash utang payments, cash expenses and your cash in/out. GCash is not counted here. Count your drawer — if it differs, record a cash in or out with a note.", "Binibilang ang cash na benta, bayad sa utang, gastos at cash in/out. Hindi kasama ang GCash. Bilangin ang kaha — kung iba, mag-record ng cash in o out na may tala."], ["No cash movement in this period. Start the day with “+ Cash in” → opening cash.", "Walang galaw ng cash sa panahong ito. Simulan ang araw sa “+ Cash in” → panimulang cash."], ["e.g. Meralco, Maynilad, Upa sa pwesto", "hal. Meralco, Maynilad, Upa sa pwesto"], ["Usual amount (optional)", "Karaniwang halaga (opsyonal)"], ["Every month", "Buwan-buwan"], ["One time", "Isang beses"], ["Saved as an expense, so it shows in your profit and cash ledger.", "Mase-save bilang gastos, kaya makikita sa kita at sa kaha."], ["Overdue or due in 3 days", "Lampas na o due sa loob ng 3 araw"], ["Unpaid (usual amounts)", "Hindi pa bayad (karaniwang halaga)"], ["No bills yet. Add rent, kuryente, tubig, internet — we'll remind you before they're due.", "Wala pang bills. Idagdag ang upa, kuryente, tubig, internet — paaalalahanan ka bago mag-due."], ["Recently paid", "Kamakailang binayaran"], ["Sales history", "Kasaysayan ng benta"], ["No sales here yet.", "Wala pang benta dito."], ["Showing the latest 300. Download everything from Reports.", "Ipinapakita ang huling 300. I-download lahat sa Ulat."], ["e.g. Yelo, tingi na asukal, piso-net", "hal. Yelo, tingi na asukal, piso-net"], ["For things you don't track in stock. It is added to this sale and to your sales totals, but no stock is deducted.", "Para sa hindi mo binibilang sa stock. Kasama sa benta at kabuuan, pero walang ibabawas sa stock."], ["Tap products to add them here.", "Pindutin ang produkto para idagdag dito."], ["Less", "Bawas"], ["Quantity", "Dami"], ["More", "Dagdag"], ["Total", "Kabuuan"], ["Payment method", "Paraan ng bayad"], ["Recorded only. Check your GCash app to confirm the payment arrived.", "Naitala lang. Tingnan sa GCash app kung pumasok ang bayad."], ["Sell", "Magbenta"], ["Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box.", "Pindutin ang produkto, i-scan gamit ang camera, o gumamit ng USB/Bluetooth barcode scanner sa search box."], ["Search product or type barcode", "Hanapin o i-type ang barcode"], ["Search products", "Hanapin ang produkto"], ["Categories", "Mga kategorya"], ["Current sale", "Kasalukuyang benta"], ["Discount", "Diskwento"], ["TOTAL", "KABUUAN"], ["Reason (required), e.g. wrong item", "Dahilan (kailangan), hal. maling item"], ["Stock comes back and any utang from it is removed. The sale stays in history marked as voided.", "Babalik ang stock at aalisin ang utang mula rito. Mananatili sa kasaysayan ang benta bilang voided."], ["Products & stock", "Paninda at stock"], ["Search name, category or barcode", "Hanapin ang pangalan, kategorya o barcode"], ["Photo", "Litrato"], ["e.g. Lucky Me Pancit Canton 60g", "hal. Lucky Me Pancit Canton 60g"], ["e.g. Noodles", "hal. Noodles"], ["Scan barcode", "I-scan ang barcode"], ["In stock", "May stock"], ["Price", "Presyo"], ["Cost", "Puhunan"], ["Stock history", "Kasaysayan ng stock"], ["When", "Kailan"], ["What", "Ano"], ["Note", "Tala"], ["No stock movements yet.", "Wala pang galaw ng stock."], ["Reason (required), e.g. punit ang sachet", "Dahilan (kailangan), hal. punit ang sachet"], ["Add a product to this delivery…", "Magdagdag ng produkto sa delivery…"], ["Record a delivery. Stock increases when you confirm.", "I-record ang delivery. Madadagdagan ang stock kapag kinumpirma mo."], ["e.g. Super8, Suy Sing", "hal. Super8, Suy Sing"], ["Not in your products yet:", "Wala pa sa mga produkto mo:"], ["Remove", "Alisin"], ["Add the products in this delivery.", "Idagdag ang mga produkto sa delivery na ito."], ["Total cost", "Kabuuang puhunan"], ["Add product photos", "Magdagdag ng litrato ng produkto"], ["Every product has a photo. 🎉", "May litrato na ang bawat produkto. 🎉"], ["Choose product…", "Pumili ng produkto…"], ["This records an 'expired' stock movement and closes this batch.", "Itatala ito bilang 'expired' na galaw ng stock at isasara ang batch."], ["Sell first what expires first.", "Unahing ibenta ang unang mag-e-expire."], ["Name", "Pangalan"], ["09171234567 (optional)", "09171234567 (opsyonal)"], ["No limit", "Walang limit"], ["Customers & utang", "Mga customer at utang"], ["Total utang outstanding", "Kabuuang utang na hindi pa bayad"], ["No customers yet. Add the people who buy on utang.", "Wala pang customer. Idagdag ang mga umuutang."], ["Utang balance", "Natitirang utang"], ["Utang history", "Kasaysayan ng utang"], ["No utang yet.", "Wala pang utang."], ["Opens your phone's own Messages app with this text — normal SMS rates from your load apply. Be polite: a friendly reminder keeps the suki.", "Bubuksan ang Messages app ng phone mo kasama ang text na ito — normal na singil sa SMS mula sa load. Maging magalang: ang mabait na paalala ay nagpapanatili ng suki."], ["No mobile number saved for this customer — copy the text and send it on Messenger, or add their number.", "Walang naka-save na numero para sa customer — kopyahin ang text at ipadala sa Messenger, o idagdag ang numero."], ["GCash ref (optional)", "GCash ref (opsyonal)"], ["Profit & loss", "Kita at lugi"], ["Reports", "Ulat"], ["Sales", "Benta"], ["Gross profit", "Kita bago gastos"], ["Net profit (after expenses)", "Net na kita (pagkatapos ng gastos)"], ["Utang given", "Naibigay na utang"], ["Stock value now", "Halaga ng stock ngayon"], ["Daily sales", "Benta kada araw"], ["Sales by product", "Benta kada produkto"], ["No sales in this period.", "Walang benta sa panahong ito."], ["Welcome to KWADERNO", "Maligayang pagdating sa KWADERNO"], ["Set up your store", "I-set up ang tindahan mo"], ["Your products, sales and utang are private to you. KELSON sees only store totals (sales, stock, utang) to support the network.", "Pribado sa iyo ang paninda, benta at utang mo. Kabuuan lang (benta, stock, utang) ang nakikita ng KELSON para suportahan ang network."], ["Not connected", "Hindi konektado"], ["Could not open that photo", "Hindi mabuksan ang litrato"], ["Reading barcode…", "Binabasa ang barcode…"], ["New barcode", "Bagong barcode"], ["Add as a new product", "Idagdag bilang bagong produkto"], ["Cancel", "Kanselahin"], ["Photo saved", "Na-save ang litrato"], ["Adding photos needs Editor access to this app", "Kailangan ng Editor access para magdagdag ng litrato"], ["Product photo", "Litrato ng produkto"], ["Upload a photo", "Mag-upload ng litrato"], ["Take a photo", "Kumuha ng litrato"], ["Choose from KELSON photo library", "Pumili sa KELSON photo library"], ["Remove photo", "Alisin ang litrato"], ["Photo removed", "Naalis ang litrato"], ["Saving photo…", "Sine-save ang litrato…"], ["🔥 Best sellers you don't have yet", "🔥 Mabenta na wala ka pa"], ["Add", "Idagdag"], ["Top sellers among stores in your barangay that you don't carry.", "Mabenta sa mga tindahan sa barangay mo na wala ka."], ["📦 Restock soon", "📦 I-restock agad"], ["Stock in", "Stock-in"], ["🏷️ Price check", "🏷️ Suriin ang presyo"], ["Edit price", "Baguhin ang presyo"], ["🐢 Slow sellers", "🐢 Matumal"], ["New sale", "Bagong benta"], ["Stock-in / receipt", "Stock-in / resibo"], ["Add product", "Magdagdag ng produkto"], ["Add bill", "Magdagdag ng bill"], ["Utang / payment", "Utang / bayad"], ["Shelf photo", "Litrato ng shelf"], ["Sell (POS)", "Magbenta (POS)"], ["Products", "Mga produkto"], ["Cash ledger", "Kaha"], ["Expenses", "Gastos"], ["Bills", "Bayarin"], ["All ›", "Lahat ›"], ["Enter the amount, e.g. 250", "Ilagay ang halaga, hal. 250"], ["Expense saved", "Na-save ang gastos"], ["Delete this expense?", "Burahin ang gastos na ito?"], ["Deleted", "Nabura"], ["Delete", "Burahin"], ["Amount ₱", "Halaga ₱"], ["Note (optional)", "Tala (opsyonal)"], ["Date", "Petsa"], ["Save expense", "I-save ang gastos"], ["This is today's opening cash (panimula)", "Ito ang panimulang cash ngayon"], ["Enter the amount", "Ilagay ang halaga"], ["Saved", "Na-save"], ["Enter the bill name", "Ilagay ang pangalan ng bill"], ["Pick the due date", "Piliin ang due date"], ["Enter a valid amount", "Maglagay ng tamang halaga"], ["Bill added", "Naidagdag ang bill"], ["New bill", "Bagong bill"], ["Repeats", "Umuulit"], ["Enter the amount paid", "Ilagay ang ibinayad"], ["Mark as paid", "Markahang bayad na"], ["Amount paid ₱", "Ibinayad ₱"], ["Bill removed", "Naalis ang bill"], ["Remove this bill", "Alisin ang bill"], ["+ Add bill", "+ Magdagdag ng bill"], ["Pay", "Bayaran"], ["Custom item", "Ibang item"], ["Item name", "Pangalan ng item"], ["Price ₱ (each)", "Presyo ₱ (bawat isa)"], ["Qty", "Dami"], ["Enter the price", "Ilagay ang presyo"], ["Enter the quantity", "Ilagay ang dami"], ["Added to the sale", "Naidagdag sa benta"], ["Add to sale", "Idagdag sa benta"], ["Discount (optional)", "Diskwento (opsyonal)"], ["Cash received (optional)", "Natanggap na cash (opsyonal)"], ["GCash reference no. (optional)", "GCash reference no. (opsyonal)"], ["+ New customer", "+ Bagong customer"], ["Scan", "I-scan"], ["Product", "Produkto"], ["No product with that name", "Walang produktong ganyan ang pangalan"], ["Add your first product", "Idagdag ang unang produkto"], ["Printing is not available here", "Hindi puwedeng mag-print dito"], ["Print receipt (Bluetooth / USB printer)", "I-print ang resibo (Bluetooth / USB printer)"], ["Void this sale", "I-void ang benta"], ["Give a short reason", "Magbigay ng maikling dahilan"], ["Sale voided — stock and utang restored", "Na-void ang benta — naibalik ang stock at utang"], ["Void sale", "I-void"], ["Void this sale?", "I-void ang benta?"], ["Add photos", "Magdagdag ng litrato"], ["+ Add product", "+ Magdagdag ng produkto"], ["Edit photo", "Baguhin ang litrato"], ["Enter the product name", "Ilagay ang pangalan ng produkto"], ["Enter a valid selling price, e.g. 16.00", "Maglagay ng tamang presyo, hal. 16.00"], ["Enter a valid cost", "Maglagay ng tamang puhunan"], ["That barcode is already used by another product", "Ginagamit na ng ibang produkto ang barcode na iyan"], ["Barcode (optional)", "Barcode (opsyonal)"], ["‹ Products", "‹ Mga produkto"], ["Adjust stock", "Ayusin ang stock"], ["Edit", "Baguhin"], ["Barcode saved", "Na-save ang barcode"], ["Add barcode", "Magdagdag ng barcode"], ["Track expiry", "Bantayan ang expiry"], ["Archived — history kept", "Na-archive — nakatago ang kasaysayan"], ["Archive", "I-archive"], ["Damaged / sira", "Sira"], ["Returned to supplier", "Ibinalik sa supplier"], ["Customer returned item", "Ibinalik ng customer"], ["Received stock (no receipt)", "Dumating na stock (walang resibo)"], ["Correct the count to…", "Itama ang bilang sa…"], ["Enter a quantity", "Ilagay ang dami"], ["No change to record", "Walang babaguhin"], ["Stock updated", "Na-update ang stock"], ["Record", "I-record"], ["What happened?", "Ano ang nangyari?"], ["Reason", "Dahilan"], ["Enter the name and selling price", "Ilagay ang pangalan at presyo"], ["Product added to this delivery", "Naidagdag ang produkto sa delivery"], ["Add product and include it", "Idagdag ang produkto at isama"], ["New product from receipt", "Bagong produkto mula sa resibo"], ["Product name", "Pangalan ng produkto"], ["Counted in", "Binibilang bilang"], ["Selling price ₱", "Presyo ₱"], ["Supplier (optional)", "Supplier (opsyonal)"], ["Receipt / invoice no. (optional)", "Resibo / invoice no. (opsyonal)"], ["Skip", "Laktawan"], ["Unit cost ₱", "Puhunan bawat isa ₱"], ["Pay supplier within (days)", "Bayaran ang supplier sa loob ng (araw)"], ["Confirm stock-in", "Kumpirmahin ang stock-in"], ["Upload", "Mag-upload"], ["Which product?", "Aling produkto?"], ["Photo of the product", "Litrato ng produkto"], ["Photo of the expiry date label", "Litrato ng expiry label"], ["Date and quantity", "Petsa at dami"], ["No date readable — type it", "Hindi mabasa ang petsa — i-type"], ["Expiry date (as printed)", "Expiry date (ayon sa nakalimbag)"], ["How many have this date? (optional)", "Ilan ang may ganitong petsa? (opsyonal)"], ["Enter the date printed on the label", "Ilagay ang petsa sa label"], ["Expiry saved", "Na-save ang expiry"], ["How many are you throwing away?", "Ilan ang itatapon?"], ["Remove from stock", "Alisin sa stock"], ["+ Track expiry", "+ Bantayan ang expiry"], ["Batch closed", "Sarado na ang batch"], ["Sold out", "Ubos na"], ["Dispose", "Itapon"], ["Track an item", "Magbantay ng item"], ["Enter the customer's name", "Ilagay ang pangalan ng customer"], ["Use a PH mobile number like 09171234567", "Gumamit ng PH mobile number tulad ng 09171234567"], ["Enter a valid limit", "Maglagay ng tamang limit"], ["Customer added", "Naidagdag ang customer"], ["Add customer", "Idagdag ang customer"], ["New customer", "Bagong customer"], ["Utang limit ₱ (optional)", "Limit ng utang ₱ (opsyonal)"], ["+ Add customer", "+ Magdagdag ng customer"], ["‹ Customers", "‹ Mga customer"], ["Record payment", "I-record ang bayad"], ["Remind", "Paalalahanan"], ["Utang reminder", "Paalala sa utang"], ["Open Messages", "Buksan ang Messages"], ["Copied", "Nakopya"], ["Select and copy the text", "Piliin at kopyahin ang text"], ["Copy text", "Kopyahin"], ["Less discounts", "Bawas na diskwento"], ["Net sales", "Net na benta"], ["Cost of goods sold", "Puhunan ng nabenta"], ["Total expenses", "Kabuuang gastos"], ["Net profit", "Net na kita"], ["Download CSV", "I-download (CSV)"], ["Download isn't available here", "Hindi puwedeng mag-download dito"], ["Download was not saved", "Hindi na-save ang download"], ["Enter your store name", "Ilagay ang pangalan ng tindahan"], ["Store ready!", "Handa na ang tindahan!"], ["Start using KWADERNO", "Simulan ang KWADERNO"], ["Stock purchases", "Paninda (stock)"], ["Electricity", "Kuryente"], ["Water", "Tubig"], ["Transport", "Pamasahe"], ["Wages", "Sahod"], ["Other", "Iba pa"], ["Cash (from drawer)", "Cash (mula sa kaha)"], ["Paid", "Bayad na"], ["Due today", "Due ngayon"], ["All", "Lahat"], ["Voided", "Na-void"], ["⭐ Best sellers", "⭐ Pinakamabenta"], ["Out of stock", "Ubos"], ["Cash from drawer", "Cash mula sa kaha"], ["Pay later (supplier credit)", "Bayaran mamaya (utang sa supplier)"], ["Personal money / not tracked", "Sariling pera / hindi itatala"], ["This week", "Ngayong linggo"], ["This year", "Ngayong taon"], ["Hide ₱", "Itago ₱"], ["Show ₱", "Ipakita ₱"], ["Amounts hidden", "Nakatago ang halaga"], ["Deducted from your cash ledger.", "Ibabawas sa kaha mo."], ["Recorded as paid by GCash.", "Itatala bilang bayad sa GCash."], ["Added to Bills so you're reminded before it's due.", "Idadagdag sa Bayarin para mapaalalahanan ka bago mag-due."], ["Stock is added; no money movement is recorded.", "Madadagdagan ang stock; walang itatalang galaw ng pera."], ["Cash in", "Cash in"], ["Cash out", "Cash out"], ["Money put into the drawer that is not a sale — opening cash, extra capital, change fund.", "Perang inilagay sa kaha na hindi benta — panimula, dagdag puhunan, pansukli."], ["Money taken out that is not a store expense — owner withdrawal, bank deposit.", "Perang kinuha na hindi gastos ng tindahan — kuha ng may-ari, deposito sa bangko."], ["Save cash in", "I-save ang cash in"], ["Save cash out", "I-save ang cash out"], ["Today", "Ngayon"], ["7 days", "7 araw"], ["30 days", "30 araw"], ["How I know", "Paano ko nalaman"], ["Steps", "Mga hakbang"], ["Did you mean:", "Ibig mo bang sabihin:"], ["Was this helpful?", "Nakatulong ba?"], ["👍 Yes", "👍 Oo"], ["👎 No", "👎 Hindi"], ["Thanks! This helps improve the answers.", "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot."], ["✨ Ask your device's AI", "✨ Itanong pa sa AI ng device mo"], ["Ask another", "Magtanong ulit"], ["Ask", "Itanong"], ["🧠 Ask Kwaderno", "🧠 Tanong kay Kwaderno"], ["Your store data + business guidance", "Datos ng tindahan + gabay sa negosyo"], ["Business questions only. Questions (names removed) are sent to KELSON to improve answers for every store.", "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan."], ["Ask: What sold best this week?", "Itanong: Ano ang pinakamabenta ko this week?"], ["Ask your device's AI", "Itanong sa AI ng device mo"], ["This is exactly what will be shared — you can edit it. Nothing is sent until you pick an app. Customer and store names are removed.", "Ito mismo ang ibabahagi — puwede mo itong i-edit. Walang ipapadala hangga't hindi ka pumipili ng app. Tinanggal na ang pangalan ng customer at ng tindahan."], ["Share to an AI app", "Ibahagi sa AI app (Share)"], ["Copy", "Kopyahin (Copy)"], ["In Share, pick the AI app on your phone or computer. If it isn't listed, copy and paste into your AI app.", "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app."], ["Copy and paste into the AI app or assistant on your computer.", "Kopyahin at i-paste sa AI app o assistant ng computer mo."], ["Copied — paste it into your AI app", "Nakopya — i-paste sa AI app mo"], ["Select the text and copy it", "Piliin ang text at kopyahin"], ["Share isn't available here — copied instead", "Hindi mabuksan ang Share dito — kinopya na lang"], ["What to restock", "Ano ang i-restock"], ["Best sellers", "Pinakamabenta"], ["Not selling", "Hindi nabebenta"], ["Profit", "Kita / tubo"], ["Sales trend", "Takbo ng benta"], ["Cash in the drawer", "Cash sa kaha"]]) { if (en !== tl) { toTl.set(en, tl); toEn.set(tl, en); } }
+    for (const [en, tl] of [["Change", "Sukli"]]) toEn.set(tl, en);
+    return { toTl, toEn, mixed: {"Benta ngayon · Sales today": ["Sales today", "Benta ngayon"], "Expenses · Gastos": ["Expenses", "Gastos"], "Cash ledger · Kaha": ["Cash ledger", "Kaha"], "Bills · Bayarin": ["Bills", "Bayarin"], "Salamat po! · Not an official receipt": ["Thank you! · Not an official receipt", "Salamat po! · Hindi opisyal na resibo"], "Paid with · Pinambayad": ["Paid with", "Pinambayad"], "Kita · Profit": ["Profit", "Kita"], "Gastos · Spent": ["Spent", "Gastos"], "Magbenta · Sell": ["Sell", "Magbenta"], "Upa · Rent": ["Rent", "Upa"], "Paninda (stock)": ["Stock purchases", "Paninda (stock)"], "Kuryente": ["Electricity", "Kuryente"], "Tubig": ["Water", "Tubig"], "Pamasahe": ["Transport", "Pamasahe"], "Sahod": ["Wages", "Sahod"], "Sukli": ["Change", "Sukli"]}, prefix: [["Use photo of ", "Gamitin ang litrato ng "], ["Upload photo of ", "Mag-upload ng litrato ng "], ["Take photo of ", "Kunan ng litrato ang "], ["Choose library photo for ", "Pumili ng litrato para sa "], ["Expense · ", "Gastos · "], ["Payment · ", "Bayad · "], ["Balance ", "Balanse "], ["End ", "Sa dulo "], ["Receipt: ", "Resibo: "], ["Some data could not load (", "Hindi na-load ang ilang datos ("], ["Question: ", "Tanong: "], ["📊 For your store: ", "📊 Para sa tindahan mo: "], ["Assumption: ", "Assumption: "], ["Confidence: ", "Kumpiyansa: "], ["Match: ", "Tugma: "]], regex: [["^(\\d+) sale\\(s\\)$", "$1 sale(s)", "$1 benta"], ["^(\\d+) item\\(s\\)$", "$1 item(s)", "$1 item"], ["^Due in (\\d+) day\\(s\\)$", "Due in $1 day(s)", "Due sa loob ng $1 araw"], ["^(\\d+) day\\(s\\) overdue$", "$1 day(s) overdue", "$1 araw nang lampas"], ["^(\\d+) customer\\(s\\)$", "$1 customer(s)", "$1 customer"]].map(([re, en, tl]) => [new RegExp(re), en, tl]) };
+  })();
+  function tx(str) {
+    if (typeof str !== "string" || !str || view === "admin") return str;
+    const m = I18N.mixed[str]; if (m) return lang === "en" ? m[0] : m[1];
+    const hit = (lang === "en" ? I18N.toEn : I18N.toTl).get(str); if (hit) return hit;
+    for (const [en, tl] of I18N.prefix) { const from = lang === "en" ? tl : en, to = lang === "en" ? en : tl; if (from !== to && str.startsWith(from)) return to + str.slice(from.length); }
+    if (lang === "tl") for (const [re, , tl] of I18N.regex) if (re.test(str)) return str.replace(re, tl);
+    return str;
+  }
   const h = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
       if (v == null || v === false) continue;
       if (k === "class") el.className = v;
       else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-      else if (k === "text") el.textContent = v;
-      else el.setAttribute(k, v === true ? "" : v);
+      else if (k === "text") el.textContent = tx(v);
+      else el.setAttribute(k, v === true ? "" : (k === "placeholder" || k === "aria-label" || k === "title") ? tx(v) : v);
     }
-    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(tx(String(kid))));
     return el;
   };
   const peso = (c) => "₱" + ((c || 0) / 100).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -349,7 +373,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const todayKey = () => dayKey(new Date().toISOString());
   const when = (iso) => new Date(iso).toLocaleString("en-PH", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   let toastT;
-  const toast = (msg) => { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2600); };
+  const toast = (msg) => { const t = $("#toast"); t.textContent = tx(msg); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2600); };
 
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
@@ -476,7 +500,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- dialog ----------
   const dlg = $("#dlg");
   dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest("[data-close]")) dlg.close(); });
-  function openDialog(title, body) { $("#dlgTitle").textContent = title; const b = $("#dlgBody"); b.replaceChildren(body); dlg.showModal(); }
+  function openDialog(title, body) { $("#dlgTitle").textContent = tx(title); const b = $("#dlgBody"); b.replaceChildren(body); dlg.showModal(); }
 
   // ---------- shell ----------
   function navLinks(container, withIcons) {
@@ -489,8 +513,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const p = document.createElementNS("http://www.w3.org/2000/svg", "path"); p.setAttribute("d", d); s.append(p); return s;
   }
 
+  const langBtn = $("#langToggle");
+  langBtn.addEventListener("click", () => { lang = lang === "en" ? "tl" : "en"; try { localStorage.setItem("kw-lang", lang); } catch { /* ignore */ } lastRoute = ""; render(); });
   function render() {
     applyLayout();
+    document.documentElement.lang = lang === "en" ? "en" : "fil";
+    langBtn.replaceChildren(...[["tl", "TL"], ["en", "EN"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
+    langBtn.title = lang === "en" ? "Switch to Tagalog" : "Lumipat sa English";
     document.documentElement.classList.toggle("admin-mode", view === "admin");
     $("#storeName").textContent = view === "admin" ? "KELSON Super Admin" : S.store.name;
     navLinks($("#tabs"), false); navLinks($("#bottom"), true);
@@ -788,28 +817,29 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // When it cannot tell what is being asked, it says so and offers examples instead of guessing.
   const LEAD = 3, COVER = 7; // restock: days an order takes to arrive, and days of stock to keep on hand
   const STOP = new Set(["the", "and", "ng", "sa", "ang", "mga", "for", "per", "pc", "pcs", "piece", "pieces", "pack", "with", "na", "ba", "ko", "mo", "of", "a", "x"]);
-  const CONF = { high: ["ok", "Mataas"], medium: ["low", "Katamtaman"], low: ["out", "Mababa"] };
-  const ASK_EXAMPLES = ["Ano ang dapat kong i-restock?", "Paano mapapalaki ang benta ko?", "Kumita ba ako this month?", "Aling produkto ang hindi nabebenta?", "Paano maningil ng utang?", "Bumaba ba ang benta ko this week?"];
+  const CONF = { high: ["ok", "Mataas", "High"], medium: ["low", "Katamtaman", "Medium"], low: ["out", "Mababa", "Low"] };
+  const askExamples = () => L(["Ano ang dapat kong i-restock?", "Paano mapapalaki ang benta ko?", "Kumita ba ako this month?", "Aling produkto ang hindi nabebenta?", "Paano maningil ng utang?", "Bumaba ba ang benta ko this week?"],
+    ["What should I restock?", "How can I grow my sales?", "Did I make a profit this month?", "Which products are not selling?", "How do I collect utang?", "Did my sales drop this week?"]);
   const INTENTS = [
-    { id: "restock", label: "Ano ang i-restock", words: ["restock", "reorder", "i order", "mag order", "bilhin", "dapat bilhin", "kulang", "ubos", "stock up", "what to buy"] },
-    { id: "best", label: "Pinakamabenta", words: ["best seller", "bestseller", "best selling", "top seller", "top product", "pinakamabenta", "pinaka benta", "mabenta"] },
-    { id: "slow", label: "Hindi nabebenta", words: ["slow", "hindi nabebenta", "hindi bumibili", "walang benta", "dead stock", "stop buying", "itigil", "wag na bilhin", "hindi na dapat", "hindi gumagalaw"] },
-    { id: "profit", label: "Kita / tubo", words: ["profit", "kumita", "kita", "tubo", "lugi", "net", "earning", "income"] },
+    { id: "restock", label: "Ano ang i-restock", words: ["restock", "reorder", "i order", "mag order", "bilhin", "dapat bilhin", "kulang", "ubos", "stock up", "what to buy", "what to restock", "run out", "running low", "reorder"] },
+    { id: "best", label: "Pinakamabenta", words: ["best seller", "bestseller", "best selling", "top seller", "top product", "pinakamabenta", "pinaka benta", "mabenta", "best", "top selling", "most sold", "sells most", "sold best"] },
+    { id: "slow", label: "Hindi nabebenta", words: ["slow", "hindi nabebenta", "hindi bumibili", "walang benta", "dead stock", "stop buying", "itigil", "wag na bilhin", "hindi na dapat", "hindi gumagalaw", "not selling", "slow moving", "does not sell", "unsold"] },
+    { id: "profit", label: "Kita / tubo", words: ["profit", "kumita", "kita", "tubo", "lugi", "net", "earning", "income", "make money", "made a profit", "earn", "margin"] },
     { id: "sales", label: "Benta", words: ["benta", "sales", "nabenta", "revenue", "sold"] },
-    { id: "trend", label: "Takbo ng benta", words: ["trend", "bumaba ba", "tumaas ba", "bumaba", "tumaas", "tumataas", "bumababa", "lumalaki", "pababa", "pataas", "compare"] },
-    { id: "utang", label: "Utang", words: ["utang", "owe", "owed", "hindi pa bayad", "nangutang", "singil", "may utang"] },
-    { id: "bills", label: "Bills", words: ["bill", "bills", "bayarin", "due", "babayaran", "kuryente", "meralco", "tubig", "renta", "upa", "maynilad"] },
-    { id: "expiry", label: "Expiry", words: ["expire", "expiry", "expired", "mag expire", "nag expire", "petsa", "sira"] },
+    { id: "trend", label: "Takbo ng benta", words: ["trend", "bumaba ba", "tumaas ba", "bumaba", "tumaas", "tumataas", "bumababa", "lumalaki", "pababa", "pataas", "compare", "drop", "dropped", "decrease", "increase", "going down", "going up"] },
+    { id: "utang", label: "Utang", words: ["utang", "owe", "owed", "hindi pa bayad", "nangutang", "singil", "may utang", "debt", "debts", "collect"] },
+    { id: "bills", label: "Bills", words: ["bill", "bills", "bayarin", "due", "babayaran", "kuryente", "meralco", "tubig", "renta", "upa", "maynilad", "electricity", "water", "rent"] },
+    { id: "expiry", label: "Expiry", words: ["expire", "expiry", "expired", "mag expire", "nag expire", "petsa", "sira", "expiring"] },
     { id: "cash", label: "Cash sa kaha", words: ["cash", "kaha", "drawer", "pera sa kaha", "sukli"] },
-    { id: "expenses", label: "Gastos", words: ["gastos", "gastusin", "expense", "expenses", "nagastos", "spent"] },
+    { id: "expenses", label: "Gastos", words: ["gastos", "gastusin", "expense", "expenses", "nagastos", "spent", "spending", "costs"] },
   ];
   const NEEDS_SALES = new Set(["sales", "profit", "trend", "restock", "best", "slow"]);
   const PERIODS = [[1, ["ngayon", "ngayong", "today"]], [7, ["linggo", "week", "7 days", "7 araw"]], [30, ["buwan", "month", "30 days", "30 araw"]], [365, ["taon", "year"]]];
   const pctTxt = (x) => (x > 0 ? "+" : "") + Math.round(x * 100) + "%";
-  const plabel = (n) => (n === 1 ? "ngayon" : n === 365 ? "ngayong taon" : n === 7 ? "nakaraang 7 araw" : n === 30 ? "nakaraang 30 araw" : `nakaraang ${n} araw`);
-  const pin = (n) => (n === 1 ? "ngayon" : n === 365 ? "ngayong taon" : "sa " + plabel(n));
+  const plabel = (n) => (n === 1 ? L("ngayon", "today") : n === 365 ? L("ngayong taon", "this year") : L(`nakaraang ${n} araw`, `the last ${n} days`));
+  const pin = (n) => (n === 1 || n === 365 ? plabel(n) : L("sa ", "in ") + plabel(n));
   // Lookups of saved records are exact; their only uncertainty is whether everything was recorded.
-  const RECORD_BASIS = { utang: ["high", "Direktang kuwenta mula sa naitalang utang at bayad, hindi tantiya."], bills: ["high", "Direktang listahan ng naitalang bills."], expiry: ["high", "Direktang listahan ng naitalang expiry date."], expenses: ["high", "Direktang kabuuan ng naitalang gastos."], cash: ["medium", "Tama lang ito kung naitala ang panimulang cash at lahat ng cash na galaw."] };
+  const RECORD_BASIS = { utang: ["high", "Direktang kuwenta mula sa naitalang utang at bayad, hindi tantiya.", "Counted directly from recorded utang and payments, not estimated."], bills: ["high", "Direktang listahan ng naitalang bills.", "A direct list of recorded bills."], expiry: ["high", "Direktang listahan ng naitalang expiry date.", "A direct list of recorded expiry dates."], expenses: ["high", "Direktang kabuuan ng naitalang gastos.", "A direct total of recorded expenses."], cash: ["medium", "Tama lang ito kung naitala ang panimulang cash at lahat ng cash na galaw.", "Correct only if opening cash and every cash movement were recorded."] };
   const fold = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
   const toks = (t) => fold(t).split(" ").filter(Boolean);
   function lev(x, y) { // edit distance, to forgive a one-letter typo ("restok" = "restock")
@@ -984,6 +1014,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       bullets: ["Tungkol sa datos mo: benta, kita, restock, pinakamabenta, utang, bills, expiry, cash at gastos.", "Tungkol sa isang produkto: i-type ang pangalan nito.", "Payo sa negosyo: presyo, supplier, puhunan, utang, display, promo, permit at iba pa.", "Pang-negosyo lang ang tanong dito."],
       steps: ["Subukan: “Paano mapapalaki ang benta ko?”"] },
   ];
+  const KB_EN = {"grow-sales": {"q": "How can I grow my store's sales?", "bullets": ["Always keep your 10 best sellers in stock. An empty shelf is a sale that goes to the store next door.", "Add products that sell well in other stores (see Smart tips).", "Put best sellers and impulse buys (candy, cigarettes, soft drinks) at the front, near the counter.", "Make bundles, e.g. coffee + pandesal or noodles + egg.", "Take care of regulars: correct change, a clean store, and remember their names."], "steps": ["Ask here: “What should I restock?” and buy what is on the list.", "Pick one new product from Smart tips and try it in a small quantity."]}, "pricing": {"q": "How do I price my products?", "bullets": ["Start with the cost per piece: price of the case or pack ÷ pieces inside.", "Example only: a smaller markup on fast sellers, a bigger one on tingi and slow items.", "Compare with the usual price in other stores. Type the product name here to see it.", "Round to easy change (₱8 instead of ₱7.85).", "Remember: a 20% markup is only a 16.7% margin on the price."], "steps": ["Make sure every product has a cost in the app.", "Check your 5 best sellers: is their markup right?"]}, "markup-margin": {"q": "What is the difference between markup and margin?", "bullets": ["Markup = (price − cost) ÷ cost.", "Margin = (price − cost) ÷ price.", "Example: cost ₱10, price ₱12 → markup 20%, margin 16.7%.", "For a 20% margin: price = cost ÷ 0.80 (₱10 → ₱12.50)."], "steps": ["Use margin when checking whether your profit is enough."]}, "cash-missing": {"q": "Why do I have sales but no money?", "bullets": ["Unpaid utang: it is a sale, but the money hasn't come in.", "Money spent on new stock: it is in your products, not lost.", "Personal money taken from the drawer and not recorded.", "Expenses like electricity, transport and load.", "Missing items or wrong change."], "steps": ["Check the Cash ledger and your total utang.", "Record every withdrawal from the drawer as Cash out with a note."]}, "separate-money": {"q": "How do I separate store money from personal money?", "bullets": ["Pay yourself a fixed weekly “salary” instead of taking money whenever needed.", "Record every withdrawal for the household as Cash out.", "If you take products for the house, record them too (as a sale or cash out).", "Use a separate container or GCash account for the store."], "steps": ["Decide your weekly salary based on the net profit in Reports."]}, "restock-qty": {"q": "How much should I buy when I restock?", "bullets": ["Formula: daily sales × (days until delivery + buffer days).", "Example: 4 a day × (3 + 7) = 40, minus the stock you still have.", "Don't overstock slow products; it ties up your capital.", "Buy expiring items more often in smaller amounts."], "steps": ["Ask here: “What should I restock?”. The app calculates this for you."]}, "dead-stock": {"q": "What should I do with products that don't sell?", "bullets": ["Move them to the front or to eye level.", "Bundle them with a best seller.", "Lower the price a little to recover the cost.", "Don't buy more until they are gone.", "Ask the supplier if you can return or swap them."], "steps": ["See the list under “Which products are not selling?”."]}, "expiry": {"q": "How do I avoid expired products?", "bullets": ["FIFO: old stock in front, new stock behind.", "Record the expiry date at every stock-in.", "Check the list of items about to expire every week.", "Buy fewer of the slow items that expire.", "Never sell expired items; remove them from the shelf right away."], "steps": ["Open Expiry on Home and start with the nearest dates."]}, "utang-policy": {"q": "How do I manage customers' utang?", "bullets": ["Set a limit for each customer.", "Record every utang and payment in the app.", "Agree on a payment day, e.g. payday.", "Don't add more utang once someone is over the limit.", "Keep utang a small part of your sales."], "steps": ["Set limits for regular customers in Utang.", "Use Remind for a polite reminder."]}, "utang-collect": {"q": "How do I collect utang without a fight?", "bullets": ["Talk privately and calmly.", "Show the record so the amount is clear.", "Offer installments if they are struggling.", "Remind them on payday.", "Pause new utang until they pay."], "steps": ["Start with the largest and oldest utang."]}, "supplier": {"q": "Where and how can I buy stock cheaper?", "bullets": ["Compare prices from at least two suppliers.", "Buy fast sellers by the case or box.", "Look for a distributor or agent who delivers, to save on transport.", "Record the cost at every stock-in to see who is cheaper."], "steps": ["On your next buying trip, compare prices of your 5 best sellers."]}, "capital": {"q": "How can I increase my capital?", "bullets": ["Put part of the profit back into the store every week.", "Reduce slow stock and collect utang.", "If you borrow, use legitimate lenders: banks, cooperatives or microfinance. Avoid 5-6.", "Check first that your net profit can cover the payments."], "steps": ["Check your net profit this month in Reports."]}, "cut-expenses": {"q": "How do I cut store expenses?", "bullets": ["Find your biggest expense first.", "Electricity: fix the fridge or freezer setting and door seal; use LED bulbs.", "Transport: combine buying trips.", "Record every expense to see your true profit."], "steps": ["Ask here: “What are my expenses this month?”."]}, "records": {"q": "Why should I record every sale?", "bullets": ["To know your real profit, not a guess.", "To see what sells and what doesn't.", "To catch missing items or money.", "It helps when applying for a loan because you have proof of income."], "steps": ["Use Sell for every sale, even small ones."]}, "shrinkage": {"q": "How do I prevent missing stock or money?", "bullets": ["Count the drawer every day and compare with the Cash ledger.", "Count expensive items weekly (cigarettes, milk, liquor).", "Only one person handles the drawer per shift.", "Keep expensive small items behind the counter."], "steps": ["Count the drawer before closing tonight."]}, "display": {"q": "How should I arrange my store display?", "bullets": ["Best sellers and impulse buys at the front, near the counter.", "Group by type: drinks, canned goods, soap, snacks.", "Make prices easy to see.", "Keep the store clean and bright.", "Put new products at eye level."], "steps": ["This week, move your 5 best sellers to the most visible spot."]}, "new-products": {"q": "What new products should I add?", "bullets": ["Check Smart tips: products that sell well in other stores.", "Ask your regulars what they look for.", "Try a small quantity first.", "Check sales after 2 weeks before buying again."], "steps": ["Open Smart tips and pick one."]}, "services": {"q": "What services can I add to earn more?", "bullets": ["E-load and bills payment.", "Cash-in and cash-out as a registered e-wallet agent; follow their rules.", "Ice and cold drinks if you have a freezer.", "Keep service money separate from product money."], "steps": ["Find out which services your regulars ask for most."]}, "gcash-safe": {"q": "How do I accept GCash safely?", "bullets": ["Check your own GCash app that the money arrived before handing over the goods.", "Don't trust a screenshot alone.", "Record the reference number in the app.", "Never share your OTP or PIN with anyone."], "steps": ["Make it a habit to open your GCash app before handing over items."]}, "loyalty": {"q": "How do I keep customers coming back?", "bullets": ["Greet them and remember their names.", "Correct change and honest measures.", "Always stock their favorites.", "A small gift or extra on special occasions.", "Quick service even when busy."], "steps": ["This week, ask 3 regulars what they want you to add."]}, "competition": {"q": "A new store opened near me. What should I do?", "bullets": ["Find out what they don't have, and be strong there.", "Don't rush to cut prices; service and stock win.", "Stay open longer if you can.", "Offer delivery to neighbors."], "steps": ["Check if your sales dropped: ask “Did my sales drop this week?”."]}, "hours": {"q": "What time should my store open and close?", "bullets": ["Check Sales history for your busiest hours.", "Early morning for breakfast and coffee; evening for people coming home.", "Keep a consistent schedule so regulars know."], "steps": ["Track your sales times for a week before changing the schedule."]}, "raise-price": {"q": "How do I raise prices without losing regulars?", "bullets": ["Raise prices when your cost goes up, and say so honestly.", "Raise gradually, not all at once.", "Start with products people rarely price-compare.", "Stay reasonable compared with other stores."], "steps": ["Compare your price with the usual price in other stores before raising it."]}, "promos": {"q": "What promos work for a sari-sari store?", "bullets": ["Bundle: two products at a lower price.", "Buy more, save: e.g. 3 pieces at a special price.", "Stamp card for regulars: a free small item after several purchases.", "Make sure you still profit after the discount."], "steps": ["This week, try a bundle of a slow item and a best seller."]}, "tingi": {"q": "Is tingi or repacking worth it?", "bullets": ["Higher profit, but it takes time and causes some waste.", "Every repack should be clean and labeled.", "Measure the weight or size correctly.", "Check your local rules for repacking food."], "steps": ["Calculate the profit per pack, including bags and time."]}, "stock-count": {"q": "How often should I count my stock?", "bullets": ["Weekly for expensive and fast-moving items.", "Monthly for the whole store.", "Compare the count with the app and correct it with a reason."], "steps": ["This week, count your 10 most expensive products."]}, "reorder-level": {"q": "How do I set a reorder level?", "bullets": ["Reorder level = daily sales × days until delivery + a small reserve.", "Example: 3 a day × 3 days + 3 = 12.", "Higher for best sellers, lower for slow items."], "steps": ["Set the reorder level of your 10 best sellers in Stock."]}, "pnl": {"q": "How do I know if my store is making a profit?", "bullets": ["Net profit = sales − cost of goods sold − expenses.", "Buying stock is not an expense; it becomes the cost of what you sell.", "Check monthly, not just daily.", "Every product needs a cost for the numbers to be right."], "steps": ["Open Profit & loss in Reports."]}, "cash-flow": {"q": "How do I avoid running out of money for restocking?", "bullets": ["Set aside part of each day's sales for restocking.", "Limit customers' utang.", "Don't overstock slow items.", "Use “Pay later” with suppliers if agreed, and pay on time."], "steps": ["Set aside a fixed amount from tomorrow's sales."]}, "permits": {"q": "What permits does a sari-sari store need?", "bullets": ["Usually: a business name from DTI, a barangay clearance, a business permit from the municipality or city, and BIR registration.", "Rules differ in each LGU.", "There are programs for small businesses; ask a DTI Negosyo Center."], "steps": ["Visit or call your municipality or a DTI Negosyo Center for the exact list."]}, "taxes": {"q": "Do I need to pay taxes?", "bullets": ["A registered business has obligations with the BIR.", "There are simplified options for small businesses.", "Ask the BIR (Revenue District Office) or an accountant about your situation.", "Keep records of sales and expenses; the app's Reports help."], "steps": ["Ask your BIR RDO what applies to your store."]}, "staff": {"q": "How do I manage a helper or staff at the store?", "bullets": ["Clear duties and hours.", "Count the drawer at the start and end of every shift.", "Teach them to record every sale in the app.", "Give a small incentive when the count is right."], "steps": ["Count the drawer at every change of shift."]}, "seasons": {"q": "How do I prepare for payday, school opening and Christmas?", "bullets": ["Add stock of best sellers before payday (15th and end of month).", "School opening: school supplies and baon.", "December: noche buena items and gifts.", "Don't overdo it; still base it on how fast items sell."], "steps": ["Check last payday's sales in Sales history."]}, "loan": {"q": "How do I get a loan for my store?", "bullets": ["Prepare records of sales and profit; the app's Reports help.", "Compare interest and the total you will repay.", "Only legitimate lenders: banks, cooperatives, microfinance.", "Borrow for stock that sells, not for personal spending."], "steps": ["Download the last 3 months of Reports as proof of sales."]}, "delivery": {"q": "How do I sell online or deliver to neighbors?", "bullets": ["Create a neighborhood group chat for orders.", "Send a list of available products.", "Set a minimum order or a small delivery fee.", "Make sure payment arrived before sending."], "steps": ["Start with 10 regulars who live nearby."]}, "app-help": {"q": "What can I ask here?", "bullets": ["About your data: sales, profit, restock, best sellers, utang, bills, expiry, cash and expenses.", "About one product: type its name.", "Business advice: pricing, suppliers, capital, utang, display, promos, permits and more.", "Business questions only."], "steps": ["Try: “How can I grow my sales?”"]}};
+  // The answer text in the chosen language; English falls back to Tagalog when an admin answer has no English yet.
+  const kbText = (e) => lang === "en" && e.en?.q ? e.en : e;
   const KB_STOP = new Set([...STOP, "ano", "paano", "pano", "bakit", "saan", "kailan", "sino", "magkano", "gaano", "ilan", "ako", "kung", "para", "nang", "po", "naman", "lang", "kaya", "yung", "iyong", "ito", "iyan", "may", "ay", "din", "rin", "dapat", "pwede", "puwede", "gagawin", "how", "what", "why", "when", "where", "which", "can", "does", "you", "your", "the", "are", "kami", "tayo", "natin", "namin", "akin", "aking", "kong", "kang", "nga", "daw", "raw", "pala", "talaga", "yun", "dito", "doon", "nito", "nyo", "ninyo", "sila", "nila", "ko", "ba", "mga", "ang", "sa", "ng", "na", "at", "o", "is", "to", "my", "and", "for", "this", "that", "with"]);
   // Light Tagalog stemmer: "nabebenta" / "magbenta" → "benta", "mapapalaki" / "palakihin" / "lumaki" → "laki".
   function stem(w) {
@@ -1000,7 +1033,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   function kbAll() {
     const db = new Map((S.kbDb || []).map((e) => [e.id, e])), out = [];
-    for (const e of STARTER_KB) { const o = db.get(e.id); if (o) { if (o.status !== "hidden") out.push({ ...e, ...o, source: "admin" }); db.delete(e.id); } else out.push({ ...e, source: "starter" }); }
+    for (const e0 of STARTER_KB) { const e = { ...e0, en: KB_EN[e0.id] }, o = db.get(e.id); if (o) { if (o.status !== "hidden") out.push({ ...e, ...o, en: o.en?.q ? o.en : e.en, source: "admin" }); db.delete(e.id); } else out.push({ ...e, source: "starter" }); }
     for (const o of db.values()) if (o.status !== "hidden" && o.q && Array.isArray(o.bullets)) out.push({ ...o, source: "admin" });
     return out;
   }
@@ -1010,7 +1043,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const docs = [], df = new Map();
     for (const e of kbAll()) {
       const words = new Set();
-      for (const w of toks([e.q, [].concat(e.kw || []).join(" "), [].concat(e.alts || []).join(" ")].join(" "))) if (w.length >= 3 && !KB_STOP.has(w)) { words.add(w); words.add("~" + stem(w)); }
+      for (const w of toks([e.q, e.en?.q || "", [].concat(e.kw || []).join(" "), [].concat(e.alts || []).join(" ")].join(" "))) if (w.length >= 3 && !KB_STOP.has(w)) { words.add(w); words.add("~" + stem(w)); }
       docs.push({ e, words }); for (const w of words) df.set(w, (df.get(w) || 0) + 1);
     }
     kbIdx = { docs, df, N: docs.length, vocab: [...df.keys()].filter((w) => !w.startsWith("~") && w.length >= 5) };
@@ -1053,27 +1086,27 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const long = [...B].filter((w) => !w.startsWith("~") && w.length >= 5);
     return qt.some((t) => t.length >= 5 && long.some((w) => Math.abs(w.length - t.length) <= 1 && lev(w, t) <= 1)) ? null : "unrelated";
   }
-  const HOWTO = /\b(paano|pano|how|bakit|why|tips?|payo|advice|paraan|ideas?|ideya|gagawin|dapat ba|should|tulong|help|suggest|mungkahi|diskarte|strategy)\b/;
-  const noSales = (title) => ({ title, lines: ["Wala pang naitalang benta sa app, kaya hindi ako makapagbigay ng maaasahang sagot."], evidence: [], assumptions: [], action: "Mag-record muna ng benta sa Sell.", confidence: "low" });
+  const HOWTO = /\b(paano|pano|how|bakit|why|tips?|payo|advice|paraan|ideas?|ideya|gagawin|dapat ba|tulong|help|suggest|mungkahi|diskarte|strategy|ways? to)\b/;
+  const noSales = (title) => ({ title, lines: [L("Wala pang naitalang benta sa app, kaya hindi ako makapagbigay ng maaasahang sagot.", "No sales are recorded in the app yet, so I can't give a reliable answer.")], evidence: [], assumptions: [], action: L("Mag-record muna ng benta sa Sell.", "Record sales in Sell first."), confidence: "low" });
   const sumTotal = (arr) => arr.reduce((x, y) => x + y.total, 0);
   // Each answer returns: title, lines (the answer), evidence, assumptions, action, and optionally confidence.
   const ANSWERS = {
     sales(c) {
       const t = windowSales(1), w7 = windowSales(7), w30 = windowSales(30), avg7 = sumTotal(w7) / 7;
-      return { title: "Benta", lines: [`Ngayon: ${peso(sumTotal(t))} (${t.length} benta)`, `Nakaraang 7 araw: ${peso(sumTotal(w7))}, karaniwang ${peso(avg7)} kada araw`, `Nakaraang 30 araw: ${peso(sumTotal(w30))} (${w30.length} benta)`],
-        evidence: [`Galing sa ${w30.length} benta na naitala sa nakaraang 30 araw.`], assumptions: ["Hindi kasama ang mga benta na na-void."],
-        action: sumTotal(t) === 0 && avg7 > 0 ? `Wala pang benta ngayon. Karaniwan ay ${peso(avg7)} kada araw. Tingnan kung nai-record ang mga benta.` : null };
+      return { title: L("Benta", "Sales"), lines: [L(`Ngayon: ${peso(sumTotal(t))} (${t.length} benta)`, `Today: ${peso(sumTotal(t))} (${t.length} sales)`), L(`Nakaraang 7 araw: ${peso(sumTotal(w7))}, karaniwang ${peso(avg7)} kada araw`, `Last 7 days: ${peso(sumTotal(w7))}, usually ${peso(avg7)} a day`), L(`Nakaraang 30 araw: ${peso(sumTotal(w30))} (${w30.length} benta)`, `Last 30 days: ${peso(sumTotal(w30))} (${w30.length} sales)`)],
+        evidence: [L(`Galing sa ${w30.length} benta na naitala sa nakaraang 30 araw.`, `From ${w30.length} sales recorded in the last 30 days.`)], assumptions: [L("Hindi kasama ang mga benta na na-void.", "Voided sales are not counted.")],
+        action: sumTotal(t) === 0 && avg7 > 0 ? L(`Wala pang benta ngayon. Karaniwan ay ${peso(avg7)} kada araw. Tingnan kung nai-record ang mga benta.`, `No sales yet today. You usually make ${peso(avg7)} a day. Check that sales are being recorded.`) : null };
     },
     profit(c) {
       const n = c.period || 30, ws = windowSales(n), rev = sumTotal(ws), cogs = ws.reduce((x, y) => x + saleCost(y), 0);
       const gross = rev - cogs, exp = expensesOn(periodFrom(n)), spent = exp.reduce((x, e) => x + e.amount, 0), net = gross - spent, margin = rev ? gross / rev : 0;
       const cats = new Map(); for (const e of exp) cats.set(e.category, (cats.get(e.category) || 0) + e.amount);
       const top = [...cats.entries()].sort((x, y) => y[1] - x[1])[0];
-      return { title: `Kita ${pin(n)}`,
-        lines: [`Benta: ${peso(rev)}`, `Tubo bago gastos: ${peso(gross)} (${Math.round(margin * 100)}%)`, `Gastos: −${peso(spent)}`, `${net < 0 ? "Lugi" : "Kita"}: ${speso(net)}`],
-        evidence: [`${ws.length} benta at ${exp.length} gastos ang binilang.`], assumptions: ["Ang bayad sa stock ay nasa puhunan ng nabentang paninda, hindi sa gastos.", "Tubo = benta − puhunan ng nabentang paninda."],
-        action: net < 0 ? (top && spent > gross * 0.5 ? `Pinakamalaki ang gastos sa ${expCat(top[0])} (${peso(top[1])}). Unahin itong bawasan.` : "Lugi sa panahong ito. Suriin ang presyo ng pinakamabenta at ang margin nito.")
-          : rev && margin < 0.1 ? `Mababa ang margin (${Math.round(margin * 100)}%). Suriin ang presyo ng mga pinakamabenta.` : null,
+      return { title: L(`Kita ${pin(n)}`, `Profit ${pin(n)}`),
+        lines: [L(`Benta: ${peso(rev)}`, `Sales: ${peso(rev)}`), L(`Tubo bago gastos: ${peso(gross)} (${Math.round(margin * 100)}%)`, `Gross profit: ${peso(gross)} (${Math.round(margin * 100)}%)`), L(`Gastos: −${peso(spent)}`, `Expenses: −${peso(spent)}`), `${net < 0 ? L("Lugi", "Loss") : L("Kita", "Net profit")}: ${speso(net)}`],
+        evidence: [L(`${ws.length} benta at ${exp.length} gastos ang binilang.`, `${ws.length} sales and ${exp.length} expenses counted.`)], assumptions: [L("Ang bayad sa stock ay nasa puhunan ng nabentang paninda, hindi sa gastos.", "Stock purchases count in the cost of goods sold, not in expenses."), L("Tubo = benta − puhunan ng nabentang paninda.", "Gross profit = sales − cost of goods sold.")],
+        action: net < 0 ? (top && spent > gross * 0.5 ? L(`Pinakamalaki ang gastos sa ${tx(expCat(top[0]))} (${peso(top[1])}). Unahin itong bawasan.`, `Your biggest expense is ${tx(expCat(top[0]))} (${peso(top[1])}). Cut that first.`) : L("Lugi sa panahong ito. Suriin ang presyo ng pinakamabenta at ang margin nito.", "A loss in this period. Check the prices and margins of your best sellers."))
+          : rev && margin < 0.1 ? L(`Mababa ang margin (${Math.round(margin * 100)}%). Suriin ang presyo ng mga pinakamabenta.`, `Your margin is low (${Math.round(margin * 100)}%). Check the prices of your best sellers.`) : null,
         confidence: c.Q.costKnown < 0.6 ? "low" : undefined };
     },
     trend(c) {
@@ -1081,14 +1114,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const a = aggregate(7), b = aggregate(7, 7);
       const moves = [...new Set([...a.keys(), ...b.keys()])].map((k) => ({ name: (a.get(k) || b.get(k)).name, d: (a.get(k)?.qty || 0) - (b.get(k)?.qty || 0), custom: (a.get(k) || b.get(k)).custom })).filter((x) => !x.custom);
       const falling = moves.filter((x) => x.d < 0).sort((x, y) => x.d - y.d).slice(0, 3), rising = moves.filter((x) => x.d > 0).sort((x, y) => y.d - x.d).slice(0, 3);
-      const lines = [`Huling 7 araw: ${peso(rc)}`, `Nakaraang 7 araw: ${peso(rp)}`, ch == null ? "Walang benta noong nakaraang linggo, kaya hindi pa makita ang takbo." : `Pagbabago: ${pctTxt(ch)}`];
-      if (falling.length) lines.push(`Bumaba: ${falling.map((x) => `${x.name} (${qtyFmt(x.d)})`).join(", ")}`);
-      if (rising.length) lines.push(`Tumaas: ${rising.map((x) => `${x.name} (+${qtyFmt(x.d)})`).join(", ")}`);
+      const lines = [L(`Huling 7 araw: ${peso(rc)}`, `Last 7 days: ${peso(rc)}`), L(`Nakaraang 7 araw: ${peso(rp)}`, `The 7 days before: ${peso(rp)}`), ch == null ? L("Walang benta noong nakaraang linggo, kaya hindi pa makita ang takbo.", "No sales the week before, so there is no trend yet.") : L(`Pagbabago: ${pctTxt(ch)}`, `Change: ${pctTxt(ch)}`)];
+      if (falling.length) lines.push(L("Bumaba: ", "Down: ") + falling.map((x) => `${x.name} (${qtyFmt(x.d)})`).join(", "));
+      if (rising.length) lines.push(L("Tumaas: ", "Up: ") + rising.map((x) => `${x.name} (+${qtyFmt(x.d)})`).join(", "));
       const small = Math.max(rc, rp) < 500;
-      return { title: "Takbo ng benta", lines,
-        evidence: [`Ikinumpara ang ${cur.length} benta ngayong linggo sa ${prev.length} benta noong nakaraan.`],
-        assumptions: ["Hindi pa kasama ang seasonal na pagbabago tulad ng payday o Pasko.", small ? "Maliit ang benta, kaya malaki ang galaw kahit kaunting pagbabago." : "Sapat ang benta para paghambingin."],
-        action: ch != null && ch < -0.15 && falling[0] ? `Alamin kung bakit bumaba ang ${falling[0].name}: naubusan ba ng stock, tumaas ba ang presyo, o may bagong kakumpitensya?` : null,
+      return { title: L("Takbo ng benta", "Sales trend"), lines,
+        evidence: [L(`Ikinumpara ang ${cur.length} benta ngayong linggo sa ${prev.length} benta noong nakaraan.`, `Compared ${cur.length} sales this week with ${prev.length} the week before.`)],
+        assumptions: [L("Hindi pa kasama ang seasonal na pagbabago tulad ng payday o Pasko.", "Seasonal changes like payday or Christmas are not accounted for."), small ? L("Maliit ang benta, kaya malaki ang galaw kahit kaunting pagbabago.", "Sales are small, so small changes look big.") : L("Sapat ang benta para paghambingin.", "There are enough sales to compare.")],
+        action: ch != null && ch < -0.15 && falling[0] ? L(`Alamin kung bakit bumaba ang ${falling[0].name}: naubusan ba ng stock, tumaas ba ang presyo, o may bagong kakumpitensya?`, `Find out why ${falling[0].name} dropped: did it run out, did the price go up, or is there a new competitor?`) : null,
         confidence: small || ch == null ? "low" : undefined };
     },
     restock(c) {
@@ -1098,45 +1131,45 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         const need = rate > 0 ? Math.max(0, Math.ceil(rate * (LEAD + COVER) - stock)) : 0;
         return { p, q14, rate, stock, days, need, urgent: rate > 0 && (stock <= 0 || days <= LEAD) };
       }).filter((r) => r.rate > 0);
-      if (!rows.length) return noSales("Ano ang i-restock");
+      if (!rows.length) return noSales(L("Ano ang i-restock", "What to restock"));
       const dd = (r) => (r.stock <= 0 ? 0 : r.days ?? 1e9);
       rows.sort((x, y) => (y.urgent - x.urgent) || dd(x) - dd(y));
       const items = rows.filter((r) => r.need > 0 && (r.urgent || (r.days ?? 1e9) <= LEAD + COVER)).slice(0, 5);
       const thin = rows.filter((r) => r.q14 < 3).length;
-      return { title: "Ano ang i-restock",
-        lines: items.length ? items.map((r) => `${r.p.name}: stock ${qtyFmt(r.stock)}, ${r.stock <= 0 ? "ubos na" : `~${Math.floor(r.days)} araw pa`}, bilhin ~${r.need}`) : ["Sapat ang stock ng mga mabibilis na produkto para sa susunod na 10 araw."],
-        evidence: [`Benta ng ${rows.length} produkto sa nakaraang 14 araw.`, thin ? `${thin} sa kanila ay mas mababa sa 3 ang nabenta, kaya maaaring mali ang tantiya.` : null].filter(Boolean),
-        assumptions: [`Lead time ${LEAD} araw bago dumating ang order.`, `Buffer ${COVER} araw.`, "Ang benta ay magpapatuloy sa parehong bilis."],
-        action: items[0] ? `Unahin ang ${items[0].p.name}: bilhin ~${items[0].need}${items[0].urgent ? " ngayon" : ""}.` : null,
+      return { title: L("Ano ang i-restock", "What to restock"),
+        lines: items.length ? items.map((r) => L(`${r.p.name}: stock ${qtyFmt(r.stock)}, ${r.stock <= 0 ? "ubos na" : `~${Math.floor(r.days)} araw pa`}, bilhin ~${r.need}`, `${r.p.name}: stock ${qtyFmt(r.stock)}, ${r.stock <= 0 ? "sold out" : `~${Math.floor(r.days)} days left`}, buy ~${r.need}`)) : [L("Sapat ang stock ng mga mabibilis na produkto para sa susunod na 10 araw.", "Your fast sellers have enough stock for the next 10 days.")],
+        evidence: [L(`Benta ng ${rows.length} produkto sa nakaraang 14 araw.`, `Sales of ${rows.length} products in the last 14 days.`), thin ? L(`${thin} sa kanila ay mas mababa sa 3 ang nabenta, kaya maaaring mali ang tantiya.`, `${thin} of them sold fewer than 3, so the estimate may be off.`) : null].filter(Boolean),
+        assumptions: [L(`Lead time ${LEAD} araw bago dumating ang order.`, `Orders take ${LEAD} days to arrive.`), L(`Buffer ${COVER} araw.`, `${COVER} days of buffer stock.`), L("Ang benta ay magpapatuloy sa parehong bilis.", "Sales continue at the same pace.")],
+        action: items[0] ? L(`Unahin ang ${items[0].p.name}: bilhin ~${items[0].need}${items[0].urgent ? " ngayon" : ""}.`, `Start with ${items[0].p.name}: buy ~${items[0].need}${items[0].urgent ? " today" : ""}.`) : null,
         confidence: thin > rows.length / 2 ? "low" : undefined };
     },
     best(c) {
       const n = c.period || 30, top = [...aggregate(n).values()].filter((r) => !r.custom).sort((x, y) => y.rev - x.rev).slice(0, 5);
-      if (!top.length) return noSales("Pinakamabenta");
+      if (!top.length) return noSales(L("Pinakamabenta", "Best sellers"));
       const first = activeProducts().find((p) => p.id === top[0].key);
-      return { title: `Pinakamabenta ${pin(n)}`, lines: top.map((r, i) => `${i + 1}. ${r.name}: ${qtyFmt(r.qty)} pcs · ${peso(Math.round(r.rev))}`),
-        evidence: [`Ranggo batay sa kita (presyo × dami) sa ${windowSales(n).length} benta.`], assumptions: ["Hindi ito ranggo batay sa dami lang."],
-        action: first && stockOf(first.id) <= 0 ? `Ubos na ang ${top[0].name}, pero ito ang pinakamabenta. Bilhin agad.` : `Siguraduhing laging may stock ang ${top[0].name}.` };
+      return { title: L(`Pinakamabenta ${pin(n)}`, `Best sellers ${pin(n)}`), lines: top.map((r, i) => `${i + 1}. ${r.name}: ${qtyFmt(r.qty)} pcs · ${peso(Math.round(r.rev))}`),
+        evidence: [L(`Ranggo batay sa kita (presyo × dami) sa ${windowSales(n).length} benta.`, `Ranked by revenue (price × quantity) across ${windowSales(n).length} sales.`)], assumptions: [L("Hindi ito ranggo batay sa dami lang.", "This is not a ranking by quantity alone.")],
+        action: first && stockOf(first.id) <= 0 ? L(`Ubos na ang ${top[0].name}, pero ito ang pinakamabenta. Bilhin agad.`, `${top[0].name} is sold out, and it is your best seller. Restock it now.`) : L(`Siguraduhing laging may stock ang ${top[0].name}.`, `Keep ${top[0].name} in stock at all times.`) };
     },
     slow(c) {
       const a = aggregate(30), net = S.insights?.products || [];
       const rows = activeProducts().filter((p) => stockOf(p.id) > 0 && !(a.get(p.id)?.qty > 0)).map((p) => ({ p, stock: stockOf(p.id), value: stockOf(p.id) * (p.cost || p.price || 0) })).sort((x, y) => y.value - x.value);
-      if (!rows.length) return { title: "Hindi nabebenta", lines: ["Lahat ng may stock ay nabenta sa nakaraang 30 araw."], evidence: [], assumptions: [], action: null };
+      if (!rows.length) return { title: L("Hindi nabebenta", "Not selling"), lines: [L("Lahat ng may stock ay nabenta sa nakaraang 30 araw.", "Everything in stock sold in the last 30 days.")], evidence: [], assumptions: [], action: null };
       const total = rows.reduce((x, r) => x + r.value, 0), slowNet = rows.filter((r) => net.some((x) => x.k === normName(r.p.name) && x.tag === "slow")).length;
-      return { title: "Hindi nabebenta",
-        lines: [...rows.slice(0, 5).map((r) => `${r.p.name}: ${qtyFmt(r.stock)} pcs, nakatengga ~${peso(r.value)}`), `Kabuuang nakatengga: ${peso(total)} sa ${rows.length} produkto`],
-        evidence: ["Walang benta sa nakaraang 30 araw.", slowNet ? `${slowNet} sa mga ito ay mabagal din sa ibang tindahan.` : null].filter(Boolean),
-        assumptions: ["Ang bagong produkto ay maaaring hindi pa nabebenta dahil bago lang. Tingnan muli pagkalipas ng 30 araw."],
-        action: `Huwag munang i-restock ang mga ito. Ibenta muna, o ibaba ang presyo ng ${rows[0].p.name}.` };
+      return { title: L("Hindi nabebenta", "Not selling"),
+        lines: [...rows.slice(0, 5).map((r) => L(`${r.p.name}: ${qtyFmt(r.stock)} pcs, nakatengga ~${peso(r.value)}`, `${r.p.name}: ${qtyFmt(r.stock)} pcs, ~${peso(r.value)} tied up`)), L(`Kabuuang nakatengga: ${peso(total)} sa ${rows.length} produkto`, `Total tied up: ${peso(total)} in ${rows.length} products`)],
+        evidence: [L("Walang benta sa nakaraang 30 araw.", "No sales in the last 30 days."), slowNet ? L(`${slowNet} sa mga ito ay mabagal din sa ibang tindahan.`, `${slowNet} of these are also slow in other stores.`) : null].filter(Boolean),
+        assumptions: [L("Ang bagong produkto ay maaaring hindi pa nabebenta dahil bago lang. Tingnan muli pagkalipas ng 30 araw.", "New products may not have sold yet because they are new. Check again after 30 days.")],
+        action: L(`Huwag munang i-restock ang mga ito. Ibenta muna, o ibaba ang presyo ng ${rows[0].p.name}.`, `Don't restock these yet. Sell them first, or lower the price of ${rows[0].p.name}.`) };
     },
     expiry(c) {
-      const all = activeExpiries(), rows = all.map((e) => ({ name: productById(e.productId)?.name || "Produkto", d: daysLeft(e.date) })).filter((r) => r.d <= 7).sort((x, y) => x.d - y.d);
-      if (!rows.length) return { title: "Expiry", lines: ["Walang batch na mag-e-expire sa loob ng 7 araw, at wala ring lampas na."], evidence: [`Tiningnan ang ${all.length} aktibong batch.`], assumptions: ["Batay sa expiry date na naitala sa app."], action: null };
+      const all = activeExpiries(), rows = all.map((e) => ({ name: productById(e.productId)?.name || L("Produkto", "Product"), d: daysLeft(e.date) })).filter((r) => r.d <= 7).sort((x, y) => x.d - y.d);
+      if (!rows.length) return { title: "Expiry", lines: [L("Walang batch na mag-e-expire sa loob ng 7 araw, at wala ring lampas na.", "No batch expires within 7 days, and none are past their date.")], evidence: [L(`Tiningnan ang ${all.length} aktibong batch.`, `Checked ${all.length} active batches.`)], assumptions: [L("Batay sa expiry date na naitala sa app.", "Based on the expiry dates recorded in the app.")], action: null };
       const expired = rows.filter((r) => r.d < 0);
       return { title: "Expiry",
-        lines: rows.slice(0, 6).map((r) => `${r.name}: ${r.d < 0 ? `lampas na ng ${-r.d} araw` : r.d === 0 ? "mag-e-expire ngayon" : `${r.d} araw pa`}`),
-        evidence: [`${all.length} aktibong batch ang tiningnan.`], assumptions: ["Batay sa expiry date na naitala sa app."],
-        action: expired.length ? `Alisin sa shelf ang ${expired[0].name} at huwag nang ibenta.` : `Ibenta muna ang ${rows[0].name}, o ibaba ang presyo.` };
+        lines: rows.slice(0, 6).map((r) => `${r.name}: ${r.d < 0 ? L(`lampas na ng ${-r.d} araw`, `${-r.d} days past`) : r.d === 0 ? L("mag-e-expire ngayon", "expires today") : L(`${r.d} araw pa`, `${r.d} days left`)}`),
+        evidence: [L(`${all.length} aktibong batch ang tiningnan.`, `Checked ${all.length} active batches.`)], assumptions: [L("Batay sa expiry date na naitala sa app.", "Based on the expiry dates recorded in the app.")],
+        action: expired.length ? L(`Alisin sa shelf ang ${expired[0].name} at huwag nang ibenta.`, `Take ${expired[0].name} off the shelf and don't sell it.`) : L(`Ibenta muna ang ${rows[0].name}, o ibaba ang presyo.`, `Sell ${rows[0].name} first, or lower its price.`) };
     },
     utang(c) {
       const list = S.customers.map((x) => {
@@ -1145,69 +1178,69 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         const ref = lastPay || firstCredit;
         return { name: x.name, bal, days: ref ? Math.floor((Date.now() - new Date(ref).getTime()) / DAYMS) : 0, paid: !!lastPay };
       }).filter((r) => r.bal > 0).sort((x, y) => y.bal - x.bal);
-      if (!list.length) return { title: "Utang", lines: ["Walang customer na may utang ngayon."], evidence: [], assumptions: [], action: null };
+      if (!list.length) return { title: "Utang", lines: [L("Walang customer na may utang ngayon.", "No customer owes you right now.")], evidence: [], assumptions: [], action: null };
       const total = list.reduce((x, r) => x + r.bal, 0), old = list.filter((r) => r.days > 30);
       return { title: "Utang",
-        lines: [...list.slice(0, 5).map((r) => `${r.name}: ${peso(r.bal)}, ${r.days} araw mula ${r.paid ? "sa huling bayad" : "sa unang utang (wala pang bayad)"}`), `Kabuuan: ${peso(total)} sa ${list.length} customer`],
-        evidence: ["Galing sa mga utang at bayad na naitala sa app."], assumptions: ["Ang bilang ng araw ay mula sa huling bayad, o sa unang utang kung wala pang bayad."],
-        action: `Singilin muna si ${list[0].name} (${peso(list[0].bal)}${list[0].days > 30 ? ", matagal na" : ""}).${old.length > 1 ? ` May ${old.length} pang utang na lampas 30 araw.` : ""}` };
+        lines: [...list.slice(0, 5).map((r) => `${r.name}: ${peso(r.bal)}, ` + (r.paid ? L(`${r.days} araw mula sa huling bayad`, `${r.days} days since last payment`) : L(`${r.days} araw mula sa unang utang (wala pang bayad)`, `${r.days} days since first utang (no payment yet)`))), L(`Kabuuan: ${peso(total)} sa ${list.length} customer`, `Total: ${peso(total)} from ${list.length} customer(s)`)],
+        evidence: [L("Galing sa mga utang at bayad na naitala sa app.", "From the utang and payments recorded in the app.")], assumptions: [L("Ang bilang ng araw ay mula sa huling bayad, o sa unang utang kung wala pang bayad.", "Days are counted from the last payment, or from the first utang if nothing was paid.")],
+        action: L(`Singilin muna si ${list[0].name} (${peso(list[0].bal)}${list[0].days > 30 ? ", matagal na" : ""}).`, `Collect from ${list[0].name} first (${peso(list[0].bal)}${list[0].days > 30 ? ", overdue for a while" : ""}).`) + (old.length > 1 ? L(` May ${old.length} pang utang na lampas 30 araw.`, ` ${old.length} more are over 30 days old.`) : "") };
     },
     bills(c) {
       const t = todayKey(), list = S.expenses.filter((b) => b.kind === "bill" && !b.deleted && !b.paid).sort((x, y) => x.due.localeCompare(y.due));
-      if (!list.length) return { title: "Bills", lines: ["Walang nakabinbing bill."], evidence: ["Batay sa bills na naitala sa app."], assumptions: ["Hindi kasama ang bills na hindi pa nailalagay sa app."], action: null };
+      if (!list.length) return { title: "Bills", lines: [L("Walang nakabinbing bill.", "No unpaid bills.")], evidence: [L("Batay sa bills na naitala sa app.", "Based on the bills recorded in the app.")], assumptions: [L("Hindi kasama ang bills na hindi pa nailalagay sa app.", "Bills not entered in the app are not included.")], action: null };
       const over = list.filter((b) => b.due < t), soon = list.filter((b) => b.due >= t && daysLeft(b.due) <= 7);
       return { title: "Bills",
-        lines: [...list.slice(0, 6).map((b) => `${b.name}: ${b.amount ? peso(b.amount) : "walang halaga"}, due ${b.due}${b.due < t ? " (lampas na)" : ""}`), `Kabuuang nakabinbin: ${peso(list.reduce((x, b) => x + (b.amount || 0), 0))}`],
-        evidence: [`${list.length} bill ang nakabinbin.`], assumptions: ["Bills lang ang nakalagay sa app. Maaaring may hindi pa naitala."],
-        action: over.length ? `Bayaran agad ang ${over[0].name}, lampas na sa due date.` : soon.length ? `Maghanda ng pera para sa ${soon.length} bill sa loob ng 7 araw.` : null };
+        lines: [...list.slice(0, 6).map((b) => `${b.name}: ${b.amount ? peso(b.amount) : L("walang halaga", "no amount")}, due ${b.due}${b.due < t ? L(" (lampas na)", " (overdue)") : ""}`), L(`Kabuuang nakabinbin: ${peso(list.reduce((x, b) => x + (b.amount || 0), 0))}`, `Total unpaid: ${peso(list.reduce((x, b) => x + (b.amount || 0), 0))}`)],
+        evidence: [L(`${list.length} bill ang nakabinbin.`, `${list.length} bill(s) unpaid.`)], assumptions: [L("Bills lang ang nakalagay sa app. Maaaring may hindi pa naitala.", "Only bills entered in the app. Some may not be recorded yet.")],
+        action: over.length ? L(`Bayaran agad ang ${over[0].name}, lampas na sa due date.`, `Pay ${over[0].name} now; it is past due.`) : soon.length ? L(`Maghanda ng pera para sa ${soon.length} bill sa loob ng 7 araw.`, `Set money aside for ${soon.length} bill(s) due within 7 days.`) : null };
     },
     cash(c) {
       const all = cashEntries(), t = todayKey(), today = all.filter((r) => r.day === t);
       const inn = today.filter((r) => r.amt > 0).reduce((x, r) => x + r.amt, 0), out = today.filter((r) => r.amt < 0).reduce((x, r) => x - r.amt, 0), expected = all.reduce((x, r) => x + r.amt, 0);
-      return { title: "Cash sa kaha",
-        lines: [`Ngayon: pumasok ${peso(inn)}, lumabas ${peso(out)}`, `Inaasahang laman ng kaha: ${speso(expected)}`],
-        evidence: [`${all.length} cash na galaw ang naitala (benta, utang na binayaran, gastos, at cash in/out).`],
-        assumptions: ["Hindi kasama ang GCash.", "Ang panimulang cash ay dapat naitala bilang Cash in."],
-        action: expected < 0 ? "Negatibo ang kuwenta, kaya malamang walang naitalang panimulang cash. Mag-record ng Cash in." : "Bilangin ang aktuwal na pera sa kaha. Kung hindi tugma, mag-record ng cash in o out na may note." };
+      return { title: L("Cash sa kaha", "Cash in the drawer"),
+        lines: [L(`Ngayon: pumasok ${peso(inn)}, lumabas ${peso(out)}`, `Today: ${peso(inn)} in, ${peso(out)} out`), L(`Inaasahang laman ng kaha: ${speso(expected)}`, `Expected in the drawer: ${speso(expected)}`)],
+        evidence: [L(`${all.length} cash na galaw ang naitala (benta, utang na binayaran, gastos, at cash in/out).`, `${all.length} cash movements recorded (sales, utang payments, expenses and cash in/out).`)],
+        assumptions: [L("Hindi kasama ang GCash.", "GCash is not included."), L("Ang panimulang cash ay dapat naitala bilang Cash in.", "Opening cash should be recorded as Cash in.")],
+        action: expected < 0 ? L("Negatibo ang kuwenta, kaya malamang walang naitalang panimulang cash. Mag-record ng Cash in.", "The total is negative, so opening cash was probably not recorded. Record a Cash in.") : L("Bilangin ang aktuwal na pera sa kaha. Kung hindi tugma, mag-record ng cash in o out na may note.", "Count the actual money in the drawer. If it doesn't match, record a cash in or out with a note.") };
     },
     expenses(c) {
       const n = c.period || 30, exp = expensesOn(periodFrom(n)), total = exp.reduce((x, e) => x + e.amount, 0);
-      if (!exp.length) return { title: "Gastos", lines: [`Walang gastos na naitala ${pin(n)}.`], evidence: [], assumptions: [], action: "Kung may gastos, i-record sa Expenses para makita ang tunay na kita." };
+      if (!exp.length) return { title: L("Gastos", "Expenses"), lines: [L(`Walang gastos na naitala ${pin(n)}.`, `No expenses recorded ${pin(n)}.`)], evidence: [], assumptions: [], action: L("Kung may gastos, i-record sa Expenses para makita ang tunay na kita.", "If you had expenses, record them in Expenses to see your true profit.") };
       const cats = new Map(); for (const e of exp) cats.set(e.category, (cats.get(e.category) || 0) + e.amount);
       const sorted = [...cats.entries()].sort((x, y) => y[1] - x[1]);
-      return { title: `Gastos ${pin(n)}`, lines: [...sorted.slice(0, 5).map(([k, v]) => `${expCat(k)}: ${peso(v)} (${Math.round((v / total) * 100)}%)`), `Kabuuan: ${peso(total)}`],
-        evidence: [`${exp.length} gastos ang binilang.`], assumptions: ["Hindi kasama ang bayad sa stock, na nasa puhunan."],
-        action: sorted[0][1] / total >= 0.4 ? `Pinakamalaki ang ${expCat(sorted[0][0])}. Tingnan kung may pwedeng bawasan o ilipat sa mas murang supplier.` : null };
+      return { title: L(`Gastos ${pin(n)}`, `Expenses ${pin(n)}`), lines: [...sorted.slice(0, 5).map(([k, v]) => `${tx(expCat(k))}: ${peso(v)} (${Math.round((v / total) * 100)}%)`), L(`Kabuuan: ${peso(total)}`, `Total: ${peso(total)}`)],
+        evidence: [L(`${exp.length} gastos ang binilang.`, `${exp.length} expenses counted.`)], assumptions: [L("Hindi kasama ang bayad sa stock, na nasa puhunan.", "Stock purchases are not included; they are part of cost of goods.")],
+        action: sorted[0][1] / total >= 0.4 ? L(`Pinakamalaki ang ${tx(expCat(sorted[0][0]))}. Tingnan kung may pwedeng bawasan o ilipat sa mas murang supplier.`, `${tx(expCat(sorted[0][0]))} is your biggest cost. See what you can cut or get cheaper.`) : null };
     },
     product(c) {
       const p = c.prod, q7 = aggregate(7).get(p.id)?.qty || 0, q30 = aggregate(30).get(p.id)?.qty || 0, q14 = aggregate(14).get(p.id)?.qty || 0;
       const stock = stockOf(p.id), rate = q14 / 14, days = rate > 0 ? stock / rate : null, need = rate > 0 ? Math.max(0, Math.ceil(rate * (LEAD + COVER) - stock)) : 0;
       const n = (S.insights?.products || []).find((x) => x.k === normName(p.name));
       const exps = activeExpiries().filter((e) => e.productId === p.id).map((e) => daysLeft(e.date)).sort((x, y) => x - y);
-      const lines = [`Benta: ${qtyFmt(q7)} pcs sa 7 araw, ${qtyFmt(q30)} pcs sa 30 araw`, `Stock: ${qtyFmt(stock)} ${p.unit || "pc"} (reorder sa ${qtyFmt(p.reorder || 0)})`, `Presyo: ${peso(p.price)}${p.cost ? `, tubo ${peso(p.price - p.cost)} kada piraso` : ""}`];
-      if (n) lines.push(`Karaniwang presyo sa ibang tindahan: ${peso(n.med)} (${peso(n.min)}–${peso(n.max)})`);
-      if (n && p.price > n.med * 1.15) lines.push("Pansin: mas mataas ka sa karaniwan. Baka lumipat ang mamimili.");
-      if (n && p.price < n.med * 0.85) lines.push("Pansin: mas mura ka sa karaniwan. Puwede pang itaas nang kaunti.");
-      if (exps.length) lines.push(`Pinakamalapit na expiry: ${exps[0] < 0 ? `lampas na ng ${-exps[0]} araw` : `${exps[0]} araw pa`}`);
-      const action = q30 === 0 && stock > 0 ? "Hindi nabebenta sa 30 araw. Huwag munang bilhin. Ibaba ang presyo o ilagay sa mas nakikitang lugar."
-        : stock <= 0 && q30 > 0 ? `Ubos na. Bilhin ~${need} ngayon.`
-        : days != null && days <= LEAD ? `Malapit nang maubos (~${Math.floor(days)} araw). Mag-order ng ~${need} ngayon.`
-        : days != null ? `Sapat ang stock hanggang ~${Math.floor(days)} araw.` : null;
-      return { title: p.name, lines, evidence: [`Benta at stock ng ${p.name} mula sa mga naitalang records.`],
-        assumptions: [rate > 0 ? "Ang bilis ng benta sa nakaraang 14 araw ang ginamit." : "Walang benta sa nakaraang 14 araw, kaya walang bilis na magamit.", p.cost ? null : "Walang puhunan na naitala, kaya hindi makita ang tunay na tubo."].filter(Boolean),
+      const lines = [L(`Benta: ${qtyFmt(q7)} pcs sa 7 araw, ${qtyFmt(q30)} pcs sa 30 araw`, `Sales: ${qtyFmt(q7)} pcs in 7 days, ${qtyFmt(q30)} pcs in 30 days`), L(`Stock: ${qtyFmt(stock)} ${p.unit || "pc"} (reorder sa ${qtyFmt(p.reorder || 0)})`, `Stock: ${qtyFmt(stock)} ${p.unit || "pc"} (reorder at ${qtyFmt(p.reorder || 0)})`), L(`Presyo: ${peso(p.price)}${p.cost ? `, tubo ${peso(p.price - p.cost)} kada piraso` : ""}`, `Price: ${peso(p.price)}${p.cost ? `, profit ${peso(p.price - p.cost)} per piece` : ""}`)];
+      if (n) lines.push(L(`Karaniwang presyo sa ibang tindahan: ${peso(n.med)} (${peso(n.min)}–${peso(n.max)})`, `Usual price in other stores: ${peso(n.med)} (${peso(n.min)}–${peso(n.max)})`));
+      if (n && p.price > n.med * 1.15) lines.push(L("Pansin: mas mataas ka sa karaniwan. Baka lumipat ang mamimili.", "Note: you are above the usual price. Buyers may go elsewhere."));
+      if (n && p.price < n.med * 0.85) lines.push(L("Pansin: mas mura ka sa karaniwan. Puwede pang itaas nang kaunti.", "Note: you are below the usual price. You could raise it a little."));
+      if (exps.length) lines.push(L("Pinakamalapit na expiry: ", "Nearest expiry: ") + (exps[0] < 0 ? L(`lampas na ng ${-exps[0]} araw`, `${-exps[0]} days past`) : L(`${exps[0]} araw pa`, `${exps[0]} days left`)));
+      const action = q30 === 0 && stock > 0 ? L("Hindi nabebenta sa 30 araw. Huwag munang bilhin. Ibaba ang presyo o ilagay sa mas nakikitang lugar.", "No sales in 30 days. Don't buy more yet. Lower the price or move it somewhere more visible.")
+        : stock <= 0 && q30 > 0 ? L(`Ubos na. Bilhin ~${need} ngayon.`, `Sold out. Buy ~${need} today.`)
+        : days != null && days <= LEAD ? L(`Malapit nang maubos (~${Math.floor(days)} araw). Mag-order ng ~${need} ngayon.`, `Running out (~${Math.floor(days)} days). Order ~${need} today.`)
+        : days != null ? L(`Sapat ang stock hanggang ~${Math.floor(days)} araw.`, `Stock lasts about ${Math.floor(days)} more days.`) : null;
+      return { title: p.name, lines, evidence: [L(`Benta at stock ng ${p.name} mula sa mga naitalang records.`, `Sales and stock of ${p.name} from your records.`)],
+        assumptions: [rate > 0 ? L("Ang bilis ng benta sa nakaraang 14 araw ang ginamit.", "Uses the sales pace of the last 14 days.") : L("Walang benta sa nakaraang 14 araw, kaya walang bilis na magamit.", "No sales in the last 14 days, so there is no pace to use."), p.cost ? null : L("Walang puhunan na naitala, kaya hindi makita ang tunay na tubo.", "No cost recorded, so the real profit can't be shown.")].filter(Boolean),
         action, confidence: q30 < 3 ? "low" : undefined };
     },
   };
   function kbAnswer(m, Q, alts) {
-    const e = m.e;
-    const res = { kind: "kb", kbId: e.id, title: e.q, lines: [...e.bullets], steps: [...(e.steps || [])], action: null,
-      evidence: [], assumptions: ["Pangkalahatang payo ito para sa sari-sari store. Iakma sa sitwasyon mo."],
+    const e = m.e, t = kbText(e);
+    const res = { kind: "kb", kbId: e.id, title: t.q, lines: [...(t.bullets || [])], steps: [...(t.steps || [])], action: null,
+      evidence: [], assumptions: [L("Pangkalahatang payo ito para sa sari-sari store. Iakma sa sitwasyon mo.", "This is general advice for sari-sari stores. Adapt it to your situation.")],
       confidence: m.cov >= 0.75 ? "high" : "medium",
-      confidenceWhy: `Tugma ang tanong mo sa “${e.q}” (${Math.round(m.cov * 100)}%). Galing ito sa ${e.source === "admin" ? "KELSON" : "gabay ng KWADERNO"}.`, alts };
+      confidenceWhy: L(`Tugma ang tanong mo sa “${t.q}” (${Math.round(m.cov * 100)}%). Galing ito sa ${e.source === "admin" ? "KELSON" : "gabay ng KWADERNO"}.`, `Your question matches “${t.q}” (${Math.round(m.cov * 100)}%). From ${e.source === "admin" ? "KELSON" : "the KWADERNO guide"}.`), alts };
     if (e.link && ANSWERS[e.link] && !(Q.sales === 0 && NEEDS_SALES.has(e.link))) {
       const d = ANSWERS[e.link]({ q: "", qt: [], Q, period: null, prod: null });
       res.mine = { title: d.title, lines: d.lines.slice(0, 3), action: d.action };
-      res.evidence.push(`Kasama ang datos ng tindahan mo: ${d.title}.`);
+      res.evidence.push(L(`Kasama ang datos ng tindahan mo: ${d.title}.`, `Includes your store's data: ${d.title}.`));
     }
     return res;
   }
@@ -1216,31 +1249,31 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (!qt.length && !force) return null;
     if (force && force.startsWith("kb:")) { const e = kbAll().find((x) => x.id === force.slice(3)); if (e) return kbAnswer({ e, cov: 1 }, Q, []); }
     const off = force ? null : offTopic(qt);
-    if (off) return { kind: "offtopic", title: "Pang-negosyo lang ang tanong dito",
-      lines: [off === "rude" ? "Pakiusap, magalang na tanong lang po." : "Tungkol lang sa tindahan, paninda, pera, utang at sa paggamit ng app ang sinasagot dito."],
-      evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
+    if (off) return { kind: "offtopic", title: L("Pang-negosyo lang ang tanong dito", "Business questions only"),
+      lines: [off === "rude" ? L("Pakiusap, magalang na tanong lang po.", "Please keep questions respectful.") : L("Tungkol lang sa tindahan, paninda, pera, utang at sa paggamit ng app ang sinasagot dito.", "Only questions about your store, products, money, utang and using the app are answered here.")],
+      evidence: [], assumptions: [], action: null, suggest: askExamples() };
     const prod = qt.length ? findProduct(qt) : null;
     const howto = HOWTO.test(" " + qt.join(" ") + " ");
     const kb = force ? [] : kbSearch(qt), top = kb[0]?.ok ? kb[0] : null;
-    const kbAlts = kb.filter((m, i) => m.ok && (i > 0 || !howto)).map((m) => ({ id: "kb:" + m.e.id, label: m.e.q })).slice(0, 2);
+    const kbAlts = kb.filter((m, i) => m.ok && (i > 0 || !howto)).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2);
     let intent = force || null, alts = [];
     if (!intent) {
       const scored = INTENTS.map((it) => ({ it, score: it.words.reduce((x, w) => x + phraseScore(qt, toks(w).join(" ")) * (toks(w).length > 1 ? 2 : 1), 0) })).sort((x, y) => y.score - x.score);
       const dataTop = scored[0].score > 0 ? scored[0] : null;
       if (prod && !(howto && top && top.cov >= 0.5)) intent = "product";
-      else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top).map((m) => ({ id: "kb:" + m.e.id, label: m.e.q })).slice(0, 2));
+      else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2));
       else if (dataTop) { intent = dataTop.it.id; alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= dataTop.score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label })); }
     }
-    if (!intent) return { kind: "none", title: "Wala pa akong sagot dito",
-      lines: ["Naipadala ang tanong mo sa KELSON (walang pangalan). Kapag may sagot na, lalabas ito dito para sa lahat ng tindahan.", "Samantala, subukan ang mga tanong sa ibaba."],
-      evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
-    const label = INTENTS.find((i) => i.id === intent)?.label || "Sagot";
+    if (!intent) return { kind: "none", title: L("Wala pa akong sagot dito", "I don't have an answer for this yet"),
+      lines: [L("Naipadala ang tanong mo sa KELSON (walang pangalan). Kapag may sagot na, lalabas ito dito para sa lahat ng tindahan.", "Your question was sent to KELSON (no names). When there is an answer, it will show here for every store."), L("Samantala, subukan ang mga tanong sa ibaba.", "Meanwhile, try the questions below.")],
+      evidence: [], assumptions: [], action: null, suggest: askExamples() };
+    const label = tx(INTENTS.find((i) => i.id === intent)?.label || "Sagot");
     const res = Q.sales === 0 && NEEDS_SALES.has(intent) ? noSales(label) : ANSWERS[intent]({ q, qt, Q, period: periodOf(qt), prod });
     const rb = RECORD_BASIS[intent];
     res.kind = intent === "product" ? "product" : "data"; res.intent = intent;
     res.confidence = res.confidence || (rb ? rb[0] : Q.level);
     res.alts = [...alts.filter((x) => x.id !== intent), ...kbAlts].slice(0, 3);
-    res.confidenceWhy = rb ? rb[1] : `${Q.sales} benta sa nakaraang 30 araw, sa ${Q.days} araw.` + (Q.costKnown < 0.6 ? " Maraming produkto na walang puhunan, kaya tantiya lang ang tubo." : "");
+    res.confidenceWhy = rb ? L(rb[1], rb[2]) : L(`${Q.sales} benta sa nakaraang 30 araw, sa ${Q.days} araw.`, `${Q.sales} sales in the last 30 days, on ${Q.days} days.`) + (Q.costKnown < 0.6 ? L(" Maraming produkto na walang puhunan, kaya tantiya lang ang tubo.", " Many products have no cost, so profit is an estimate.") : "");
     return res;
   }
   const askState = { draft: "", q: "", res: null, qid: null, voted: null };
@@ -1268,7 +1301,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const c = CONF[r.confidence];
     const body = [
       h("div", { class: "small muted", text: "Tanong: " + askState.q }),
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + c[1] }) : null),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + L(c[1], c[2]) }) : null),
       r.lines.length ? h("ul", { class: "small", style: "margin:0;padding-left:18px;display:grid;gap:3px" }, r.lines.map((l) => h("li", { text: l }))) : null,
       r.steps?.length ? h("div", { class: "small" }, h("b", { text: "Mga hakbang" }), h("ol", { style: "margin:4px 0 0;padding-left:20px;display:grid;gap:3px" }, r.steps.map((x) => h("li", { text: x })))) : null,
       r.mine ? h("div", { class: "card", style: "padding:10px;display:grid;gap:4px" }, h("div", { class: "small", style: "font-weight:700", text: "📊 Para sa tindahan mo: " + r.mine.title }), r.mine.lines.map((l) => h("div", { class: "small", text: "• " + l })), r.mine.action ? h("div", { class: "small", style: "color:var(--accent);font-weight:600", text: "→ " + r.mine.action }) : null) : null,
@@ -1297,11 +1330,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return out;
   }
   function devicePrompt(r) {
-    const sec = (x) => [`${x.title}:`, ...x.lines.map((l) => "- " + l), x.action ? "- Mungkahi ng app: " + x.action : null].filter(Boolean).join("\n");
+    const sec = (x) => [`${x.title}:`, ...x.lines.map((l) => "- " + l), x.action ? L("- Mungkahi ng app: ", "- App suggests: ") + x.action : null].filter(Boolean).join("\n");
     const parts = r.suggest ? ["sales", "profit", "restock", "best"].map((i) => answerQuestion("", i)).filter(Boolean).map(sec)
       : [sec(r), r.evidence.length ? "Batayan: " + r.evidence.join(" ") : null, r.assumptions.length ? "Assumptions: " + r.assumptions.join(" ") : null].filter(Boolean);
-    return redact([`May sari-sari store ako sa Pilipinas. Tanong ko: "${askState.q}"`, "", "Datos mula sa store app ko:", ...parts, "",
-      "Pakipaliwanag sa simpleng Taglish at magbigay ng 2–3 praktikal na hakbang. Kung kulang ang datos, sabihin kung ano pa ang dapat kong itala."].join("\n")).slice(0, 2500);
+    return redact(L([`May sari-sari store ako sa Pilipinas. Tanong ko: "${askState.q}"`, "", "Datos mula sa store app ko:", ...parts, "",
+      "Pakipaliwanag sa simpleng Taglish at magbigay ng 2–3 praktikal na hakbang. Kung kulang ang datos, sabihin kung ano pa ang dapat kong itala."],
+      [`I run a small sari-sari store in the Philippines. My question: "${askState.q}"`, "", "Data from my store app:", ...parts, "",
+      "Please explain simply and give 2–3 practical steps. If the data isn't enough, tell me what else I should record."]).join("\n")).slice(0, 2500);
   }
   function deviceAIDialog(r) {
     const ta = h("textarea", { id: "shareTxt", rows: 10, "aria-label": "Text to share", style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:.85rem" });
@@ -1324,7 +1359,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
       h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Datos ng tindahan + gabay sa negosyo" })),
       h("div", { style: "display:flex;gap:6px" }, input, h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
-      !askState.res ? h("div", { class: "cats" }, ASK_EXAMPLES.slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
+      !askState.res ? h("div", { class: "cats" }, askExamples().slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
       askState.res ? resultView(askState.res) : null,
       h("p", { class: "muted small", style: "margin:0", text: "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan." }));
   }
@@ -1396,7 +1431,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   // ---------- EXPENSES (gastos) ----------
   const EXP_CATS = [["stock", "Paninda (stock)"], ["power", "Kuryente"], ["water", "Tubig"], ["rent", "Upa · Rent"], ["transport", "Pamasahe"], ["load", "Load / Internet"], ["supplies", "Supplies"], ["salary", "Sahod"], ["other", "Other"]];
-  const expCat = (k) => EXP_CATS.find(([c]) => c === k)?.[1] || "Other";
+  const expCat = (k) => tx(EXP_CATS.find(([c]) => c === k)?.[1] || "Other");
   const expForm = { amount: "", cat: "power", method: "cash", note: "", date: "" };
   function viewExpenses() {
     const t = todayKey(), month = t.slice(0, 8) + "01";
@@ -1542,7 +1577,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Overdue or due in 3 days" }), h("div", { class: "value num", style: billsDue().length ? "color:var(--bad)" : null, text: String(billsDue().length) })),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Unpaid (usual amounts)" }), h("div", { class: "value num", text: peso(unpaid.reduce((a, b) => a + (b.amount || 0), 0)) }))),
       h("div", { class: "card" }, bills.length ? h("ul", { class: "list" }, bills.map((b) => { const [cls, txt] = status(b); return h("li", {},
-        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: b.name }), h("div", { class: "muted small", text: [expCat(b.category), b.repeat === "monthly" ? "monthly" : "one time", b.amount ? peso(b.amount) : null].filter(Boolean).join(" · ") })),
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: b.name }), h("div", { class: "muted small", text: [expCat(b.category), b.repeat === "monthly" ? L("buwanan", "monthly") : L("isang beses", "one time"), b.amount ? peso(b.amount) : null].filter(Boolean).join(" · ") })),
         h("span", { class: "chip " + cls, text: txt }), b.paid ? null : h("button", { class: "btn sm primary", onclick: () => payBillDialog(b) }, "Pay")); }))
         : h("div", { class: "empty", text: "No bills yet. Add rent, kuryente, tubig, internet — we'll remind you before they're due." })),
       paidLog.length ? h("div", { class: "card" }, h("h2", { text: "Recently paid" }), h("ul", { class: "list" }, paidLog.map((e) => h("li", {}, h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: e.note || expCat(e.category) }), h("div", { class: "muted small", text: `${e.date} · ${e.method === "gcash" ? "GCash" : "Cash"}` })), h("span", { class: "num", text: peso(e.amount) }))))) : null);

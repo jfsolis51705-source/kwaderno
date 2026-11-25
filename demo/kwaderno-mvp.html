@@ -254,6 +254,15 @@ dialog .db * { min-width: 0; }
 :root[data-layout="phone"].landscape .hero { gap: 8px; padding: 12px 14px; }
 :root[data-layout="phone"].landscape .hero .big { font-size: 1.7rem; }
 :root[data-layout="phone"].landscape dialog { max-height: calc(100dvh - 16px); }
+/* Desktop preview of a phone held sideways: a wide, short frame; the side rail sits inside it. */
+:root.framed.framed-land #phone { width: min(900px, calc(100vw - 32px)); height: min(430px, calc(100dvh - 32px)); }
+:root.framed.framed-land #phone::after { top: 50%; left: 8px; width: 24px; height: 92px; margin: -46px 0 0; }
+:root.framed.framed-land #phone header.top .wrap { padding-top: 6px; }
+:root[data-layout="phone"].framed.landscape:not(.admin-mode) #phone { margin-left: 0; }
+:root[data-layout="phone"].framed.landscape:not(.admin-mode) #screen { margin-left: 100px; }
+:root[data-layout="phone"].framed.landscape:not(.admin-mode) nav.bottom { width: 100px; padding-left: 32px; } /* room for the camera notch, like a real phone's safe area */
+:root[data-layout="phone"].landscape .pos-acts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:root.framed.framed-land dialog { width: min(560px, calc(100% - 40px)); max-height: calc(100% - 24px); }
 /* phone screens are narrow: give the store name the room the demo tag took */
 :root[data-layout="phone"] .demo-pill { display: none; }
 :root[data-layout="phone"] .admin-link { margin-left: auto; }
@@ -379,7 +388,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], rules: null, kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], staff: [], attendance: [], rules: null, kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "", disc: { type: "none" }, tabId: "", tabLabel: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
@@ -441,9 +450,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
-    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs"]);
+    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"]);
     const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
-    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs"]) {
+    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"]) {
       col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
@@ -468,9 +477,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   window.addEventListener("hashchange", () => { readHash(); render(); });
 
   // ---------- layout: phone app or desktop ----------
-  const LAYOUTS = ["phone", "tablet", "desktop"];
-  const NEXT_LAYOUT = { phone: "tablet", tablet: "desktop", desktop: "phone" };
-  const LAYOUT_NAME = { phone: "phone", tablet: "tablet", desktop: "desktop" };
+  const LAYOUTS = ["phone", "phone-land", "tablet", "desktop"];
+  const NEXT_LAYOUT = { phone: "phone-land", "phone-land": "tablet", tablet: "desktop", desktop: "phone" };
+  const LAYOUT_NAME = { phone: "phone", "phone-land": "phone landscape", tablet: "tablet", desktop: "desktop" };
   let layoutChoice = "phone";
   // A touch screen at least 600px on its short side is a tablet; smaller is a phone.
   const touch = () => matchMedia("(pointer: coarse)").matches;
@@ -485,11 +494,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function applyLayout() {
     const narrow = isPhone(); // a real phone always gets the phone layout, upright or sideways
     const choice = view === "admin" ? adminLayout : layoutChoice;
-    const layout = narrow ? "phone" : choice, root = document.documentElement;
+    const landPreview = !narrow && choice === "phone-land";
+    const layout = narrow || landPreview ? "phone" : choice === "phone-land" ? "phone" : choice, root = document.documentElement;
     root.dataset.layout = layout;
     const framed = layout === "phone" && !narrow && innerWidth >= 520; // desktop preview of the phone app
     root.classList.toggle("framed", framed);
-    root.classList.toggle("landscape", !framed && layout !== "desktop" && innerWidth > innerHeight);
+    root.classList.toggle("framed-land", framed && landPreview);
+    root.classList.toggle("landscape", (framed && landPreview) || (!framed && layout !== "desktop" && innerWidth > innerHeight));
     const t = $("#layoutToggle");
     t.hidden = narrow;
     const nextMode = view === "admin" ? (choice === "phone" ? "desktop" : "phone") : NEXT_LAYOUT[choice];
@@ -543,10 +554,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- camera photo → barcode / Claude ----------
   // Live camera is not available inside this page, so scanning uses a photo from the phone camera.
   let pendingBarcode = "", draft = null; // draft: a product suggested by Smart tips
-  function pickPhoto(camera = true) {
+  function pickPhoto(camera = true) { // camera: true = back camera, "user" = front camera (selfie)
     return new Promise((resolve) => {
       const i = h("input", { type: "file", accept: "image/*", hidden: true });
-      if (camera) i.setAttribute("capture", "environment");
+      if (camera) i.setAttribute("capture", camera === "user" ? "user" : "environment");
       i.addEventListener("change", () => { resolve(i.files?.[0] || null); i.remove(); });
       i.addEventListener("cancel", () => { resolve(null); i.remove(); });
       document.body.append(i); i.click();
@@ -1556,6 +1567,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "cash") return viewCash();
     if (sub === "logbook") return viewLogbook();
     if (sub === "settings") return viewStoreSettings();
+    if (sub === "attendance") return viewAttendance();
     if (sub === "bills") return viewBills();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
@@ -1599,6 +1611,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Expenses", IC.expense, "var(--warn)", () => go("home", "expenses")),
         appTile("Bills", IC.bill, "var(--s2)", () => go("home", "bills"), billsDue().length),
         appTile("Sales history", IC.history, "var(--s1)", () => go("home", "history")),
+        appTile(L("Attendance", "Attendance"), "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M17 3l1.5 1.5L21 2", "var(--s3)", () => go("home", "attendance")),
         appTile("Reports", IC.reports, "var(--good)", () => go("reports")),
         appTile("Expiry", IC.expiry, "var(--warn)", () => go("products", "expiry"), expired + soon),
         appTile("Smart tips", IC.tips, "var(--accent)", () => go("home", "tips"), T?.count || 0),
@@ -1887,6 +1900,135 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "card grid" }, h("h2", { text: L("Gamot", "Medicines") }), h("div", { class: "muted small", text: L(`${R.rate20}% + VAT exemption para sa Senior/PWD.`, `${R.rate20}% + VAT exemption for Senior/PWD.`) }), cats.length ? checks(medSel, cats) : null),
       h("div", { class: "banner small" }, h("b", { text: L(`Batas na sinusunod (ayon sa KELSON, as of ${R.asOf}): `, `Rules followed (kept by KELSON, as of ${R.asOf}): `) }), R.basis),
       h("button", { class: "btn primary big", onclick: (e) => save(e.currentTarget) }, L("I-save", "Save")));
+  }
+
+
+  // ---------- ATTENDANCE: staff clock in and out on the store's phone with a PIN and a selfie ----------
+  // The selfie and time are the proof; the owner checks them. (No face recognition: that would need AI.)
+  let attTab = "clock", attPeriod = "week", attDay = "";
+  const sha256 = async (t) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)))].map((x) => x.toString(16).padStart(2, "0")).join("");
+  const activeStaff = () => S.staff.filter((x) => !x.archived).sort((a, b) => a.name.localeCompare(b.name));
+  const attSorted = () => S.attendance.filter((a) => !a.deleted).sort((a, b) => a.at.localeCompare(b.at));
+  // Record types: in, break (start), back (end of break), out.
+  function staffState(sid) {
+    const mine = attSorted().filter((a) => a.staffId === sid), last = mine.at(-1);
+    if (!last || last.type === "out") return { in: false, last: last?.at || null };
+    const since = [...mine].reverse().find((a) => a.type === "in")?.at || last.at;
+    return { in: true, since, onBreak: last.type === "break", breakSince: last.type === "break" ? last.at : null };
+  }
+  const hm = (iso) => new Date(iso).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
+  // Pair clock-ins with clock-outs into shifts; an open shift from an earlier day is flagged as missing a clock-out.
+  function shifts(from, to) {
+    const out = [], open = new Map();
+    const mins = (a, b) => Math.max(0, (new Date(b) - new Date(a)) / 6e4);
+    for (const a of attSorted()) {
+      const o = open.get(a.staffId);
+      if (a.type === "in") { if (o) out.push({ ...o, missingOut: true }); open.set(a.staffId, { staffId: a.staffId, inAt: a.at, inRec: a, breakMin: 0, breakAt: null }); }
+      else if (a.type === "break" && o && !o.breakAt) o.breakAt = a.at;
+      else if (a.type === "back" && o?.breakAt) { o.breakMin += mins(o.breakAt, a.at); o.breakAt = null; }
+      else if (a.type === "out" && o) { if (o.breakAt) { o.breakMin += mins(o.breakAt, a.at); o.breakAt = null; } open.delete(a.staffId); out.push({ ...o, outAt: a.at, outRec: a, minutes: Math.max(0, mins(o.inAt, a.at) - o.breakMin) }); }
+    }
+    for (const o of open.values()) { const now = new Date().toISOString(), br = o.breakMin + (o.breakAt ? mins(o.breakAt, now) : 0);
+      out.push(dayKey(o.inAt) === todayKey() ? { ...o, breakMin: br, ongoing: true, minutes: Math.max(0, mins(o.inAt, now) - br) } : { ...o, missingOut: true }); }
+    return out.filter((x) => x.inAt >= from && x.inAt < to);
+  }
+  function attRange() {
+    const t = new Date(); t.setHours(0, 0, 0, 0); const y = t.getFullYear(), m = t.getMonth(), d = t.getDate();
+    if (attPeriod === "week") { const s0 = new Date(weekStart()); return [s0, new Date(s0.getTime() + 7 * DAYMS), L("Ngayong linggo", "This week")]; }
+    if (attPeriod === "kinsenas") return d <= 15 ? [new Date(y, m, 1), new Date(y, m, 16), L("Ika-1 hanggang 15", "1st to 15th")] : [new Date(y, m, 16), new Date(y, m + 1, 1), L("Ika-16 hanggang katapusan", "16th to month end")];
+    if (attPeriod === "month") return [new Date(y, m, 1), new Date(y, m + 1, 1), L("Ngayong buwan", "This month")];
+    return [new Date(y, m - 1, 1), new Date(y, m, 1), L("Nakaraang buwan", "Last month")];
+  }
+  function attReport() {
+    const [a, b, label] = attRange(), sh = shifts(a.toISOString(), b.toISOString());
+    const rows = activeStaff().map((st) => {
+      const mine = sh.filter((x) => x.staffId === st.id), days = new Set(mine.map((x) => dayKey(x.inAt))), minutes = mine.reduce((t, x) => t + (x.minutes || 0), 0), breakMin = mine.reduce((t, x) => t + (x.breakMin || 0), 0);
+      let late = 0; if (st.shiftStart) for (const dk of days) { const first = mine.filter((x) => dayKey(x.inAt) === dk).sort((p, q) => p.inAt.localeCompare(q.inAt))[0]; const [hh, mm] = st.shiftStart.split(":").map(Number); const due = new Date(first.inAt); due.setHours(hh, mm + 10, 0, 0); if (new Date(first.inAt) > due) late++; }
+      const pay = st.rateType === "day" ? days.size * (st.rate || 0) : Math.round((minutes / 60) * (st.rate || 0));
+      return { st, days: days.size, hours: minutes / 60, breaks: breakMin / 60, late, missing: mine.filter((x) => x.missingOut).length, pay };
+    });
+    return { label, rows, shifts: sh };
+  }
+  async function clockFlow(st, type) {
+    const pin = h("input", { type: "password", inputmode: "numeric", id: "attPin", maxlength: 6, autocomplete: "off", placeholder: "••••" });
+    const go2 = async (btn) => {
+      if ((await sha256(st.id + ":" + pin.value)) !== st.pinHash) { pin.value = ""; return toast(L("Mali ang PIN", "Wrong PIN")); }
+      btn.disabled = true; dlg.close();
+      const selfie = type === "in" || type === "out";
+      if (selfie) toast(L("Kumuha ng selfie…", "Take a selfie…"));
+      const file = selfie ? await pickPhoto("user") : null;
+      let photo = null;
+      if (file) { try { const assets = await window.claude?.use?.("assets"); if (assets) { const a2 = await assets.upload(await squareJpeg(file, 360)); photo = { id: a2.id, url: a2.url }; } } catch { /* saved without the photo */ } }
+      try {
+        await write("attendance/" + uid(), { staffId: st.id, name: st.name, type, at: new Date().toISOString(), photo, noPhoto: selfie && !photo, by: S.me || null });
+        if (type === "break" || type === "back") return toast(type === "break" ? L(`Break ni ${st.name} · ${hm(new Date().toISOString())}`, `${st.name} on break · ${hm(new Date().toISOString())}`) : L(`Balik na si ${st.name} · ${hm(new Date().toISOString())}`, `${st.name} back from break · ${hm(new Date().toISOString())}`));
+        toast(type === "in" ? L(`Naka-clock in si ${st.name} · ${hm(new Date().toISOString())}`, `${st.name} clocked in · ${hm(new Date().toISOString())}`) : L(`Naka-clock out si ${st.name} · ${hm(new Date().toISOString())}`, `${st.name} clocked out · ${hm(new Date().toISOString())}`));
+      } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); }
+    };
+    const btn = h("button", { class: "btn primary big", onclick: (e) => go2(e.currentTarget) }, type === "in" || type === "out" ? L("Tuloy — kunan ng selfie", "Continue — take a selfie") : L("Tuloy", "Continue"));
+    pin.addEventListener("keydown", (e) => { if (e.key === "Enter") go2(btn); });
+    openDialog({ in: L(`Clock in: ${st.name}`, `Clock in: ${st.name}`), out: L(`Clock out: ${st.name}`, `Clock out: ${st.name}`), break: L(`Simula ng break: ${st.name}`, `Start break: ${st.name}`), back: L(`Tapos na ang break: ${st.name}`, `End break: ${st.name}`) }[type], h("div", { class: "grid" }, h("label", { class: "f" }, L("PIN ng tauhan", "Staff PIN"), pin), btn,
+      h("p", { class: "muted small", style: "margin:0", text: L("Ang selfie at oras ang patunay. Nakikita lang ito ng may-ari ng tindahan.", "The selfie and time are the proof. Only the store owner sees them.") })));
+    setTimeout(() => pin.focus(), 60);
+  }
+  function staffForm(st) {
+    const name = h("input", { type: "text", id: "stName", maxlength: 40, value: st?.name || "" }), pin = h("input", { type: "password", inputmode: "numeric", id: "stPin", maxlength: 6, placeholder: st ? L("iwanang blangko kung hindi papalitan", "leave blank to keep") : "4–6 digits" });
+    const rate = h("input", { type: "text", inputmode: "decimal", id: "stRate", value: st?.rate ? String(st.rate / 100) : "", placeholder: "0.00" }), shift = h("input", { type: "time", id: "stShift", value: st?.shiftStart || "" });
+    const type = h("select", { id: "stRateType" }, h("option", { value: "day", text: L("Bawat araw", "Per day"), selected: (st?.rateType || "day") === "day" }), h("option", { value: "hour", text: L("Bawat oras", "Per hour"), selected: st?.rateType === "hour" }));
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      if (!name.value.trim()) return toast(L("Ilagay ang pangalan", "Enter the name"));
+      if ((!st || pin.value) && !/^\d{4,6}$/.test(pin.value)) return toast(L("PIN: 4 hanggang 6 na numero", "PIN: 4 to 6 digits"));
+      const id = st?.id || uid(), r = rate.value.trim() ? toCentavos(rate.value) : 0; if (r == null) return toast(L("Maglagay ng tamang halaga", "Enter a valid amount"));
+      btn.disabled = true;
+      try { await write("staff/" + id, { name: name.value.trim(), rate: r, rateType: type.value, shiftStart: shift.value || null, pinHash: pin.value ? await sha256(id + ":" + pin.value) : st.pinHash, archived: false, createdAt: st?.createdAt || new Date().toISOString() }); dlg.close(); toast(L("Na-save", "Saved")); }
+      catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); }
+    } }, L("I-save", "Save"));
+    openDialog(st ? L("Baguhin ang tauhan", "Edit staff") : L("Bagong tauhan", "New staff"), h("div", { class: "grid" }, h("label", { class: "f" }, L("Pangalan", "Name"), name), h("label", { class: "f" }, "PIN", pin),
+      h("div", { class: "form" }, h("label", { class: "f" }, L("Sahod ₱", "Pay ₱"), rate), h("label", { class: "f" }, L("Uri", "Type"), type), h("label", { class: "f" }, L("Simula ng shift", "Shift start"), shift)), btn,
+      st ? h("button", { class: "btn danger", onclick: async () => { await write("staff/" + st.id, { ...strip(st), archived: true }).catch(() => {}); dlg.close(); } }, L("Alisin sa listahan", "Remove from list")) : null));
+  }
+  function viewAttendance() {
+    const pill = (k, l) => h("button", { "aria-pressed": String(attTab === k), onclick: () => { attTab = k; render(); } }, l);
+    const head = h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: L("Attendance ng tauhan", "Staff attendance"), style: "margin-top:8px" })), h("button", { class: "btn", onclick: () => staffForm(null) }, L("+ Tauhan", "+ Staff")));
+    const staff = activeStaff();
+    if (!staff.length) return h("div", { class: "view" }, head, h("div", { class: "empty" }, L("Wala pang tauhan. ", "No staff yet. "), h("button", { class: "btn sm primary", onclick: () => staffForm(null) }, L("Idagdag ang unang tauhan", "Add the first staff member"))));
+    const tabs = h("div", { class: "cats" }, pill("clock", L("Pasok / Labas", "Clock in / out")), pill("report", L("Ulat at sahod", "Hours & pay")), pill("staff", L("Mga tauhan", "Staff")));
+    if (attTab === "staff") return h("div", { class: "view" }, head, tabs, h("div", { class: "card" }, h("ul", { class: "list" }, staff.map((st) => h("li", {},
+      h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: st.name }), h("div", { class: "muted small", text: [st.rate ? `${peso(st.rate)} ${st.rateType === "hour" ? L("bawat oras", "per hour") : L("bawat araw", "per day")}` : null, st.shiftStart ? L(`shift ${st.shiftStart}`, `shift ${st.shiftStart}`) : null].filter(Boolean).join(" · ") })),
+      h("button", { class: "btn sm", onclick: () => staffForm(st) }, L("Baguhin", "Edit")))))));
+    if (attTab === "report") {
+      const R2 = attReport(), csv = () => "﻿" + [["Staff", "Days", "Hours", "Break hours", "Late", "Missing clock-out", "Pay"].join(","), ...R2.rows.map((r) => [`"${r.st.name.replace(/"/g, '""')}"`, r.days, r.hours.toFixed(2), r.breaks.toFixed(2), r.late, r.missing, (r.pay / 100).toFixed(2)].join(","))].join("\r\n");
+      return h("div", { class: "view" }, head, tabs,
+        h("div", { class: "cats" }, [["week", L("Linggo", "Week")], ["kinsenas", "Kinsenas"], ["month", L("Buwan", "Month")], ["last", L("Nakaraang buwan", "Last month")]].map(([k, l]) => h("button", { "aria-pressed": String(attPeriod === k), onclick: () => { attPeriod = k; render(); } }, l))),
+        h("div", { class: "card" }, h("div", { class: "toolbar", style: "margin-bottom:6px" }, h("h2", { text: R2.label, style: "margin-right:auto" }), h("button", { class: "btn sm", onclick: () => exportCsv(csv(), "kwaderno-attendance") }, "CSV")),
+          h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, [L("Tauhan", "Staff"), L("Araw", "Days"), L("Oras", "Hours"), L("Break", "Breaks"), L("Late", "Late"), L("Kulang na out", "No clock-out"), L("Sahod", "Pay")].map((t, i) => h("th", { class: i ? "r" : null, text: t })))),
+            h("tbody", {}, R2.rows.map((r) => h("tr", {}, h("td", { text: r.st.name }), h("td", { class: "r num", text: String(r.days) }), h("td", { class: "r num", text: r.hours.toFixed(1) }), h("td", { class: "r num", text: r.breaks.toFixed(1) }), h("td", { class: "r num", text: String(r.late) }), h("td", { class: "r num", style: r.missing ? "color:var(--bad)" : null, text: String(r.missing) }), h("td", { class: "r num", text: peso(r.pay) })))),
+            h("tfoot", {}, h("tr", {}, h("td", { text: L("Kabuuan", "Total"), colspan: 6 }), h("td", { class: "r num", text: peso(R2.rows.reduce((t, r) => t + r.pay, 0)) }))))),
+          h("p", { class: "muted small", style: "margin:6px 0 0", text: L("Ang oras ay bawas na ang break. Late = pumasok nang lampas 10 minuto sa simula ng shift. Tantiya lang ang sahod; walang kaltas (SSS, PhilHealth, Pag-IBIG).", "Hours exclude breaks. Late = clocked in more than 10 minutes after the shift start. Pay is an estimate, before deductions (SSS, PhilHealth, Pag-IBIG).") })),
+        h("div", { class: "card" }, h("h2", { text: L("Mga shift", "Shifts"), style: "margin-bottom:6px" }), h("ul", { class: "list" }, R2.shifts.slice().reverse().slice(0, 100).map((x) => { const st = S.staff.find((y) => y.id === x.staffId);
+          return h("li", {}, x.inRec?.photo ? h("img", { src: x.inRec.photo.url, alt: "", class: "thumb", style: "object-fit:cover" }) : h("span", { class: "thumb", style: "display:grid;place-items:center", text: "—" }),
+            h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: st?.name || x.inRec?.name || "?" }), h("div", { class: "muted small", text: `${new Date(x.inAt).toLocaleDateString("en-PH", { month: "short", day: "numeric" })} · ${hm(x.inAt)} – ${x.outAt ? hm(x.outAt) : x.ongoing ? L("ngayon", "now") : L("walang clock-out", "no clock-out")}` })),
+            h("span", { class: "num", text: x.minutes != null ? (x.minutes / 60).toFixed(1) + "h" : "—" }), x.outRec?.photo ? h("img", { src: x.outRec.photo.url, alt: "", class: "thumb", style: "object-fit:cover" }) : null); }))));
+    }
+    const day = attDay || todayKey(), today = attSorted().filter((a) => dayKey(a.at) === day).reverse();
+    const daySh = shifts(day + "T00:00:00", day + "T23:59:59.999").length ? shifts(new Date(day + "T00:00:00").toISOString(), new Date(new Date(day + "T00:00:00").getTime() + DAYMS).toISOString()) : [];
+    const label = { in: "Clock in", out: "Clock out", break: L("Break", "Break start"), back: L("Balik", "Break end") };
+    return h("div", { class: "view" }, head, tabs,
+      h("div", { class: "tiles", style: "grid-template-columns:repeat(auto-fill,minmax(150px,1fr))" }, staff.map((st) => { const z = staffState(st.id);
+        return h("div", { class: "card grid", style: "gap:8px;text-align:center" }, h("div", { style: "font-weight:700", text: st.name }),
+          h("span", { class: "chip " + (z.onBreak ? "low" : z.in ? "ok" : ""), style: "justify-self:center", text: z.onBreak ? L(`Naka-break mula ${hm(z.breakSince)}`, `On break since ${hm(z.breakSince)}`) : z.in ? L(`Nasa loob mula ${hm(z.since)}`, `In since ${hm(z.since)}`) : L("Wala", "Out") }),
+          z.in ? h("button", { class: "btn sm", onclick: () => clockFlow(st, z.onBreak ? "back" : "break") }, z.onBreak ? L("Tapos na ang break", "End break") : L("Mag-break", "Start break")) : null,
+          h("button", { class: "btn " + (z.in ? "" : "primary"), onclick: () => clockFlow(st, z.in ? "out" : "in") }, z.in ? L("Clock out", "Clock out") : L("Clock in", "Clock in"))); })),
+      h("div", { class: "cats" }, [...Array(7)].map((_, i) => { const dd = new Date(); dd.setDate(dd.getDate() - i); const k = dayKey(dd.toISOString());
+        return h("button", { "aria-pressed": String(day === k), onclick: () => { attDay = k; render(); } }, i === 0 ? L("Ngayon", "Today") : dd.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })); })),
+      daySh.length ? h("div", { class: "card" }, h("ul", { class: "list" }, daySh.map((x) => h("li", {}, x.inRec?.photo ? h("img", { src: x.inRec.photo.url, alt: "", class: "thumb", style: "object-fit:cover;border-radius:50%" }) : null,
+        h("div", { class: "grow" }, h("div", { style: "font-weight:700", text: S.staff.find((y) => y.id === x.staffId)?.name || x.inRec?.name }), h("div", { class: "small", text: `${Math.floor((x.minutes || 0) / 60)} hrs ${Math.round((x.minutes || 0) % 60)} mins` + (x.breakMin ? L(` · break ${Math.round(x.breakMin)} min`, ` · break ${Math.round(x.breakMin)} min`) : "") }),
+          h("div", { class: "muted small", text: `In ${hm(x.inAt)} · Out ${x.outAt ? hm(x.outAt) : x.ongoing ? "—" : L("walang clock-out", "no clock-out")}` })),
+        x.outRec?.photo ? h("img", { src: x.outRec.photo.url, alt: "", class: "thumb", style: "object-fit:cover;border-radius:50%" }) : null)))) : null,
+      h("div", { class: "card" }, h("h2", { text: day === todayKey() ? L("Ngayong araw", "Today") : day, style: "margin-bottom:6px" }), today.length ? h("ul", { class: "list" }, today.map((a) => h("li", {},
+        a.photo ? h("img", { src: a.photo.url, alt: L("Selfie", "Selfie"), class: "thumb", style: "object-fit:cover" }) : h("span", { class: "thumb", style: "display:grid;place-items:center", title: L("Walang selfie", "No selfie"), text: "—" }),
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: a.name }), h("div", { class: "muted small", text: label[a.type] + " · " + hm(a.at) + (a.noPhoto ? L(" · walang selfie", " · no selfie") : "") })))))
+        : h("div", { class: "empty", text: L("Wala pang pumasok ngayon.", "Nobody has clocked in today.") })));
   }
 
   // ---------- EXPENSES (gastos) ----------

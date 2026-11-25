@@ -42,6 +42,25 @@ nav.tabs a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 nav.bottom { display: none; }
 .lockwait #app { visibility: hidden; }
+#liveScan { position: fixed; inset: 0; z-index: 70; background: #000; display: grid; grid-template-rows: 1fr auto; }
+#liveScan video { width: 100%; height: 100%; object-fit: cover; }
+#liveScan .vf { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+#liveScan .frame { position: relative; width: min(78vw, 420px); aspect-ratio: 2.2 / 1; border-radius: 14px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+#liveScan .frame i { position: absolute; width: 28px; height: 28px; border: 4px solid #fff; }
+#liveScan .frame i:nth-child(1) { left: -2px; top: -2px; border-right: 0; border-bottom: 0; border-radius: 12px 0 0 0; }
+#liveScan .frame i:nth-child(2) { right: -2px; top: -2px; border-left: 0; border-bottom: 0; border-radius: 0 12px 0 0; }
+#liveScan .frame i:nth-child(3) { left: -2px; bottom: -2px; border-right: 0; border-top: 0; border-radius: 0 0 0 12px; }
+#liveScan .frame i:nth-child(4) { right: -2px; bottom: -2px; border-left: 0; border-top: 0; border-radius: 0 0 12px 0; }
+#liveScan .frame b { position: absolute; left: 6%; right: 6%; top: 50%; height: 2px; background: #ff3b30; box-shadow: 0 0 8px #ff3b30; }
+#liveScan .frame.hit i { border-color: #34c759; } #liveScan .frame.hit b { background: #34c759; box-shadow: 0 0 8px #34c759; }
+@media (prefers-reduced-motion: no-preference) { #liveScan .frame b { animation: scanLine 1.6s ease-in-out infinite alternate; } @keyframes scanLine { from { top: 12%; } to { top: 88%; } } }
+#liveScan .vf p { position: absolute; top: calc(50% + min(18vw, 100px) + 18px); color: #fff; font-weight: 600; text-align: center; padding: 0 20px; text-shadow: 0 1px 3px #000; }
+#liveScan .bar { display: flex; gap: 8px; padding: 12px max(16px, env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)); background: #000; }
+#liveScan .bar > * { flex: 1; }
+.photo-pick { position: relative; justify-self: stretch; border-radius: 10px; overflow: hidden; touch-action: manipulation; cursor: crosshair; }
+.photo-pick img { display: block; width: 100%; max-height: 46vh; object-fit: contain; background: #000; }
+.photo-pick .box { position: absolute; border: 3px solid #ffcc00; border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.5); pointer-events: none; }
+.photo-pick .box.ok { border-color: #34c759; }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -809,9 +828,93 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
    * ask: start with the choice screen (used for "Add barcode"); otherwise open the camera straight away
    * (Sell / Scan) and show the choice screen only if reading fails.
    */
+  // ---------- live scanner (camera view with a rectangle) — only where the page may use the camera ----------
+  const liveCameraAllowed = () => { try { const pp = document.permissionsPolicy || document.featurePolicy; return !!(navigator.mediaDevices?.getUserMedia && pp?.allowsFeature?.("camera")); } catch { return false; } };
+  /** Opens the camera full screen with a scan rectangle; reads what is inside the rectangle several times a second. */
+  function liveScan(title) {
+    return new Promise((resolve) => {
+      let stream = null, stopped = false, timer = null, busy = false;
+      const video = h("video", { playsinline: true, muted: true, autoplay: true }); video.muted = true;
+      const frame = h("div", { class: "frame" }, h("i"), h("i"), h("i"), h("i"), h("b"));
+      const hint = h("p", { text: L("Itapat ang barcode sa loob ng kahon", "Fit the barcode inside the box") });
+      const end = (code) => { if (stopped) return; stopped = true; clearTimeout(timer); stream?.getTracks().forEach((t) => t.stop()); box.remove(); resolve(code); };
+      const box = h("div", { id: "liveScan", role: "dialog", "aria-modal": "true", "aria-label": title || L("Scanner", "Scanner") },
+        h("div", { style: "position:relative;overflow:hidden" }, video, h("div", { class: "vf" }, frame, hint)),
+        h("div", { class: "bar" }, h("button", { class: "btn", onclick: () => end(null) }, L("Kanselahin", "Cancel")), h("button", { class: "btn", onclick: () => end("__type__") }, L("I-type ang numero", "Type the number"))));
+      document.body.append(box);
+      const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+      let det = null, ZX = null, reader = null;
+      const tick = async () => {
+        if (stopped) return;
+        if (!busy && video.videoWidth) {
+          busy = true;
+          try {
+            // map the on-screen rectangle to the camera picture (the video fills the screen, cropped like object-fit: cover)
+            const vr = video.getBoundingClientRect(), fr = frame.getBoundingClientRect();
+            const sc = Math.max(vr.width / video.videoWidth, vr.height / video.videoHeight), ox = (vr.width - video.videoWidth * sc) / 2, oy = (vr.height - video.videoHeight * sc) / 2;
+            const sx = (fr.left - vr.left - ox) / sc, sy = (fr.top - vr.top - oy) / sc, sw = fr.width / sc, sh = fr.height / sc;
+            const k = Math.min(2, 1100 / sw); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+            g.drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
+            let code = null;
+            if (det) { try { const r = await det.detect(c); code = r.map((x) => (x.rawValue || "").trim()).find((v) => v && eanOk(v)) || null; } catch { det = null; } }
+            if (!code && reader) { for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) { try { const t = reader.decode(new ZX.BinaryBitmap(new Bin(new ZX.HTMLCanvasElementLuminanceSource(c)))).getText().trim(); if (t && eanOk(t)) { code = t; break; } } catch { /* keep looking */ } finally { reader.reset(); } } }
+            if (code) { frame.classList.add("hit"); scanBeep(true); setTimeout(() => end(code), 350); return; }
+          } catch { /* next frame */ } finally { busy = false; }
+        }
+        timer = setTimeout(tick, 220);
+      };
+      (async () => {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+          if (stopped) { stream.getTracks().forEach((t) => t.stop()); return; }
+          video.srcObject = stream; await video.play().catch(() => {});
+          try { const f = (await BarcodeDetector.getSupportedFormats()).filter((x) => BC_FORMATS.includes(x)); if (f.length) det = new BarcodeDetector({ formats: f }); } catch { det = null; }
+          try { ZX = await loadZxing(); const hints = new Map(); hints.set(ZX.DecodeHintType.TRY_HARDER, true); reader = new ZX.MultiFormatReader(); reader.setHints(hints); } catch { if (!det) hint.textContent = L("Hindi ma-load ang barcode reader — i-type ang numero.", "The barcode reader couldn't load — type the number."); }
+          tick();
+        } catch { end("__photo__"); } // camera refused here: fall back to taking a photo
+      })();
+    });
+  }
+  /** Photo on screen; tap the barcode to put a rectangle there and read just that part. */
+  function photoPicker(file, onCode, status) {
+    const url = URL.createObjectURL(file), img = h("img", { src: url, alt: L("Ang litrato", "Your photo") }), rect = h("div", { class: "box", hidden: true });
+    const wrap = h("div", { class: "photo-pick", role: "button", tabindex: 0, "aria-label": L("Pindutin ang barcode sa litrato", "Tap the barcode in the photo") }, img, rect);
+    let bmpP = null;
+    wrap.addEventListener("click", async (e) => {
+      const r = img.getBoundingClientRect(), nw = img.naturalWidth, nh = img.naturalHeight; if (!nw) return;
+      const sc = Math.min(r.width / nw, r.height / nh), ox = (r.width - nw * sc) / 2, oy = (r.height - nh * sc) / 2;
+      const px = (e.clientX - r.left - ox) / sc, py = (e.clientY - r.top - oy) / sc; if (px < 0 || py < 0 || px > nw || py > nh) return;
+      bmpP ??= createImageBitmap(file);
+      const bmp = await bmpP;
+      const ks = bmp.width / nw; // the bitmap can be larger than what the img reports
+      const show = (bw, bh, ok) => { rect.hidden = false; rect.classList.toggle("ok", !!ok); Object.assign(rect.style, { left: ox + (px - bw / 2) * sc + "px", top: oy + (py - bh / 2) * sc + "px", width: bw * sc + "px", height: bh * sc + "px" }); };
+      status.style.color = ""; status.textContent = L("Binabasa ang nasa kahon…", "Reading inside the box…");
+      const ZX = await loadZxing().catch(() => null); if (!ZX) { status.textContent = L("Hindi ma-load ang barcode reader.", "The barcode reader couldn't load."); return; }
+      const reader = new ZX.MultiFormatReader(); const hints = new Map(); hints.set(ZX.DecodeHintType.TRY_HARDER, true); reader.setHints(hints);
+      const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+      for (const f of [.45, .3, .65]) for (const tilt of [0, -8, 8, -18, 18, -28, 28, 90]) {
+        const bw = nw * f, bh = bw / 2.2; show(bw, bh);
+        const sw = bw * ks, sh = (tilt === 90 ? bw : bh) * ks, sx = px * ks - sw / 2, sy = py * ks - sh / 2, k = 1100 / Math.max(sw, sh);
+        const cw = Math.round(sw * k), ch = Math.round(sh * k); c.width = tilt === 90 ? ch : cw; c.height = tilt === 90 ? cw : ch;
+        g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.translate(c.width / 2, c.height / 2); g.rotate(tilt * Math.PI / 180); g.translate(-cw / 2, -ch / 2); g.drawImage(bmp, sx, sy, sw, sh, 0, 0, cw, ch);
+        for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) {
+          try { const t = reader.decode(new ZX.BinaryBitmap(new Bin(new ZX.HTMLCanvasElementLuminanceSource(c)))).getText().trim(); if (t && eanOk(t)) { show(bw, bh, true); scanBeep(true); setTimeout(() => onCode(t), 300); return; } } catch { /* next */ } finally { reader.reset(); }
+        }
+        await new Promise((res) => setTimeout(res, 0));
+      }
+      show(nw * .45, nw * .45 / 2.2); scanBeep(false); status.style.color = "var(--bad)";
+      status.textContent = L("Wala pa ring nabasa sa kahon. Kumuha ng mas malapit na litrato, o i-type ang numero.", "Still nothing inside the box. Take a closer photo, or type the number.");
+    });
+    return wrap;
+  }
   /** A scan button that IS the camera picker (direct tap opens the camera on phones). If the camera can't open here,
    *  the scan screen opens with the reason and the type-the-number box. onCode gets the code. */
   function scanButton(cls, kids, onCode, title) {
+    if (liveCameraAllowed()) return h("button", { class: cls, onclick: async () => {
+      const code = await liveScan(title);
+      const got = code === "__type__" || code === "__photo__" ? await scanBarcode({ ask: true, title, note: code === "__photo__" ? pickerStuckMsg(true) : "" }) : code;
+      if (got) onCode(got);
+    } }, ...kids);
     const i = fileInput(true); let stop = () => {};
     i.addEventListener("change", async () => { stop(); const f = i.files?.[0]; i.value = ""; if (!f) return; const code = await scanBarcode({ file: f, title }); if (code) onCode(code); });
     i.addEventListener("cancel", () => stop());
@@ -833,9 +936,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         if (!eanOk(v)) { scanBeep(false); return status.textContent = L("Mukhang mali ang isang numero — pakisuri ulit.", "One digit looks wrong — please check the number again."); }
         scanBeep(true); dlg.close(); finish(v);
       };
+      const pickSlot = h("div", { class: "grid", style: "gap:6px" });
       const tryFile = async (file) => {
         if (!file) return;
-        thumb.src = URL.createObjectURL(file); thumb.hidden = false;
+        thumb.src = URL.createObjectURL(file); thumb.hidden = false; pickSlot.replaceChildren();
         status.style.color = ""; status.textContent = L("Binabasa ang barcode…", "Reading the barcode…");
         try {
           const code = await decodeBarcode(file, (st) => { status.textContent = st === "reader" ? L("Kinukuha ang barcode reader…", "Loading the barcode reader…") : L("Binabasa ang barcode…", "Reading the barcode…"); });
@@ -848,7 +952,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
             : L("Walang nabasang barcode. Ilapit (mga 15 cm), ituwid, iwasan ang silaw — o i-type ang numero.", "No barcode found. Get closer (about 15 cm), keep it straight, avoid glare — or type the number.");
           detail.textContent = `phone reader: ${barcodeInfo.native} · KWADERNO reader: ${barcodeInfo.reader} · ${barcodeInfo.tries} tries · ${barcodeInfo.ms} ms`;
           if (!(dlg.open && dlg.contains(status))) showChoices();
-          setTimeout(() => typed.focus(), 50);
+          if (e?.message === "none") { // let the person show where the barcode is
+            thumb.hidden = true;
+            pickSlot.replaceChildren(h("b", { class: "small", text: L("👆 Pindutin ang barcode sa litrato — lalabas ang kahon at babasahin ito.", "👆 Tap the barcode in the photo — a box appears and it's read from there.") }),
+              photoPicker(file, (code) => { if (dlg.open) dlg.close(); finish(code); }, status));
+          } else setTimeout(() => typed.focus(), 50);
         }
       };
       // the button IS the file picker (a label around the input): the most reliable way to open the camera on phones
@@ -861,9 +969,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       };
       const showChoices = () => {
         openDialog(opts.title || L("Magdagdag ng barcode", "Add barcode"), h("div", { class: "grid" },
-          pickLabel(true, "btn primary big", [camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")]),
+          liveCameraAllowed() ? h("button", { class: "btn primary big", onclick: async () => { const code = await liveScan(opts.title); if (code && code !== "__type__" && code !== "__photo__") { dlg.close(); finish(code); } else if (code === "__photo__") { status.style.color = "var(--bad)"; status.textContent = pickerStuckMsg(true); } else setTimeout(() => typed.focus(), 50); } }, camIcon(), L("Buksan ang scanner", "Open the scanner")) : null,
+          pickLabel(true, liveCameraAllowed() ? "btn" : "btn primary big", [camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")]),
           pickLabel(false, "btn", [L("🖼️ Pumili sa gallery", "🖼️ Choose from gallery")]),
-          thumb, status,
+          thumb, pickSlot, status,
           h("label", { class: "f" }, L("O i-type ang numero sa ilalim ng barcode", "Or type the number under the barcode"), typed),
           h("button", { class: "btn", onclick: useTyped }, L("Gamitin ang numerong ito", "Use this number")),
           h("p", { class: "muted small", style: "margin:0", text: L("Tip: punuin ng barcode ang gitna ng litrato, maliwanag at hindi malabo.", "Tip: fill the middle of the photo with the barcode, well lit and sharp.") }), detail));
@@ -2507,18 +2616,25 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   document.addEventListener("pointerdown", () => { try { SA.ctx = SA.ctx || new (window.AudioContext || window.webkitAudioContext)(); if (SA.ctx.state === "suspended") SA.ctx.resume(); } catch { /* no audio */ } }, { capture: true });
   const qtyWord = (p, n) => `${Math.max(0, Math.round(n * 100) / 100)} ${p.unit || "pc"}`;
-  function alertSpeech(items) {
-    const top = items.slice(0, 3);
-    return { title: L(`Paalala! Paubos na ang ${items.length} paninda.`, `Heads up! ${items.length} item${items.length === 1 ? " is" : "s are"} running low.`),
-      lines: top.map((p) => effStock(p.id) <= 0 ? L(`Ubos na ang ${p.name}.`, `${p.name} is out of stock.`) : L(`${p.name}: ${Math.round(effStock(p.id))} na lang.`, `${p.name}: only ${Math.round(effStock(p.id))} left.`))
-        .concat(items.length > 3 ? [L(`At ${items.length - 3} pa.`, `And ${items.length - 3} more.`)] : []).concat([L("Mag-restock na po.", "Time to restock.")]), lang };
+  // Spoken reminder: always English, in the calm British male "assistant" voice (the on-screen text follows the app language).
+  function alertSpeechEn(items) {
+    const top = items.slice(0, 3), n = items.length, left = (p) => Math.max(0, Math.round(effStock(p.id)));
+    return { title: n === 1 ? "Pardon the interruption. One item is running low." : `Pardon the interruption. ${n} items are running low.`,
+      lines: top.map((p) => left(p) <= 0 ? `${p.name} is out of stock.` : `${p.name}: only ${left(p)} left.`)
+        .concat(n > 3 ? [`And ${n - 3} more.`] : []).concat(["I'd suggest restocking soon."]), lang: "en" };
   }
+  function speakAssistant(r) {
+    const keep = { style: voice.style, enGender: voice.enGender };
+    voice.style = "uk"; voice.enGender = "male";
+    try { speakNow(r); } finally { Object.assign(voice, keep); }
+  }
+
   function showStockAlert(items, why) {
     if (!items.length || !alertsOn() || view === "admin" || document.getElementById("lock") || dlg.open) return;
     document.getElementById("stockAlert")?.remove();
     const sale = why === "demo" ? SA.lastSale : null;
     const close = () => { box.remove(); SA.open = false; window.speechSynthesis?.cancel(); voice.tts?.stop?.(); };
-    const sound = chime(), say = () => { try { speakNow(alertSpeech(items)); } catch { /* no voice */ } };
+    const sound = chime(), say = () => { try { speakAssistant(alertSpeechEn(items)); } catch { /* no voice */ } };
     const box = h("div", { id: "stockAlert", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "saTitle", onclick: (e) => { if (e.target === box) close(); } },
       h("div", { class: "sa" },
         h("h2", { id: "saTitle" }, h("span", { "aria-hidden": "true", text: "⚠️" }), L("Paubos na!", "Running low!"), why === "demo" ? h("span", { class: "demo-tag", text: "DEMO" }) : null),

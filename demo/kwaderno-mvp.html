@@ -213,18 +213,41 @@ dialog .db * { min-width: 0; }
 :root[data-layout="tablet"] .layout-toggle { right: 28px; bottom: 104px; }
 /* On a tablet or computer, show the app inside a phone-shaped screen. Fixed bars (bottom tabs,
    cart button, toast) pin to the phone because #phone is transformed and does not scroll. */
-@media (min-width: 520px) {
-  :root[data-layout="phone"], :root[data-layout="phone"] body { height: 100%; }
-  :root[data-layout="phone"] body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
-  :root[data-layout="phone"] body::before { display: none; }
-  :root[data-layout="phone"] #phone { position: relative; transform: translateZ(0); width: 410px; height: min(880px, calc(100dvh - 32px)); background: var(--bg);
+@media (min-width: 520px) { /* desktop preview only: JS sets .framed */
+  :root[data-layout="phone"].framed, :root[data-layout="phone"].framed body { height: 100%; }
+  :root[data-layout="phone"].framed body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
+  :root[data-layout="phone"].framed body::before { display: none; }
+  :root[data-layout="phone"].framed #phone { position: relative; transform: translateZ(0); width: 410px; height: min(880px, calc(100dvh - 32px)); background: var(--bg);
     border: 11px solid #121619; border-radius: 44px; overflow: hidden; box-shadow: 0 0 0 2px #3a4248, 0 30px 70px rgb(0 0 0 / .35); }
-  :root[data-layout="phone"] #screen { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  :root[data-layout="phone"] #screen::-webkit-scrollbar { display: none; }
-  :root[data-layout="phone"] #phone::after { content: ""; position: absolute; top: 8px; left: 50%; width: 92px; height: 24px; margin-left: -46px; border-radius: 99px; background: #121619; z-index: 40; pointer-events: none; }
-  :root[data-layout="phone"] #phone header.top .wrap { padding-top: 38px; }
-  :root[data-layout="phone"] dialog { width: 372px; max-height: min(800px, calc(100dvh - 90px)); }
+  :root[data-layout="phone"].framed #screen { height: 100%; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  :root[data-layout="phone"].framed #screen::-webkit-scrollbar { display: none; }
+  :root[data-layout="phone"].framed #phone::after { content: ""; position: absolute; top: 8px; left: 50%; width: 92px; height: 24px; margin-left: -46px; border-radius: 99px; background: #121619; z-index: 40; pointer-events: none; }
+  :root[data-layout="phone"].framed #phone header.top .wrap { padding-top: 38px; }
+  :root[data-layout="phone"].framed dialog { width: 372px; max-height: min(800px, calc(100dvh - 90px)); }
 }
+/* Landscape (JS sets .landscape on real phones and tablets held sideways, and on the tablet view). */
+:root.landscape:not(.admin-mode) .home { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+:root.landscape:not(.admin-mode) .home > * { grid-column: 1 / -1; }
+:root.landscape:not(.admin-mode) .home > .hero { grid-column: 1; grid-row: 1; }
+:root.landscape:not(.admin-mode) .home > .apps-block { grid-column: 2; grid-row: 1; }
+:root[data-layout="tablet"].landscape .home .apps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:root[data-layout="tablet"].landscape .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Phone held sideways: the bottom bar becomes a slim left rail so the short screen is all content. */
+:root[data-layout="phone"].landscape:not(.admin-mode) nav.bottom { display: flex; flex-direction: column; justify-content: center; gap: 2px; top: 0; bottom: 0; right: auto; width: calc(72px + env(safe-area-inset-left, 0px));
+  padding: 8px 4px 8px calc(4px + env(safe-area-inset-left, 0px)); border-top: 0; border-right: 1px solid var(--line); }
+:root[data-layout="phone"].landscape:not(.admin-mode) nav.bottom a { padding: 6px 0; border-radius: 12px; font-size: .68rem; }
+:root[data-layout="phone"].landscape:not(.admin-mode) nav.bottom a[aria-current="page"] { background: var(--accent-soft); }
+:root[data-layout="phone"].landscape:not(.admin-mode) nav.bottom svg { width: 20px; height: 20px; }
+:root[data-layout="phone"].landscape:not(.admin-mode) #phone { margin-left: calc(72px + env(safe-area-inset-left, 0px)); }
+:root[data-layout="phone"].landscape:not(.admin-mode) header.top .wrap { padding-block: 6px; }
+:root[data-layout="phone"].landscape:not(.admin-mode) main { padding-bottom: 24px; }
+:root[data-layout="phone"].landscape .fab { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); right: calc(16px + env(safe-area-inset-right, 0px)); width: 52px; height: 52px; }
+:root[data-layout="phone"].landscape .mobile-cart { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: calc(88px + env(safe-area-inset-left, 0px)); right: calc(84px + env(safe-area-inset-right, 0px)); }
+:root[data-layout="phone"].landscape .toast { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+:root[data-layout="phone"].landscape .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+:root[data-layout="phone"].landscape .hero { gap: 8px; padding: 12px 14px; }
+:root[data-layout="phone"].landscape .hero .big { font-size: 1.7rem; }
+:root[data-layout="phone"].landscape dialog { max-height: calc(100dvh - 16px); }
 /* phone screens are narrow: give the store name the room the demo tag took */
 :root[data-layout="phone"] .demo-pill { display: none; }
 :root[data-layout="phone"] .admin-link { margin-left: auto; }
@@ -331,7 +354,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], kbDb: [], kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
@@ -383,14 +406,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
+    if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
-    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses"]);
+    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions"]);
     const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
-    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses"]) {
+    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions"]) {
       col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
@@ -419,16 +444,24 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const NEXT_LAYOUT = { phone: "tablet", tablet: "desktop", desktop: "phone" };
   const LAYOUT_NAME = { phone: "phone", tablet: "tablet", desktop: "desktop" };
   let layoutChoice = "phone";
-  try { const saved = localStorage.getItem("kw-layout"); if (LAYOUTS.includes(saved)) layoutChoice = saved; } catch { /* private mode */ }
+  // A touch screen at least 600px on its short side is a tablet; smaller is a phone.
+  const touch = () => matchMedia("(pointer: coarse)").matches;
+  const isPhone = () => (touch() && Math.min(innerWidth, innerHeight) < 600) || innerWidth < 600;
+  const isTablet = () => touch() && !isPhone();
+  try { const saved = localStorage.getItem("kw-layout"); layoutChoice = LAYOUTS.includes(saved) ? saved : isTablet() ? "tablet" : "phone"; } catch { layoutChoice = isTablet() ? "tablet" : "phone"; }
   function setLayout(l) { layoutChoice = LAYOUTS.includes(l) ? l : "phone"; try { localStorage.setItem("kw-layout", layoutChoice); } catch { /* ignore */ } }
   // The Super Admin keeps its own phone/desktop choice (default desktop), separate from the store app's.
   let adminLayout = "desktop";
   try { adminLayout = localStorage.getItem("kw-admin-layout") || "desktop"; } catch { /* private mode */ }
   function setAdminLayout(l) { adminLayout = l; try { localStorage.setItem("kw-admin-layout", l); } catch { /* ignore */ } }
   function applyLayout() {
-    const narrow = window.innerWidth < 600; // a real phone always gets the phone layout
+    const narrow = isPhone(); // a real phone always gets the phone layout, upright or sideways
     const choice = view === "admin" ? adminLayout : layoutChoice;
-    document.documentElement.dataset.layout = narrow ? "phone" : choice;
+    const layout = narrow ? "phone" : choice, root = document.documentElement;
+    root.dataset.layout = layout;
+    const framed = layout === "phone" && !narrow && innerWidth >= 520; // desktop preview of the phone app
+    root.classList.toggle("framed", framed);
+    root.classList.toggle("landscape", !framed && layout !== "desktop" && innerWidth > innerHeight);
     const t = $("#layoutToggle");
     t.hidden = narrow;
     const nextMode = view === "admin" ? (choice === "phone" ? "desktop" : "phone") : NEXT_LAYOUT[choice];
@@ -756,7 +789,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const LEAD = 3, COVER = 7; // restock: days an order takes to arrive, and days of stock to keep on hand
   const STOP = new Set(["the", "and", "ng", "sa", "ang", "mga", "for", "per", "pc", "pcs", "piece", "pieces", "pack", "with", "na", "ba", "ko", "mo", "of", "a", "x"]);
   const CONF = { high: ["ok", "Mataas"], medium: ["low", "Katamtaman"], low: ["out", "Mababa"] };
-  const ASK_EXAMPLES = ["Ano ang dapat kong i-restock?", "Kumita ba ako this month?", "Aling produkto ang hindi nabebenta?", "Magkano ang utang na hindi pa bayad?", "Ano ang due na bills?", "Bumaba ba ang benta ko this week?"];
+  const ASK_EXAMPLES = ["Ano ang dapat kong i-restock?", "Paano mapapalaki ang benta ko?", "Kumita ba ako this month?", "Aling produkto ang hindi nabebenta?", "Paano maningil ng utang?", "Bumaba ba ang benta ko this week?"];
   const INTENTS = [
     { id: "restock", label: "Ano ang i-restock", words: ["restock", "reorder", "i order", "mag order", "bilhin", "dapat bilhin", "kulang", "ubos", "stock up", "what to buy"] },
     { id: "best", label: "Pinakamabenta", words: ["best seller", "bestseller", "best selling", "top seller", "top product", "pinakamabenta", "pinaka benta", "mabenta"] },
@@ -837,6 +870,190 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     }
     return best?.p || null;
   }
+  // ---------- KNOWLEDGE BASE: practical answers for running a sari-sari store ----------
+  // Starter answers ship with the app. The Super Admin edits them and publishes new ones (network/kb/items);
+  // a published entry with the same id replaces the starter one, and status "hidden" removes it.
+  const KB_CATS = ["Benta", "Presyo", "Imbentaryo", "Supplier", "Pera at accounting", "Utang", "Pamamahala", "Paglago", "Customer", "Digital", "Permit at buwis", "App"];
+  const STARTER_KB = [
+    { id: "grow-sales", cat: "Paglago", link: "best", q: "Paano mapapalaki ang benta ng tindahan?", kw: "palaguin palakihin mapapalaki lumaki dagdag benta grow increase sales more customers dumami mamimili",
+      bullets: ["Laging may stock ang 10 pinakamabenta mo. Ang ubos na paninda ay benta na napupunta sa kabilang tindahan.", "Magdagdag ng produktong mabenta sa ibang tindahan (tingnan ang Smart tips).", "Ilagay sa harap at malapit sa bantay ang mabenta at mga impulse buy (kendi, sigarilyo, softdrinks).", "Gumawa ng bundle, hal. kape + pandesal o noodles + itlog.", "Alagaan ang suki: maayos na sukli, malinis na tindahan, at tandaan ang pangalan nila."],
+      steps: ["Itanong dito: “Ano ang dapat kong i-restock?” at bilhin ang nasa listahan.", "Pumili ng isang bagong produkto mula sa Smart tips at subukan sa maliit na dami."] },
+    { id: "pricing", cat: "Presyo", link: "profit", q: "Paano magpresyo ng paninda?", kw: "presyo pricing magkano ibenta markup patong tubo price set magpresyo halaga",
+      bullets: ["Simulan sa puhunan bawat piraso: presyo ng kaha o pack ÷ dami ng laman.", "Halimbawa lang: mas maliit na patong sa mabilis na produkto, mas malaki sa tingi at mabagal na produkto.", "Ikumpara sa karaniwang presyo sa ibang tindahan. Itanong dito ang pangalan ng produkto para makita ito.", "Bilugan sa madaling sukli (₱8 imbes na ₱7.85).", "Tandaan: 20% na patong ay 16.7% lang na tubo sa presyo (margin)."],
+      steps: ["Siguraduhing may puhunan (cost) ang bawat produkto sa app.", "Suriin ang 5 pinakamabenta: tama ba ang patong nila?"] },
+    { id: "markup-margin", cat: "Presyo", link: "profit", q: "Ano ang pagkakaiba ng markup at margin?", kw: "markup margin pagkakaiba difference porsyento percent patong tubo",
+      bullets: ["Markup = (presyo − puhunan) ÷ puhunan.", "Margin = (presyo − puhunan) ÷ presyo.", "Halimbawa: puhunan ₱10, presyo ₱12 → markup 20%, margin 16.7%.", "Kung gusto mo ng 20% margin: presyo = puhunan ÷ 0.80 (₱10 → ₱12.50)."],
+      steps: ["Gamitin ang margin kapag tinitingnan kung sapat ang kita mo."] },
+    { id: "cash-missing", cat: "Pera at accounting", link: "cash", q: "Bakit may benta pero walang pera?", kw: "walang pera benta kita cash bakit nasaan napunta nawawala kulang kaha naubos",
+      bullets: ["Utang na hindi pa nababayaran: benta ito pero wala pang pera.", "Pinambili ng bagong stock: nasa paninda ang pera, hindi nawala.", "Personal na kinuha sa kaha na hindi naitala.", "Mga gastos tulad ng kuryente, pamasahe at load.", "Nawawalang paninda o maling sukli."],
+      steps: ["Tingnan ang Cash ledger at ang kabuuang utang.", "Itala ang bawat kuha sa kaha bilang Cash out na may note."] },
+    { id: "separate-money", cat: "Pera at accounting", link: "cash", q: "Paano ihiwalay ang pera ng tindahan at personal?", kw: "ihiwalay hiwalay personal pera sariling sahod sweldo owner withdraw kinukuha gastos bahay",
+      bullets: ["Bigyan ang sarili ng takdang “sahod” linggo-linggo, hindi kuha nang kuha.", "Itala bilang Cash out ang bawat kuha para sa bahay.", "Kung kukuha ng paninda para sa bahay, itala rin (benta o cash out).", "Gumamit ng hiwalay na lalagyan o GCash account para sa tindahan."],
+      steps: ["Magpasya ng halaga ng lingguhang sahod mo batay sa net profit sa Reports."] },
+    { id: "restock-qty", cat: "Imbentaryo", link: "restock", q: "Gaano karami ang dapat kong bilhin kapag nag-restock?", kw: "gaano karami dami bibilhin order restock quantity ilang piraso mag-order pamimili",
+      bullets: ["Formula: bilis ng benta kada araw × (araw bago dumating + buffer na araw).", "Halimbawa: 4 kada araw × (3 + 7) = 40, bawasan ng natitirang stock.", "Huwag mag-overstock ng mabagal na produkto; nakatengga ang puhunan.", "Mas madalas pero mas kaunti para sa may expiry."],
+      steps: ["Itanong dito: “Ano ang dapat kong i-restock?”. Kinukuwenta na ito ng app para sa iyo."] },
+    { id: "dead-stock", cat: "Imbentaryo", link: "slow", q: "Ano ang gagawin sa paninda na hindi nabebenta?", kw: "hindi nabebenta matumal mabagal dead stock nakatengga lumang paninda walang bumibili",
+      bullets: ["Ilipat sa harap o sa eye level.", "Isama sa bundle kasama ang mabentang produkto.", "Bawasan nang kaunti ang presyo para mabawi ang puhunan.", "Huwag nang bilhin muli hangga't hindi naubos.", "Itanong sa supplier kung puwedeng ibalik o ipalit."],
+      steps: ["Tingnan ang listahan sa “Aling produkto ang hindi nabebenta?”."] },
+    { id: "expiry", cat: "Imbentaryo", link: "expiry", q: "Paano maiwasan ang expired na paninda?", kw: "expired expire iwasan fifo luma una petsa sira panis",
+      bullets: ["FIFO: ilagay sa harap ang luma, sa likod ang bago.", "Itala ang expiry date tuwing stock-in.", "Silipin linggo-linggo ang listahan ng malapit nang mag-expire.", "Bumili ng mas kaunti ng mabagal na may expiry.", "Huwag ibenta ang expired; alisin agad sa shelf."],
+      steps: ["Buksan ang Expiry sa Home at unahin ang mga malapit na."] },
+    { id: "utang-policy", cat: "Utang", link: "utang", q: "Paano mag-manage ng utang ng customer?", kw: "utang pautang credit mangutang listahan limit policy patakaran",
+      bullets: ["Maglagay ng limit sa bawat customer.", "Itala ang lahat ng utang at bayad sa app.", "Magkasundo sa araw ng bayad, hal. tuwing sweldo o kinsenas.", "Huwag nang dagdagan ang utang ng lampas na sa limit.", "Panatilihing maliit na bahagi lang ng benta ang utang."],
+      steps: ["Lagyan ng limit ang mga suki sa Utang.", "Gamitin ang Remind para sa magalang na paalala."] },
+    { id: "utang-collect", cat: "Utang", link: "utang", q: "Paano maningil ng utang nang hindi nag-aaway?", kw: "maningil singilin singil hindi magbayad ayaw magbayad paalala collect hiya",
+      bullets: ["Kausapin nang pribado at mahinahon.", "Ipakita ang record para malinaw ang halaga.", "Mag-alok ng hulugan kung hirap magbayad.", "Ipaalala sa araw ng sweldo.", "Ihinto muna ang bagong utang hangga't hindi nakakabayad."],
+      steps: ["Unahin ang pinakamalaki at pinakamatagal na utang."] },
+    { id: "supplier", cat: "Supplier", link: "restock", q: "Saan at paano bumili ng paninda nang mas mura?", kw: "supplier wholesale saan bumili mura palengke distributor grocery bultuhan pakyawan agent",
+      bullets: ["Ikumpara ang presyo ng hindi bababa sa dalawang supplier.", "Bilhin nang kaha o box ang mabilis na produkto.", "Hanapin ang distributor o agent na nagde-deliver para makatipid sa pamasahe.", "Itala ang puhunan sa bawat stock-in para makita kung saan mas mura."],
+      steps: ["Sa susunod na pamimili, ikumpara ang presyo ng 5 pinakamabenta mo."] },
+    { id: "capital", cat: "Pera at accounting", link: "profit", q: "Paano madagdagan ang puhunan?", kw: "puhunan capital dagdag loan utangan bangko negosyo pondo kapital",
+      bullets: ["Ibalik sa negosyo ang bahagi ng kita linggo-linggo.", "Bawasan ang nakatenggang stock at singilin ang utang.", "Kung uutang, piliin ang lehitimo: bangko, kooperatiba o microfinance. Iwasan ang 5-6.", "Kuwentahin muna kung kaya ng net profit ang hulog bago umutang."],
+      steps: ["Tingnan ang net profit mo ngayong buwan sa Reports."] },
+    { id: "cut-expenses", cat: "Pera at accounting", link: "expenses", q: "Paano bawasan ang gastos ng tindahan?", kw: "bawasan tipid gastos kuryente expenses save matipid bills",
+      bullets: ["Alamin muna ang pinakamalaking gastos.", "Kuryente: ayusin ang setting at seal ng ref o freezer; gumamit ng LED.", "Pamasahe: pagsabayin ang pamimili sa isang biyahe.", "Itala ang lahat ng gastos para makita ang tunay na kita."],
+      steps: ["Itanong dito: “Ano ang gastos ko this month?”."] },
+    { id: "records", cat: "Pamamahala", link: "sales", q: "Bakit kailangang itala ang bawat benta?", kw: "itala record listahan bakit kailangan kwaderno lista tala",
+      bullets: ["Para malaman ang tunay na kita, hindi hula.", "Para makita kung ano ang mabenta at ano ang matumal.", "Para mahuli ang nawawalang paninda o pera.", "Nakakatulong ito kapag mag-a-apply ng loan dahil may patunay ng kita."],
+      steps: ["Gamitin ang Sell sa bawat benta, kahit maliit."] },
+    { id: "shrinkage", cat: "Pamamahala", link: "cash", q: "Paano maiwasan ang nawawalang paninda o pera?", kw: "nawawala nakaw theft ninakaw kulang shrinkage bantay magnanakaw",
+      bullets: ["Bilangin ang kaha araw-araw at ikumpara sa Cash ledger.", "Bilangin linggo-linggo ang mahal na paninda (sigarilyo, gatas, alak).", "Isang tao lang ang may hawak ng kaha kada shift.", "Ilagay sa likod ng bantay ang mahal at maliit na paninda."],
+      steps: ["Gawin ang bilang ng kaha bago magsara ngayong gabi."] },
+    { id: "display", cat: "Benta", q: "Paano ayusin ang display ng tindahan?", kw: "display ayos ayusin itsura shelf merchandising harap estante",
+      bullets: ["Ang mabenta at impulse buys ay sa harap at malapit sa bantay.", "Igrupo ayon sa uri: inumin, de-lata, sabon, meryenda.", "Kitang-kita ang presyo.", "Malinis at maliwanag na tindahan.", "Ilagay sa eye level ang bagong produkto."],
+      steps: ["Ilipat ngayong linggo ang 5 pinakamabenta sa pinakakitang lugar."] },
+    { id: "new-products", cat: "Paglago", link: "best", q: "Anong bagong produkto ang dapat kong idagdag?", kw: "bagong produkto idagdag dagdag new product ano ibebenta itinda tinda",
+      bullets: ["Tingnan ang Smart tips: mga produktong mabenta sa ibang tindahan.", "Tanungin ang mga suki kung ano ang hinahanap nila.", "Subukan muna sa maliit na dami.", "Tingnan ang benta pagkalipas ng 2 linggo bago bumili ulit."],
+      steps: ["Buksan ang Smart tips at pumili ng isa."] },
+    { id: "services", cat: "Paglago", q: "Anong serbisyo ang puwedeng idagdag para kumita pa?", kw: "serbisyo service dagdag kita load eload cash cashin bills payment padala yelo",
+      bullets: ["E-load at bills payment.", "Cash-in at cash-out bilang rehistradong agent ng e-wallet; sundin ang patakaran nila.", "Yelo at malamig na inumin kung may freezer.", "Ihiwalay ang pera ng serbisyo sa pera ng paninda."],
+      steps: ["Alamin kung alin ang madalas hanapin ng mga suki mo."] },
+    { id: "gcash-safe", cat: "Digital", q: "Paano tumanggap ng GCash nang ligtas?", kw: "gcash maya qr ligtas scam fake screenshot bayad ewallet",
+      bullets: ["Tingnan sa sariling GCash app kung pumasok bago ibigay ang paninda.", "Huwag maniwala sa screenshot lang.", "Itala ang reference number sa app.", "Huwag ibigay ang OTP o PIN kahit kanino."],
+      steps: ["Ugaliing buksan ang GCash app bago iabot ang paninda."] },
+    { id: "loyalty", cat: "Customer", q: "Paano mapabalik-balik ang customer (suki)?", kw: "suki loyalty bumalik customer service ugali loyal mamimili kostumer",
+      bullets: ["Batiin at tandaan ang pangalan.", "Tamang sukli at tapat na timbang.", "Laging may stock ang paborito nila.", "Maliit na regalo o dagdag tuwing may okasyon.", "Mabilis na serbisyo kahit maraming tao."],
+      steps: ["Tanungin ang 3 suki ngayong linggo kung ano ang gusto nilang idagdag."] },
+    { id: "competition", cat: "Paglago", link: "trend", q: "May bagong tindahan malapit sa akin, ano ang gagawin?", kw: "kakumpitensya kalaban bagong tindahan competition katabi malapit kompetisyon",
+      bullets: ["Alamin kung ano ang wala sa kanila at doon ka magaling.", "Huwag agad bumaba ng presyo; serbisyo at stock ang panalo.", "Pahabain ang oras ng bukas kung kaya.", "Mag-alok ng pa-deliver sa kapitbahay."],
+      steps: ["Tingnan kung bumaba ang benta mo: itanong “Bumaba ba ang benta ko this week?”."] },
+    { id: "hours", cat: "Pamamahala", link: "sales", q: "Anong oras dapat magbukas at magsara ang tindahan?", kw: "oras bukas sarado open close hours schedule magbukas magsara",
+      bullets: ["Tingnan sa Sales history kung anong oras pinakamaraming benta.", "Maaga sa umaga para sa almusal at kape; gabi para sa mga pauwi.", "Maging consistent para alam ng suki."],
+      steps: ["Itala ang oras ng benta nang isang linggo bago baguhin ang schedule."] },
+    { id: "raise-price", cat: "Presyo", link: "profit", q: "Paano magtaas ng presyo nang hindi nawawala ang suki?", kw: "taas presyo increase price nagmahal supplier inflation pagtaas mahal",
+      bullets: ["Itaas kapag tumaas ang puhunan mo, at sabihin nang tapat.", "Paunti-unti, hindi biglaan.", "Unahin ang produktong hindi masyadong pinaghahambing ang presyo.", "Panatilihing makatwiran kumpara sa ibang tindahan."],
+      steps: ["Ikumpara ang presyo mo sa karaniwan ng ibang tindahan bago magtaas."] },
+    { id: "promos", cat: "Benta", q: "Anong promo ang puwede sa sari-sari store?", kw: "promo bundle sale discount pakulo raffle alok",
+      bullets: ["Bundle: dalawang produkto sa mas mababang presyo.", "Buy-more-save: hal. 3 piraso ng isang produkto sa espesyal na presyo.", "Stamp card para sa suki: libreng maliit na item pagkatapos ng ilang bili.", "Siguraduhing may tubo pa rin pagkatapos ng discount."],
+      steps: ["Subukan ang isang bundle ng mabagal at mabentang produkto ngayong linggo."] },
+    { id: "tingi", cat: "Benta", q: "Sulit ba ang pagtitingi o repacking?", kw: "tingi repack repacking takal hati sachet pagtitingi",
+      bullets: ["Mas mataas ang tubo pero kumakain ng oras at may sayang.", "Malinis at may label ang bawat repack.", "Tama ang timbang o sukat.", "Alamin ang patakaran sa inyong lugar para sa pagre-repack ng pagkain."],
+      steps: ["Kuwentahin ang tubo kada pack kasama ang supot at oras."] },
+    { id: "stock-count", cat: "Imbentaryo", q: "Gaano kadalas dapat magbilang ng stock?", kw: "bilang stock count inventory imbentaryo gaano kadalas bilangin",
+      bullets: ["Linggo-linggo para sa mahal at mabilis na produkto.", "Buwan-buwan para sa buong tindahan.", "Ikumpara ang bilang sa app at itama na may dahilan."],
+      steps: ["Bilangin ngayong linggo ang 10 pinakamahal na produkto."] },
+    { id: "reorder-level", cat: "Imbentaryo", link: "restock", q: "Paano itakda ang reorder level?", kw: "reorder level minimum stock kailan bibili mababa",
+      bullets: ["Reorder level = benta kada araw × araw bago dumating ang order + kaunting reserba.", "Halimbawa: 3 kada araw × 3 araw + 3 = 12.", "Mas mataas para sa mabenta, mas mababa para sa matumal."],
+      steps: ["Itakda ang reorder level ng 10 pinakamabenta sa Stock."] },
+    { id: "pnl", cat: "Pera at accounting", link: "profit", q: "Paano malalaman kung kumikita ang tindahan?", kw: "kumikita profit loss tubo lugi malalaman kita ng tindahan income statement",
+      bullets: ["Net profit = benta − puhunan ng nabentang paninda − gastos.", "Ang bayad sa stock ay hindi gastos; nasa puhunan ito ng nabenta.", "Tingnan buwan-buwan, hindi araw-araw lang.", "Kailangang may puhunan (cost) ang bawat produkto para tama ang kuwenta."],
+      steps: ["Buksan ang Profit & loss sa Reports."] },
+    { id: "cash-flow", cat: "Pera at accounting", link: "cash", q: "Paano hindi maubusan ng pera pang-restock?", kw: "pang restock walang pambili kapos cash flow ubos pera puhunan",
+      bullets: ["Magtabi ng bahagi ng benta araw-araw para sa restock.", "Limitahan ang utang ng customer.", "Huwag mag-overstock ng matumal.", "Gamitin ang “Pay later” sa supplier kung may usapan, at bayaran sa takdang araw."],
+      steps: ["Magtabi ng nakapirming halaga mula sa benta bukas."] },
+    { id: "permits", cat: "Permit at buwis", q: "Anong permit ang kailangan ng sari-sari store?", kw: "permit business permit barangay clearance dti bir rehistro legal lisensya mayor",
+      bullets: ["Kadalasang kailangan: business name sa DTI, barangay clearance, business permit mula sa munisipyo o lungsod, at rehistro sa BIR.", "Iba-iba ang patakaran sa bawat LGU.", "May mga programa para sa maliliit na negosyo; itanong sa DTI Negosyo Center."],
+      steps: ["Pumunta o tumawag sa munisipyo o DTI Negosyo Center para sa eksaktong listahan."] },
+    { id: "taxes", cat: "Permit at buwis", q: "Kailangan ko bang magbayad ng buwis?", kw: "buwis tax bir income tax resibo magbayad",
+      bullets: ["Ang rehistradong negosyo ay may obligasyon sa BIR.", "May pinasimpleng opsyon para sa maliliit na negosyo.", "Magtanong sa BIR (Revenue District Office) o sa isang accountant para sa sitwasyon mo.", "Itago ang records ng benta at gastos; makakatulong ang Reports ng app."],
+      steps: ["Itanong sa BIR RDO kung ano ang angkop sa tindahan mo."] },
+    { id: "staff", cat: "Pamamahala", q: "Paano mag-manage ng bantay o kasama sa tindahan?", kw: "bantay staff tauhan kasama empleyado tiwala helper",
+      bullets: ["Malinaw na tungkulin at oras.", "Bilangin ang kaha sa simula at dulo ng bawat shift.", "Turuan silang gumamit ng app sa bawat benta.", "Magbigay ng maliit na insentibo kapag maayos ang bilang."],
+      steps: ["Gawin ang bilang ng kaha sa bawat palitan ng bantay."] },
+    { id: "seasons", cat: "Benta", link: "trend", q: "Paano maghanda sa payday, pasukan at Pasko?", kw: "payday sweldo kinsenas pasukan pasko season holiday fiesta okasyon",
+      bullets: ["Dagdagan ang stock ng mabenta bago ang sweldo (kinsenas at katapusan).", "Pasukan: school supplies at baon.", "Disyembre: pang-noche buena at regalo.", "Huwag sumobra; kuwentahin pa rin ayon sa bilis ng benta."],
+      steps: ["Tingnan ang benta noong nakaraang sweldo sa Sales history."] },
+    { id: "loan", cat: "Pera at accounting", link: "profit", q: "Paano makakuha ng loan para sa tindahan?", kw: "loan pautang bangko microfinance kooperatiba apply hiram umutang",
+      bullets: ["Ihanda ang records ng benta at kita; makakatulong ang Reports ng app.", "Ikumpara ang interes at kabuuang babayaran.", "Lehitimong nagpapautang lang: bangko, kooperatiba, microfinance.", "Umutang para sa paninda na mabenta, hindi para sa personal na gastos."],
+      steps: ["I-download ang Reports ng nakaraang 3 buwan bilang patunay ng benta."] },
+    { id: "delivery", cat: "Digital", q: "Paano magbenta online o mag-deliver sa kapitbahay?", kw: "online delivery deliver messenger facebook order pa-deliver kapitbahay group chat",
+      bullets: ["Gumawa ng group chat ng kapitbahayan para sa order.", "Magpadala ng listahan ng available na paninda.", "Maglagay ng minimum order o maliit na delivery fee.", "Tiyaking pumasok ang bayad bago ipadala."],
+      steps: ["Simulan sa 10 suki na malapit sa iyo."] },
+    { id: "app-help", cat: "App", q: "Ano ang puwede kong itanong dito?", kw: "puwede itanong tanong examples halimbawa ano kaya help tulong app kwaderno gamitin",
+      bullets: ["Tungkol sa datos mo: benta, kita, restock, pinakamabenta, utang, bills, expiry, cash at gastos.", "Tungkol sa isang produkto: i-type ang pangalan nito.", "Payo sa negosyo: presyo, supplier, puhunan, utang, display, promo, permit at iba pa.", "Pang-negosyo lang ang tanong dito."],
+      steps: ["Subukan: “Paano mapapalaki ang benta ko?”"] },
+  ];
+  const KB_STOP = new Set([...STOP, "ano", "paano", "pano", "bakit", "saan", "kailan", "sino", "magkano", "gaano", "ilan", "ako", "kung", "para", "nang", "po", "naman", "lang", "kaya", "yung", "iyong", "ito", "iyan", "may", "ay", "din", "rin", "dapat", "pwede", "puwede", "gagawin", "how", "what", "why", "when", "where", "which", "can", "does", "you", "your", "the", "are", "kami", "tayo", "natin", "namin", "akin", "aking", "kong", "kang", "nga", "daw", "raw", "pala", "talaga", "yun", "dito", "doon", "nito", "nyo", "ninyo", "sila", "nila", "ko", "ba", "mga", "ang", "sa", "ng", "na", "at", "o", "is", "to", "my", "and", "for", "this", "that", "with"]);
+  // Light Tagalog stemmer: "nabebenta" / "magbenta" → "benta", "mapapalaki" / "palakihin" / "lumaki" → "laki".
+  function stem(w) {
+    let x = w;
+    for (let round = 0; round < 3; round++) {
+      if (x.length >= 6 && x.slice(0, 2) === x.slice(2, 4)) { x = x.slice(2); continue; }
+      const pre = ["pinaka", "nakaka", "nagpa", "magpa", "ipag", "pag", "mag", "nag", "ma", "na", "pa", "ka", "i"].find((pfx) => x.startsWith(pfx) && x.length - pfx.length >= 4);
+      if (pre) { x = x.slice(pre.length); continue; }
+      break;
+    }
+    if (x.length >= 5 && x.slice(1, 3) === "um") x = x[0] + x.slice(3);
+    const suf = ["han", "hin", "an", "in"].find((sx) => x.endsWith(sx) && x.length - sx.length >= 4);
+    return suf ? x.slice(0, -suf.length) : x;
+  }
+  function kbAll() {
+    const db = new Map((S.kbDb || []).map((e) => [e.id, e])), out = [];
+    for (const e of STARTER_KB) { const o = db.get(e.id); if (o) { if (o.status !== "hidden") out.push({ ...e, ...o, source: "admin" }); db.delete(e.id); } else out.push({ ...e, source: "starter" }); }
+    for (const o of db.values()) if (o.status !== "hidden" && o.q && Array.isArray(o.bullets)) out.push({ ...o, source: "admin" });
+    return out;
+  }
+  let kbIdx = null, bizSet = null; // rebuilt when published answers change
+  function kbIndex() {
+    if (kbIdx) return kbIdx;
+    const docs = [], df = new Map();
+    for (const e of kbAll()) {
+      const words = new Set();
+      for (const w of toks([e.q, [].concat(e.kw || []).join(" "), [].concat(e.alts || []).join(" ")].join(" "))) if (w.length >= 3 && !KB_STOP.has(w)) { words.add(w); words.add("~" + stem(w)); }
+      docs.push({ e, words }); for (const w of words) df.set(w, (df.get(w) || 0) + 1);
+    }
+    kbIdx = { docs, df, N: docs.length, vocab: [...df.keys()].filter((w) => !w.startsWith("~") && w.length >= 5) };
+    return kbIdx;
+  }
+  // Rank answers by how much of the question they cover, weighting rare words more (TF-IDF style).
+  function kbSearch(qt) {
+    const I = kbIndex(); if (!I.N) return [];
+    const terms = [...new Set(qt.filter((w) => w.length >= 3 && !KB_STOP.has(w)))];
+    if (!terms.length) return [];
+    const idf = (k) => Math.log(1 + I.N / I.df.get(k));
+    const T = terms.map((t) => {
+      const forms = [[t, 1], ["~" + stem(t), 0.9], ...(t.length >= 5 ? I.vocab.filter((v) => v !== t && Math.abs(v.length - t.length) <= 1 && lev(v, t) <= 1).map((v) => [v, 0.8]) : [])].filter(([k]) => I.df.has(k));
+      return { forms, w: forms.length ? Math.max(...forms.map(([k]) => idf(k))) : 1.5 };
+    });
+    const total = T.reduce((a, x) => a + x.w, 0);
+    return I.docs.map(({ e, words }) => {
+      let got = 0, n = 0;
+      for (const x of T) { const f = Math.max(0, ...x.forms.filter(([k]) => words.has(k)).map(([, m]) => m)); if (f) { got += f * x.w; n++; } }
+      const cov = got / total;
+      return { e, cov, n, ok: cov >= 0.45 && (n >= 2 || terms.length <= 2) };
+    }).filter((m) => m.n).sort((a, b) => b.cov - a.cov).slice(0, 3);
+  }
+  // Only business and app questions are answered. Jokes, insults and unrelated topics are declined and not saved.
+  const RUDE = new Set(["puta", "putang", "putangina", "tangina", "gago", "gaga", "tanga", "bobo", "ulol", "tarantado", "leche", "pakyu", "fuck", "fck", "shit", "bitch", "asshole", "inutil", "pucha"]);
+  const JOKE = new Set(["joke", "jokes", "biro", "patawa", "hugot", "pickup", "banat", "crush", "jowa", "ligaw", "manligaw", "girlfriend", "boyfriend", "pogi", "gwapo", "kanta", "song", "tula", "poem", "bugtong", "riddle", "horoscope", "lotto", "sabong", "sugal"]);
+  const BIZ_WORDS = "tindahan store sari negosyo business benta sales sale sell paninda tinda produkto product customer mamimili suki kostumer presyo price pera money kita profit tubo puhunan capital kapital gastos expense utang credit stock inventory imbentaryo supplier wholesale order restock bili bumili bilhin app kwaderno kaha cash gcash maya bayad payment resibo receipt loan permit tax buwis bir dti barangay bantay staff tauhan empleyado delivery online promo discount display bundle tingi repack expiry expire expired bills bill kuryente renta upa palengke grocery negosyante ipon savings report reports accounting libro record itala benta noodles kape softdrinks sigarilyo load eload";
+  function biz() {
+    if (bizSet) return bizSet;
+    const words = [BIZ_WORDS, ...INTENTS.flatMap((i) => i.words), ...kbIndex().docs.flatMap((d) => [...d.words].filter((w) => !w.startsWith("~"))), ...activeProducts().map((p) => p.name)].join(" ");
+    bizSet = new Set(toks(words).filter((w) => w.length >= 3 && !KB_STOP.has(w)).flatMap((w) => [w, "~" + stem(w)]));
+    return bizSet;
+  }
+  function offTopic(qt) {
+    if (qt.some((t) => RUDE.has(t))) return "rude";
+    if (qt.some((t) => JOKE.has(t))) return "joke";
+    const B = biz();
+    if (qt.some((t) => t.length >= 3 && (B.has(t) || B.has("~" + stem(t))))) return null;
+    // forgive a one-letter typo in longer words ("restok", "presiyo")
+    const long = [...B].filter((w) => !w.startsWith("~") && w.length >= 5);
+    return qt.some((t) => t.length >= 5 && long.some((w) => Math.abs(w.length - t.length) <= 1 && lev(w, t) <= 1)) ? null : "unrelated";
+  }
+  const HOWTO = /\b(paano|pano|how|bakit|why|tips?|payo|advice|paraan|ideas?|ideya|gagawin|dapat ba|should|tulong|help|suggest|mungkahi|diskarte|strategy)\b/;
   const noSales = (title) => ({ title, lines: ["Wala pang naitalang benta sa app, kaya hindi ako makapagbigay ng maaasahang sagot."], evidence: [], assumptions: [], action: "Mag-record muna ng benta sa Sell.", confidence: "low" });
   const sumTotal = (arr) => arr.reduce((x, y) => x + y.total, 0);
   // Each answer returns: title, lines (the answer), evidence, assumptions, action, and optionally confidence.
@@ -981,51 +1198,91 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         action, confidence: q30 < 3 ? "low" : undefined };
     },
   };
+  function kbAnswer(m, Q, alts) {
+    const e = m.e;
+    const res = { kind: "kb", kbId: e.id, title: e.q, lines: [...e.bullets], steps: [...(e.steps || [])], action: null,
+      evidence: [], assumptions: ["Pangkalahatang payo ito para sa sari-sari store. Iakma sa sitwasyon mo."],
+      confidence: m.cov >= 0.75 ? "high" : "medium",
+      confidenceWhy: `Tugma ang tanong mo sa “${e.q}” (${Math.round(m.cov * 100)}%). Galing ito sa ${e.source === "admin" ? "KELSON" : "gabay ng KWADERNO"}.`, alts };
+    if (e.link && ANSWERS[e.link] && !(Q.sales === 0 && NEEDS_SALES.has(e.link))) {
+      const d = ANSWERS[e.link]({ q: "", qt: [], Q, period: null, prod: null });
+      res.mine = { title: d.title, lines: d.lines.slice(0, 3), action: d.action };
+      res.evidence.push(`Kasama ang datos ng tindahan mo: ${d.title}.`);
+    }
+    return res;
+  }
   function answerQuestion(raw, force) {
     const q = String(raw || "").trim().slice(0, 300), qt = toks(q), Q = dataQuality();
     if (!qt.length && !force) return null;
+    if (force && force.startsWith("kb:")) { const e = kbAll().find((x) => x.id === force.slice(3)); if (e) return kbAnswer({ e, cov: 1 }, Q, []); }
+    const off = force ? null : offTopic(qt);
+    if (off) return { kind: "offtopic", title: "Pang-negosyo lang ang tanong dito",
+      lines: [off === "rude" ? "Pakiusap, magalang na tanong lang po." : "Tungkol lang sa tindahan, paninda, pera, utang at sa paggamit ng app ang sinasagot dito."],
+      evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
     const prod = qt.length ? findProduct(qt) : null;
-    let intent = force || (prod ? "product" : null), alts = [];
+    const howto = HOWTO.test(" " + qt.join(" ") + " ");
+    const kb = force ? [] : kbSearch(qt), top = kb[0]?.ok ? kb[0] : null;
+    const kbAlts = kb.filter((m, i) => m.ok && (i > 0 || !howto)).map((m) => ({ id: "kb:" + m.e.id, label: m.e.q })).slice(0, 2);
+    let intent = force || null, alts = [];
     if (!intent) {
       const scored = INTENTS.map((it) => ({ it, score: it.words.reduce((x, w) => x + phraseScore(qt, toks(w).join(" ")) * (toks(w).length > 1 ? 2 : 1), 0) })).sort((x, y) => y.score - x.score);
-      if (scored[0].score > 0) {
-        intent = scored[0].it.id;
-        alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= scored[0].score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label }));
-      }
+      const dataTop = scored[0].score > 0 ? scored[0] : null;
+      if (prod && !(howto && top && top.cov >= 0.5)) intent = "product";
+      else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top).map((m) => ({ id: "kb:" + m.e.id, label: m.e.q })).slice(0, 2));
+      else if (dataTop) { intent = dataTop.it.id; alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= dataTop.score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label })); }
     }
-    if (!intent) return { title: "Hindi ko pa matukoy ang tanong", lines: ["Hindi ako manghuhula. Subukan ang isa sa mga tanong sa ibaba, o banggitin ang pangalan ng produkto."], evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
+    if (!intent) return { kind: "none", title: "Wala pa akong sagot dito",
+      lines: ["Naipadala ang tanong mo sa KELSON (walang pangalan). Kapag may sagot na, lalabas ito dito para sa lahat ng tindahan.", "Samantala, subukan ang mga tanong sa ibaba."],
+      evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
     const label = INTENTS.find((i) => i.id === intent)?.label || "Sagot";
-    if (Q.sales === 0 && NEEDS_SALES.has(intent) && intent !== "product") return noSales(label);
-    const res = ANSWERS[intent]({ q, qt, Q, period: periodOf(qt), prod });
+    const res = Q.sales === 0 && NEEDS_SALES.has(intent) ? noSales(label) : ANSWERS[intent]({ q, qt, Q, period: periodOf(qt), prod });
     const rb = RECORD_BASIS[intent];
+    res.kind = intent === "product" ? "product" : "data"; res.intent = intent;
     res.confidence = res.confidence || (rb ? rb[0] : Q.level);
-    res.alts = alts.filter((x) => x.id !== intent);
+    res.alts = [...alts.filter((x) => x.id !== intent), ...kbAlts].slice(0, 3);
     res.confidenceWhy = rb ? rb[1] : `${Q.sales} benta sa nakaraang 30 araw, sa ${Q.days} araw.` + (Q.costKnown < 0.6 ? " Maraming produkto na walang puhunan, kaya tantiya lang ang tubo." : "");
     return res;
   }
-  const askState = { draft: "", q: "", res: null };
+  const askState = { draft: "", q: "", res: null, qid: null, voted: null };
+  // Every business question is saved (names removed) and reaches the Super Admin through the store summary.
+  async function logAsk(res, q) {
+    if (!S.db || !res || res.kind === "offtopic") return null;
+    const id = uid();
+    try { await write("questions/" + id, { q: redact(q).slice(0, 300), at: new Date().toISOString(), kind: res.kind || "data", intent: res.intent || null, kb: res.kbId || null, helpful: null }); return id; }
+    catch { return null; }
+  }
   function askNow(q, force) {
     const text = String(q ?? askState.draft ?? "").trim().slice(0, 300);
     if (!text && !force) return;
-    askState.q = text; askState.draft = text;
+    askState.q = text; askState.draft = text; askState.voted = null;
     askState.res = answerQuestion(text, force || null);
+    if (!force) { askState.qid = null; logAsk(askState.res, text).then((id) => { if (id && askState.q === text) { askState.qid = id; if (view === "home") render(); } }); }
+    else if (askState.qid) ref("questions/" + askState.qid).update({ kind: askState.res?.kind || "data", intent: askState.res?.intent || null, kb: askState.res?.kbId || null }).catch(() => {});
     render();
+  }
+  async function askVote(up) {
+    askState.voted = up ? "up" : "down"; render();
+    try { await ref("questions/" + askState.qid).update({ helpful: !!up }); } catch { /* a missed vote is not critical */ }
   }
   function resultView(r) {
     const c = CONF[r.confidence];
     const body = [
       h("div", { class: "small muted", text: "Tanong: " + askState.q }),
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: "Kumpiyansa: " + c[1] }) : null),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + c[1] }) : null),
       r.lines.length ? h("ul", { class: "small", style: "margin:0;padding-left:18px;display:grid;gap:3px" }, r.lines.map((l) => h("li", { text: l }))) : null,
+      r.steps?.length ? h("div", { class: "small" }, h("b", { text: "Mga hakbang" }), h("ol", { style: "margin:4px 0 0;padding-left:20px;display:grid;gap:3px" }, r.steps.map((x) => h("li", { text: x })))) : null,
+      r.mine ? h("div", { class: "card", style: "padding:10px;display:grid;gap:4px" }, h("div", { class: "small", style: "font-weight:700", text: "📊 Para sa tindahan mo: " + r.mine.title }), r.mine.lines.map((l) => h("div", { class: "small", text: "• " + l })), r.mine.action ? h("div", { class: "small", style: "color:var(--accent);font-weight:600", text: "→ " + r.mine.action }) : null) : null,
       r.action ? h("div", { class: "note", style: "background:var(--accent-soft);color:var(--accent)", text: "→ " + r.action }) : null,
     ];
     if (r.suggest) body.push(h("div", { class: "cats" }, r.suggest.map((x) => h("button", { onclick: () => askNow(x) }, x))));
-    if (r.evidence) body.push(h("details", {}, h("summary", { class: "small", style: "cursor:pointer", text: "Paano ko nalaman" }),
-      h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, r.evidence.map((e) => h("div", { text: "• " + e })), r.assumptions.map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: "Kumpiyansa: " + r.confidenceWhy }) : null)));
+    if (r.evidence?.length || r.assumptions?.length || r.confidenceWhy) body.push(h("details", {}, h("summary", { class: "small", style: "cursor:pointer", text: "Paano ko nalaman" }),
+      h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, (r.evidence || []).map((e) => h("div", { text: "• " + e })), (r.assumptions || []).map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + r.confidenceWhy }) : null)));
     if (r.alts?.length) body.push(h("div", { class: "pills" }, h("span", { class: "small muted", text: "Ibig mo bang sabihin:" }), r.alts.map((x) => h("button", { onclick: () => askNow(askState.q, x.id) }, x.label))));
+    if (askState.qid && r.kind !== "offtopic") body.push(h("div", { class: "pills", style: "align-items:center" }, h("span", { class: "small muted", text: askState.voted ? "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot." : "Nakatulong ba?" }),
+      askState.voted ? [] : [h("button", { onclick: () => askVote(true) }, "👍 Oo"), h("button", { onclick: () => askVote(false) }, "👎 Hindi")]));
     body.push(h("div", { class: "pills" },
-      h("button", { class: "btn sm", onclick: () => deviceAIDialog(r) }, "✨ Itanong pa sa AI ng device mo"),
-      h("button", { class: "btn sm", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; render(); } }, "Ask another")));
+      r.kind !== "offtopic" ? h("button", { class: "btn sm", onclick: () => deviceAIDialog(r) }, "✨ Itanong pa sa AI ng device mo") : null,
+      h("button", { class: "btn sm", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; askState.qid = null; render(); } }, "Ask another")));
     return h("div", { class: "banner", style: "display:grid;gap:8px;color:var(--fg)" }, body);
   }
   // ---------- Ask the device's own AI: share a summary through the phone/computer share sheet, or copy it ----------
@@ -1065,10 +1322,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function aiCard() {
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Batay sa datos ng tindahan · offline" })),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Datos ng tindahan + gabay sa negosyo" })),
       h("div", { style: "display:flex;gap:6px" }, input, h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
       !askState.res ? h("div", { class: "cats" }, ASK_EXAMPLES.slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
-      askState.res ? resultView(askState.res) : null);
+      askState.res ? resultView(askState.res) : null,
+      h("p", { class: "muted small", style: "margin:0", text: "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan." }));
   }
   function viewHome() {
     if (sub === "tips") return viewTips();
@@ -1091,7 +1349,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const profitToday = salesToday - sum(today, saleCost) - spentToday;
     const T = computeTips();
     const stat = (l, v, onclick) => h(onclick ? "button" : "div", { onclick }, h("div", { class: "l", text: l }), h("div", { class: "v num", text: v }));
-    return h("div", { class: "view" },
+    return h("div", { class: "view home" },
       h("section", { class: "hero", "aria-label": "Today" },
         h("div", { class: "top" }, h("span", { class: "trunc", text: `${S.store.name} · ${new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}` }),
           h("button", { class: "eye", "aria-pressed": String(hideMoney), onclick: () => { hideMoney = !hideMoney; try { localStorage.setItem("kw-hide-money", hideMoney ? "1" : "0"); } catch { /* ignore */ } render(); } }, hideMoney ? "Show ₱" : "Hide ₱")),
@@ -1106,6 +1364,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("button", { onclick: () => go("products", "stockin") }, svgIcon(IC.stockin), "Stock-in"))),
       expired || soon ? h("button", { class: "note" + (expired ? " err" : ""), style: "text-align:left;border:0", onclick: () => go("products", "expiry") }, expired ? `${expired} batch(es) expired` + (soon ? `, ${soon} more expire this week` : "") + " — check the expiry list" : `${soon} batch(es) expire within 7 days — check the expiry list`) : null,
       billsDue().length ? h("button", { class: "note", style: "text-align:left;border:0", onclick: () => go("home", "bills") }, `${billsDue().length} bill(s) due soon or overdue — ${billsDue().map((b) => b.name).slice(0, 3).join(", ")}`) : null,
+      h("div", { class: "apps-block grid", style: "gap:12px" },
       h("div", { class: "sec-title" }, h("h2", { text: "Kwaderno" }), h("span", { class: "muted small", text: "Your store ledger" })),
       h("nav", { class: "apps", "aria-label": "Store tools" },
         appTile("Sell (POS)", IC.sell, "var(--accent)", () => go("sell")),
@@ -1121,7 +1380,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Expiry", IC.expiry, "var(--warn)", () => go("products", "expiry"), expired + soon),
         appTile("Smart tips", IC.tips, "var(--accent)", () => go("home", "tips"), T?.count || 0),
         !S.owner ? appTile("Shelf photo", IC.photo, "var(--s2)", () => go("home", "shelf")) : null,
-        appTile("Add product", IC.add, "var(--s3)", () => go("products", "new"))),
+        appTile("Add product", IC.add, "var(--s3)", () => go("products", "new")))),
       aiCard(), tipsCard(), shelfCard(),
       h("div", { class: "grid two" },
         h("div", { class: "card" }, h("div", { style: "display:flex;justify-content:space-between;align-items:baseline;gap:8px" }, h("h2", { text: "Recent sales" }), h("button", { class: "btn sm", onclick: () => go("home", "history") }, "All ›")),
@@ -1991,6 +2250,7 @@ ${catalog}`;
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
       days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10), items,
       exp: activeExpiries().slice(0, 60).map((e) => ({ name: productById(e.productId)?.name || "Product", date: e.date, qty: e.qty || null })),
+      asks: [...S.questions].sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 40).map((x) => ({ q: x.q, at: x.at, kind: x.kind || null, intent: x.intent || null, kb: x.kb || null, helpful: x.helpful ?? null })),
     };
   }
   async function writeSummary() {
@@ -2039,6 +2299,7 @@ ${catalog}`;
     if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
     if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
+    if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
     if (sub && sub.startsWith("audit")) return adminPage("audit", "Shelf audit", viewAudit());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
@@ -2839,10 +3100,133 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       h("p", { class: "muted small", text: "From each store's own sales in KWADERNO (sales recorded in the app and ledger photos). Owner names and phone numbers come from your Directory and are visible only to you." }));
   }
 
+  // ---------- SUPER ADMIN · KNOWLEDGE: questions from every store, and the answers all stores receive ----------
+  let kbTab = "open", kbFilter = "";
+  const qKey = (q) => toks(q).filter((w) => !KB_STOP.has(w)).join(" ");
+  function askGroups() {
+    const g = new Map(), dismissed = new Set(S.kbMeta.dismissed || []);
+    for (const st of S.stores) for (const a of st.asks || []) {
+      const k = qKey(a.q); if (!k || dismissed.has(k)) continue;
+      const x = g.get(k) || { k, q: a.q, variants: new Set(), n: 0, stores: new Set(), last: "", none: 0, up: 0, down: 0, kb: null, kinds: {} };
+      x.variants.add(a.q); x.n++; x.stores.add(st.id); if (a.at > x.last) { x.last = a.at; x.q = a.q; }
+      if (a.kind === "none") x.none++; if (a.helpful === true) x.up++; if (a.helpful === false) x.down++; if (a.kb) x.kb = a.kb;
+      x.kinds[a.kind || "data"] = (x.kinds[a.kind || "data"] || 0) + 1; g.set(k, x);
+    }
+    return [...g.values()];
+  }
+  function kbStats() {
+    const m = new Map();
+    for (const st of S.stores) for (const a of st.asks || []) if (a.kb) { const x = m.get(a.kb) || { n: 0, up: 0, down: 0 }; x.n++; if (a.helpful === true) x.up++; if (a.helpful === false) x.down++; m.set(a.kb, x); }
+    return m;
+  }
+  async function dismissGroup(k) {
+    const list = [...new Set([...(S.kbMeta.dismissed || []), k])].slice(-2000);
+    try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, dismissed: list }); toast("Itinago"); } catch (e) { toast("Could not save: " + (e?.code || "try again")); }
+  }
+  async function setKbStatus(e, status) {
+    const { source, ...rest } = e;
+    try { await S.db.doc("network/kb/items/" + e.id).set({ ...rest, status, updatedAt: new Date().toISOString(), by: S.me || null }); toast(status === "hidden" ? "Hidden from stores" : "Published to all stores"); }
+    catch (x) { toast("Could not save: " + (x?.code || "try again")); }
+  }
+  const LINKS = [["", "Wala"], ["sales", "Benta"], ["profit", "Kita"], ["trend", "Takbo ng benta"], ["restock", "Restock"], ["best", "Pinakamabenta"], ["slow", "Hindi nabebenta"], ["utang", "Utang"], ["bills", "Bills"], ["expiry", "Expiry"], ["cash", "Cash"], ["expenses", "Gastos"]];
+  // Draft or edit an answer. Claude is used only here, by the Super Admin; stores never call it.
+  function kbEditor(entry, group) {
+    const lines = (a) => (a || []).join("\n");
+    const q = h("input", { type: "text", id: "kbQ", maxlength: 160, value: entry?.q || group?.q || "" });
+    const cat = h("select", { id: "kbCat" }, KB_CATS.map((c) => h("option", { value: c, text: c, selected: (entry?.cat || "Paglago") === c })));
+    const kw = h("input", { type: "text", id: "kbKw", value: [].concat(entry?.kw || []).join(" "), placeholder: "Mga salitang ginagamit ng tindera, hal. palaguin benta dagdag customer" });
+    const bullets = h("textarea", { id: "kbBullets", rows: 6, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); bullets.value = lines(entry?.bullets);
+    const steps = h("textarea", { id: "kbSteps", rows: 3, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); steps.value = lines(entry?.steps);
+    const link = h("select", { id: "kbLink" }, LINKS.map(([v, l]) => h("option", { value: v, text: l, selected: (entry?.link || "") === v })));
+    const status = h("div", { class: "small muted", role: "status" });
+    const variants = group ? [...group.variants] : [];
+    const draftBtn = h("button", { class: "btn", onclick: async () => {
+      draftBtn.disabled = true; status.textContent = "Claude is drafting…";
+      const net = (S.insights?.products || []).slice(0, 10).map((x) => x.name).filter(Boolean);
+      const prompt = `You write short, practical guidance for owners of small Filipino sari-sari stores, shown inside the KWADERNO store app.
+A store owner asked: "${q.value.trim()}"${variants.length > 1 ? `\nOther ways stores asked it: ${variants.slice(0, 8).map((v) => `"${v}"`).join("; ")}` : ""}
+Rules:
+- Only answer questions about running a small store or using the app (sales, pricing, inventory, suppliers, money, utang, accounting, staff, growth, permits). If the question is off-topic, a joke or abusive, return {"offtopic": true}.
+- Simple, respectful Taglish. 3 to 6 bullets of one sentence each, and 1 to 3 concrete steps the owner can do this week.
+- Do not invent laws, tax rates, fees or government program details. For legal, tax or permit questions give general guidance and say to confirm with the BIR, their LGU or a DTI Negosyo Center.
+- No brand endorsements and no named financial products.
+Context (aggregated, no store names): ${S.stores.length} stores use the app; widely carried products include ${net.join(", ") || "basic groceries"}.
+Existing answers (do not duplicate; if one already covers it, write a better version of that one): ${kbAll().map((e) => e.q).slice(0, 80).join(" | ")}
+Return ONLY JSON: {"offtopic": false, "q": "the question as a clear title", "cat": one of ${JSON.stringify(KB_CATS)}, "keywords": ["words owners might type, Tagalog and English"], "bullets": ["..."], "steps": ["..."], "link": one of ${JSON.stringify(LINKS.map(([v]) => v))}}`;
+      try {
+        const r = await askClaudeJson(prompt);
+        if (r?.offtopic) { status.textContent = "Claude: not a business question. Consider hiding it."; return; }
+        if (r?.q) q.value = String(r.q).slice(0, 160);
+        if (KB_CATS.includes(r?.cat)) cat.value = r.cat;
+        if (Array.isArray(r?.keywords)) kw.value = r.keywords.map(String).join(" ").slice(0, 400);
+        if (Array.isArray(r?.bullets)) bullets.value = r.bullets.map(String).slice(0, 8).join("\n");
+        if (Array.isArray(r?.steps)) steps.value = r.steps.map(String).slice(0, 4).join("\n");
+        if (LINKS.some(([v]) => v === r?.link)) link.value = r.link;
+        status.textContent = "Draft ready. Check every line before publishing.";
+      } catch (e) { status.textContent = claudeError(e); }
+      finally { draftBtn.disabled = false; }
+    } }, "✨ Draft with Claude");
+    const publish = h("button", { class: "btn primary big", onclick: async () => {
+      const b = bullets.value.split("\n").map((x) => x.trim()).filter(Boolean), st = steps.value.split("\n").map((x) => x.trim()).filter(Boolean);
+      if (q.value.trim().length < 5) return toast("Write the question title"); if (b.length < 2) return toast("Write at least 2 answer lines");
+      const off = offTopic(toks(q.value)); if (off === "rude" || off === "joke") return toast("That is not a business question");
+      const id = entry?.id || "kb-" + uid().replace(/-/g, "").slice(0, 10);
+      const alts = [...new Set([...(entry?.alts || []), ...variants])].slice(0, 40);
+      publish.disabled = true;
+      try {
+        await S.db.doc("network/kb/items/" + id).set({ q: q.value.trim(), cat: cat.value, kw: kw.value.trim().slice(0, 400), bullets: b.slice(0, 8), steps: st.slice(0, 4), link: link.value || null, alts, status: "published", updatedAt: new Date().toISOString(), by: S.me || null });
+        dlg.close(); toast("Published to all stores");
+      } catch (e) { publish.disabled = false; toast("Could not publish: " + (e?.code || "try again")); }
+    } }, "Publish to all stores");
+    openDialog(entry ? "Edit answer" : "New answer", h("div", { class: "grid" },
+      group ? h("div", { class: "banner small", text: `Asked ${group.n}× by ${group.stores.size} store(s). ${variants.length > 1 ? `${variants.length} wordings are saved with the answer so stores find it.` : ""}` }) : null,
+      h("label", { class: "f" }, "Question (title stores see)", q),
+      h("div", { class: "form" }, h("label", { class: "f" }, "Category", cat), h("label", { class: "f" }, "Show the store's own numbers", link)),
+      h("label", { class: "f" }, "Keywords", kw),
+      h("label", { class: "f" }, "Answer — one line per bullet", bullets),
+      h("label", { class: "f" }, "Steps this week — one per line", steps),
+      h("div", { class: "pills", style: "align-items:center" }, draftBtn, status),
+      publish));
+  }
+  function viewKnowledge() {
+    const groups = askGroups(), stats = kbStats(), entries = kbAll(), byId = new Map(entries.map((e) => [e.id, e]));
+    const asks = S.stores.flatMap((st) => st.asks || []), rated = asks.filter((a) => a.helpful != null), up = rated.filter((a) => a.helpful).length;
+    const kinds = (k) => asks.filter((a) => (a.kind || "data") === k).length;
+    const open = groups.filter((g) => g.none > 0 || g.down > g.up).sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+    const top = [...groups].sort((a, b) => b.n - a.n);
+    const pill = (k, l) => h("button", { "aria-pressed": String(kbTab === k), onclick: () => { kbTab = k; render(); } }, l);
+    const groupRow = (g) => { const e = g.kb ? byId.get(g.kb) : null; return h("li", { style: "flex-wrap:wrap" },
+      h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: g.q }),
+        h("div", { class: "muted small", text: [`${g.n}× · ${g.stores.size} store(s)`, relTime(g.last), g.none ? `${g.none} unanswered` : e ? "Answered: " + e.q : g.kinds.data || g.kinds.product ? "Answered from store data" : null, g.up || g.down ? `👍 ${g.up} · 👎 ${g.down}` : null].filter(Boolean).join(" · ") })),
+      h("div", { class: "pills" },
+        h("button", { class: "btn sm primary", onclick: () => kbEditor(g.none || !e ? null : e, g) }, g.none || !e ? "Answer" : "Improve answer"),
+        h("button", { class: "btn sm", onclick: () => dismissGroup(g.k) }, "Hide"))); };
+    const f = fold(kbFilter);
+    const list = entries.filter((e) => !f || fold(e.q + " " + e.cat).includes(f)).sort((a, b) => (stats.get(b.id)?.n || 0) - (stats.get(a.id)?.n || 0) || a.q.localeCompare(b.q));
+    const hidden = (S.kbDb || []).filter((e) => e.status === "hidden");
+    return h("div", { class: "grid", style: "gap:16px" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox("Questions from stores", String(asks.length), `${S.stores.filter((x) => x.asks?.length).length} store(s) asking · latest 40 per store`),
+        kpiBox("Answered from store data", String(kinds("data") + kinds("product"))),
+        kpiBox("Answered by guidance", String(kinds("kb")), `${entries.length} answers live`),
+        kpiBox("Waiting for an answer", String(open.length), "Unanswered or rated unhelpful"),
+        kpiBox("Helpful", rated.length ? Math.round((up / rated.length) * 100) + "%" : "—", `${rated.length} rating(s)`)),
+      h("div", { class: "banner small", text: "Stores never call AI. Their questions (names removed) arrive here. Draft an answer with Claude, check it, and publish: every store gets it at once, and the wordings stores used are saved so they find it." }),
+      h("div", { class: "pills" }, pill("open", `Needs an answer (${open.length})`), pill("top", "Most asked"), pill("kb", `Answers (${entries.length})`)),
+      kbTab === "kb" ? h("div", { class: "card" },
+        h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("input", { type: "search", id: "kbSearch", placeholder: "Search answers", value: kbFilter, oninput: (e) => { kbFilter = e.target.value; render(); } }), h("button", { class: "btn primary", onclick: () => kbEditor(null, null) }, "+ New answer")),
+        h("ul", { class: "list" }, list.map((e) => { const st = stats.get(e.id); return h("li", { style: "flex-wrap:wrap" },
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: e.q }), h("div", { class: "muted small", text: [e.cat, e.source === "admin" ? "KELSON" : "Starter", st ? `used ${st.n}×` : "not used yet", st && (st.up || st.down) ? `👍 ${st.up} · 👎 ${st.down}` : null].filter(Boolean).join(" · ") })),
+          h("div", { class: "pills" }, h("button", { class: "btn sm", onclick: () => kbEditor(e, null) }, "Edit"), h("button", { class: "btn sm", onclick: () => setKbStatus(e, "hidden") }, "Hide"))); })),
+        hidden.length ? h("details", { style: "margin-top:10px" }, h("summary", { class: "small", text: `Hidden answers (${hidden.length})` }),
+          h("ul", { class: "list" }, hidden.map((e) => h("li", {}, h("span", { class: "grow", text: e.q || e.id }), h("button", { class: "btn sm", onclick: () => setKbStatus({ ...(STARTER_KB.find((x) => x.id === e.id) || {}), ...e }, "published") }, "Show again"))))) : null)
+      : h("div", { class: "card" }, (kbTab === "open" ? open : top).length ? h("ul", { class: "list" }, (kbTab === "open" ? open : top).slice(0, 200).map(groupRow))
+        : h("div", { class: "empty", text: kbTab === "open" ? "Nothing waiting. Every question so far was answered and nobody rated an answer unhelpful." : "No questions from stores yet." })));
+  }
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

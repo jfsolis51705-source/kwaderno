@@ -1722,8 +1722,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       let last = null;
       for (const src of ocrSources()) {
         try {
-          if (!window.Tesseract) await withTimeout(loadScript(src.script), Math.min(T, 30000));
-          const w = await withTimeout(window.Tesseract.createWorker("eng", 1, { workerPath: src.worker, corePath: src.core, langPath: src.lang, logger: (m) => ocrLog?.(m) }), T);
+          ocrStage = "script"; if (!window.Tesseract) await withTimeout(loadScript(src.script), Math.min(T, 30000));
+          ocrStage = "worker";
+          const w = await withTimeout(window.Tesseract.createWorker("eng", 1, { workerPath: src.worker, corePath: src.core, langPath: src.lang, logger: (m) => { ocrStage = m.status || ocrStage; ocrLog?.(m); } }), T);
           await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
           ocrReady = true; return w;
         } catch (e) { last = e; }
@@ -1731,7 +1732,18 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       throw last || new Error("load");
     })().catch((e) => { ocrP = null; throw e; }));
   }
-  let ocrReady = false;
+  let ocrReady = false, ocrStage = "";
+  // When the reader fails, test each thing it needs so the reason is visible (worker, downloads, WebAssembly).
+  async function ocrProbe() {
+    const cdn = OCR_CDN(), t = (p) => withTimeout(p, 4000).then(() => "ok", (e) => "NO(" + String(e?.message || e).slice(0, 40) + ")");
+    const inWorker = (code) => new Promise((res, rej) => { try { const w = new Worker(URL.createObjectURL(new Blob([code], { type: "text/javascript" })));
+      w.onmessage = (m) => { w.terminate(); m.data === "ok" ? res() : rej(new Error(m.data)); }; w.onerror = (e) => { w.terminate(); rej(new Error(e.message || "worker error")); }; } catch (e) { rej(e); } });
+    return { wasm: await t(WebAssembly.compile(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0]))),
+      download: await t(fetch(cdn + "/@tesseract.js-data/eng@1.0.0/package.json", { cache: "no-store" }).then((r) => { if (!r.ok) throw new Error("http " + r.status); })),
+      worker: await t(inWorker('postMessage("ok")')),
+      workerScript: await t(inWorker(`try{importScripts("${cdn}/tesseract.js@5.1.1/dist/worker.min.js");postMessage("ok")}catch(e){postMessage(String(e.message||e))}`)),
+      workerDownload: await t(inWorker(`fetch("${cdn}/@tesseract.js-data/eng@1.0.0/package.json").then(r=>postMessage(r.ok?"ok":"http "+r.status),e=>postMessage(String(e.message||e)))`)) };
+  }
   const lb = { mode: "sale", date: "", stage: "start", progress: 0, status: "", preview: "", rows: [], err: "" };
   async function readLogbook(file) {
     if (!file) return;
@@ -1747,6 +1759,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       if (!ocrReady) prog(L("Nilo-load ang pambasa (unang beses lang)…", "Loading the reader (first time only)…"));
       const w = await loadOcr();
       // read the page twice (black & white, and grayscale) and keep the reading that matches more of the store's products
+      ocrStage = "reading";
       const readAs = async (cv) => {
         const { data } = await withTimeout(w.recognize(cv, {}, { text: true, blocks: true }), window.__OCR_TIMEOUT || 60000);
         let lines = (data.blocks || []).flatMap((b) => (b.paragraphs || []).flatMap((pg) => pg.lines || [])).map((l) => ({ text: l.text, conf: l.confidence }));
@@ -1766,7 +1779,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       lb.stage = "review"; lb.rows = lb.rows?.length ? lb.rows : [{ raw: "", name: "", conf: 0, qty: 1, amount: null, auto: "", pid: "", score: 0 }];
       lb.err = e?.message === "timeout" ? L("Masyadong matagal ang pagbasa dito. I-type na lang ang mga linya habang tinitingnan ang litrato — o subukan muli mamaya.", "Reading is taking too long here. Type the lines while looking at the photo, or try again later.")
         : L("Hindi ma-load ang pambasa ng sulat dito. I-type na lang ang mga linya habang tinitingnan ang litrato.", "The writing reader couldn't load here. Type the lines while looking at the photo.");
-      lb.errDetail = String(e?.message || e || "").slice(0, 120);
+      lb.errDetail = `${String(e?.message || e || "").slice(0, 60)} @ ${ocrStage || "start"}`;
+      if (ocrStage !== "reading") { render(); const pr = await ocrProbe().catch(() => null); if (pr) lb.errDetail += " · " + Object.entries(pr).map(([k, v]) => `${k} ${v}`).join(" · "); }
     }
     render();
   }

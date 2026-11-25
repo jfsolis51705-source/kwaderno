@@ -388,7 +388,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], staff: [], attendance: [], rules: null, kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], staff: [], attendance: [], rules: null, branches: [], branchSum: {}, branch: "", rootBase: "", kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "", disc: { type: "none" }, tabId: "", tabLabel: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
@@ -424,6 +424,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // The owner's own demo store keeps the original top-level paths.
   const col = (name) => S.db.collection(S.base + name);
   const ref = (path) => S.db.doc(S.base + path);
+  const rootRef = (path) => S.db.doc(S.rootBase + path); // the owner's main store (branch list, shared learning)
   async function write(path, body) {
     if (!S.db) throw new Error("Not connected");
     await ref(path).set(body);
@@ -436,38 +437,51 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     try { S.me = user ? await user.id() : null; } catch { S.me = null; }
     try { S.owner = user ? !!(await user.isOwner()) : false; } catch { S.owner = false; }
     if (!S.owner && !S.me) { S.error = "nodb"; S.ready = true; render(); return; }
-    S.base = S.owner ? "" : `stores/${S.me}/`;
+    S.rootBase = S.owner ? "" : `stores/${S.me}/`;
+    try { S.branch = localStorage.getItem("kw-branch:" + (S.me || "owner")) || ""; } catch { S.branch = ""; }
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/rules").onSnapshot((d) => { S.rules = d.exists ? d.data() : null; render(); }, () => {});
     db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
-    ref("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
+    rootRef("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
     db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; scheduleAuto(); if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
+    rootRef("store/branches").onSnapshot((d) => { S.branches = d.exists ? d.data().list || [] : []; render(); }, () => {});
+    rootRef("store/branchsum").onSnapshot((d) => { S.branchSum = d.exists ? d.data() : {}; if (sub === "branches") render(); }, () => {});
+    subscribeStore();
+  }
+  // Load one branch's data (products, sales, stock, staff …). Each branch lives under branches/<id>/ in the owner's space.
+  let storeUnsubs = [];
+  const STORE_COLS = ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"];
+  function subscribeStore() {
+    storeUnsubs.forEach((u) => { try { typeof u === "function" && u(); } catch { /* already closed */ } }); storeUnsubs = [];
+    S.base = S.rootBase + (S.branch ? `branches/${S.branch}/` : "");
+    for (const k of STORE_COLS) S[k] = [];
+    D = derived(); S.ready = false; S.profileLoaded = false; S.hasProfile = false; S.store = { name: "My sari-sari store" }; lastSummary = ""; lastRoute = "";
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
-    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"]);
+    const pending = new Set(STORE_COLS);
     const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
-    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"]) {
-      col(k).onSnapshot((snap) => {
+    for (const k of STORE_COLS) {
+      storeUnsubs.push(col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
         if (!snap.metadata.fromCache) done(k);
         render(); queueSummary();
-      }, (e) => { S.error = e.code; S.ready = true; clearTimeout(timer); render(); });
+      }, (e) => { S.error = e.code; S.ready = true; clearTimeout(timer); render(); }));
     }
-    ref("store/profile").onSnapshot((d) => { S.profileLoaded = true; S.hasProfile = d.exists; if (d.exists) S.store = { ...S.store, ...d.data() }; render(); queueSummary(); }, () => { S.profileLoaded = true; render(); });
+    storeUnsubs.push(ref("store/profile").onSnapshot((d) => { S.profileLoaded = true; S.hasProfile = d.exists; if (d.exists) S.store = { ...S.store, ...d.data() }; render(); queueSummary(); }, () => { S.profileLoaded = true; render(); }));
   }
 
   // ---------- routing ----------
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
   function readHash() {
     const raw = location.hash.slice(1);
-    if (raw === "phone" || raw === "tablet" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
+    if (raw === "phone" || raw === "phone-land" || raw === "tablet" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
     if (raw === "admin-phone" || raw === "admin-desktop") { setAdminLayout(raw.slice(6)); history.replaceState(null, "", "#admin"); view = "admin"; sub = null; return; }
     if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
     const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
@@ -1568,6 +1582,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "logbook") return viewLogbook();
     if (sub === "settings") return viewStoreSettings();
     if (sub === "attendance") return viewAttendance();
+    if (sub === "branches") return viewBranches();
     if (sub === "bills") return viewBills();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
@@ -1585,7 +1600,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const stat = (l, v, onclick) => h(onclick ? "button" : "div", { onclick }, h("div", { class: "l", text: l }), h("div", { class: "v num", text: v }));
     return h("div", { class: "view home" },
       h("section", { class: "hero", "aria-label": "Today" },
-        h("div", { class: "top" }, h("span", { class: "trunc", text: `${S.store.name} · ${new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}` }),
+        h("div", { class: "top" }, h("span", { class: "trunc", text: `${S.branches.length ? "🏬 " : ""}${S.store.name} · ${new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}` }),
           h("button", { class: "eye", "aria-pressed": String(hideMoney), onclick: () => { hideMoney = !hideMoney; try { localStorage.setItem("kw-hide-money", hideMoney ? "1" : "0"); } catch { /* ignore */ } render(); } }, hideMoney ? "Show ₱" : "Hide ₱")),
         h("div", {}, h("div", { class: "small", style: "opacity:.85", text: "Benta ngayon · Sales today" }), h("div", { class: "big num", text: money(salesToday) })),
         h("div", { class: "stats" },
@@ -1611,6 +1626,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Expenses", IC.expense, "var(--warn)", () => go("home", "expenses")),
         appTile("Bills", IC.bill, "var(--s2)", () => go("home", "bills"), billsDue().length),
         appTile("Sales history", IC.history, "var(--s1)", () => go("home", "history")),
+        appTile(L("Mga branch", "Branches"), "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6", "var(--s1)", () => go("home", "branches")),
         appTile(L("Attendance", "Attendance"), "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M17 3l1.5 1.5L21 2", "var(--s3)", () => go("home", "attendance")),
         appTile("Reports", IC.reports, "var(--good)", () => go("reports")),
         appTile("Expiry", IC.expiry, "var(--warn)", () => go("products", "expiry"), expired + soon),
@@ -1816,7 +1832,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       }
       // learn from the owner's corrections: next time the same writing maps to the right product, and KELSON sees the pair
       const fixes = rows.filter((r) => r.name && r.pid !== r.auto).map((r) => ({ raw: fold(r.name).slice(0, 60), to: productById(r.pid).name, at: new Date().toISOString() }));
-      if (fixes.length) await ref("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
+      if (fixes.length) await rootRef("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
       toast(lb.mode === "sale" ? L(`Na-save: ${rows.length} item bilang benta`, `Saved ${rows.length} item(s) as sales`) : L(`Na-save: ${rows.length} item bilang stock-in`, `Saved ${rows.length} item(s) as stock-in`));
       Object.assign(lb, { stage: "start", rows: [], preview: "", err: "", errDetail: "" }); go("home");
     } catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
@@ -2029,6 +2045,50 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         a.photo ? h("img", { src: a.photo.url, alt: L("Selfie", "Selfie"), class: "thumb", style: "object-fit:cover" }) : h("span", { class: "thumb", style: "display:grid;place-items:center", title: L("Walang selfie", "No selfie"), text: "—" }),
         h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: a.name }), h("div", { class: "muted small", text: label[a.type] + " · " + hm(a.at) + (a.noPhoto ? L(" · walang selfie", " · no selfie") : "") })))))
         : h("div", { class: "empty", text: L("Wala pang pumasok ngayon.", "Nobody has clocked in today.") })));
+  }
+
+
+  // ---------- BRANCHES: one owner, several stores; switch between them and see them all together ----------
+  function switchBranch(id) {
+    S.branch = id || ""; try { localStorage.setItem("kw-branch:" + (S.me || "owner"), S.branch); } catch { /* ignore */ }
+    Object.assign(cart, { lines: [], tabId: "", tabLabel: "", disc: { type: "none" } }); askState.res = null;
+    subscribeStore(); go("home");
+    toast(L(`Lumipat sa ${branchName(S.branch)}`, `Switched to ${branchName(S.branch)}`));
+  }
+  const branchName = (id) => (!id ? S.branchSum?.main?.name || L("Pangunahing tindahan", "Main store") : S.branches.find((x) => x.id === id)?.name || id);
+  function branchForm() {
+    const name = h("input", { type: "text", id: "brName", maxlength: 60, placeholder: L("hal. Aling Nena — Brgy. San Roque", "e.g. Aling Nena — Brgy. San Roque") }), addr = h("input", { type: "text", id: "brAddr", maxlength: 120 });
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      if (!name.value.trim()) return toast(L("Ilagay ang pangalan ng branch", "Enter the branch name"));
+      btn.disabled = true; const id = "b" + uid().replace(/-/g, "").slice(0, 8), now = new Date().toISOString();
+      try {
+        await rootRef("store/branches").set({ list: [...(S.branches || []), { id, name: name.value.trim(), address: addr.value.trim() || null, createdAt: now }] });
+        await S.db.doc(S.rootBase + `branches/${id}/store/profile`).set({ name: name.value.trim(), address: addr.value.trim() || null, bizType: S.store.bizType || "retail", vatReg: !!S.store.vatReg, createdAt: now, branchOf: S.me || null });
+        dlg.close(); toast(L("Naidagdag ang branch", "Branch added"));
+      } catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); }
+    } }, L("Idagdag ang branch", "Add branch"));
+    openDialog(L("Bagong branch", "New branch"), h("div", { class: "grid" }, h("label", { class: "f" }, L("Pangalan", "Name"), name), h("label", { class: "f" }, L("Address (opsyonal)", "Address (optional)"), addr), btn,
+      h("p", { class: "muted small", style: "margin:0", text: L("Hiwalay ang paninda, benta, stock, tauhan at attendance ng bawat branch. Ikaw lang ang may access sa lahat.", "Each branch has its own products, sales, stock, staff and attendance. Only you can see all of them.") })));
+    setTimeout(() => name.focus(), 50);
+  }
+  function viewBranches() {
+    const rows = [{ id: "", name: branchName("") }, ...S.branches.map((x) => ({ id: x.id, name: x.name, address: x.address }))].map((r) => ({ ...r, s: S.branchSum?.[r.id || "main"] || null }));
+    const tot = (k) => rows.reduce((a, r) => a + (r.s?.[k] || 0), 0);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: L("Mga branch", "Branches"), style: "margin-top:8px" })), h("button", { class: "btn primary", onclick: branchForm }, L("+ Branch", "+ Branch"))),
+      h("div", { class: "grid kpis" },
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: L("Benta ngayon · lahat", "Sales today · all") }), h("div", { class: "value num", text: peso(tot("today")) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: L("7 araw · lahat", "7 days · all") }), h("div", { class: "value num", text: peso(tot("d7")) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: L("30 araw · lahat", "30 days · all") }), h("div", { class: "value num", text: peso(tot("d30")) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: L("Utang · lahat", "Utang · all") }), h("div", { class: "value num", text: peso(tot("utang")) }))),
+      h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {},
+        h("thead", {}, h("tr", {}, [L("Branch", "Branch"), L("Ngayon", "Today"), L("7 araw", "7 days"), L("30 araw", "30 days"), L("Paubos", "Low stock"), L("Huling galaw", "Last active"), ""].map((t, i) => h("th", { class: i && i < 5 ? "r" : null, text: t })))),
+        h("tbody", {}, rows.map((r) => h("tr", {}, h("td", {}, h("div", { style: "font-weight:600", text: r.name }), r.address ? h("div", { class: "muted small", text: r.address }) : null, (S.branch || "") === r.id ? h("span", { class: "chip ok", text: L("bukas ngayon", "open now") }) : null),
+          h("td", { class: "r num", text: r.s ? peso(r.s.today) : "—" }), h("td", { class: "r num", text: r.s ? peso(r.s.d7) : "—" }), h("td", { class: "r num", text: r.s ? peso(r.s.d30) : "—" }), h("td", { class: "r num", text: r.s ? String(r.s.lowStock || 0) : "—" }),
+          h("td", { class: "small", text: r.s?.lastActiveAt ? relTime(r.s.lastActiveAt) : L("buksan para ma-update", "open to update") }),
+          h("td", {}, (S.branch || "") === r.id ? null : h("button", { class: "btn sm", onclick: () => switchBranch(r.id) }, L("Lumipat", "Switch")))))),
+        h("tfoot", {}, h("tr", {}, h("td", { text: L("Kabuuan", "Total") }), h("td", { class: "r num", text: peso(tot("today")) }), h("td", { class: "r num", text: peso(tot("d7")) }), h("td", { class: "r num", text: peso(tot("d30")) }), h("td", { class: "r num", text: String(tot("lowStock")) }), h("td", {}), h("td", {})))))),
+      h("p", { class: "muted small", text: L("Naa-update ang bilang ng isang branch tuwing bubuksan ito sa app.", "A branch's figures update whenever that branch is open in the app.") }));
   }
 
   // ---------- EXPENSES (gastos) ----------
@@ -3024,10 +3084,19 @@ ${catalog}`;
       asks: [...S.questions].sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 40).map((x) => ({ q: x.q, at: x.at, kind: x.kind || null, intent: x.intent || null, kb: x.kb || null, helpful: x.helpful ?? null })),
     };
   }
+  function branchLite(body) {
+    const t = todayKey(), d = body.days || [], sum = (n) => d.slice(-n).reduce((a, x) => a + (x.t || 0), 0);
+    return { name: body.name, today: d.find((x) => x.d === t)?.t || 0, d7: sum(7), d30: sum(30), n30: d.reduce((a, x) => a + (x.n || 0), 0), products: body.products, lowStock: body.lowStock, utang: body.utang, stockValue: body.stockValue, lastActiveAt: body.lastActiveAt, at: new Date().toISOString() };
+  }
   async function writeSummary() {
-    const body = buildSummary(); const key = JSON.stringify(body);
+    const body = buildSummary(); const key = (S.branch || "main") + JSON.stringify(body);
     if (key === lastSummary) return;
-    try { await S.db.doc("stores/" + S.me).set({ ...body, updatedAt: new Date().toISOString() }); lastSummary = key; } catch { /* retried on the next change */ }
+    try {
+      const lite = branchLite(body), id = S.branch || "main";
+      if (JSON.stringify((S.branchSum || {})[id] && { ...S.branchSum[id], at: 0 }) !== JSON.stringify({ ...lite, at: 0 })) await rootRef("store/branchsum").set({ ...(S.branchSum || {}), [id]: lite });
+      if (!S.branch) await S.db.doc("stores/" + S.me).set({ ...body, branches: (S.branches || []).map((x) => ({ id: x.id, name: x.name, address: x.address || null })), branchSum: S.branchSum || {}, updatedAt: new Date().toISOString() });
+      lastSummary = key;
+    } catch { /* retried on the next change */ }
   }
 
   // ---------- new merchant: set up the store ----------
@@ -4347,6 +4416,9 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         kpi("Sales today", peso(st.today)), kpi("Sales · 7 days", peso(st.d7)), kpi("Sales · 30 days", peso(st.d30), `${st.n30} sales · avg ${peso(st.n30 ? Math.round(st.d30 / st.n30) : 0)}`),
         kpi("Products", String(x.products || 0), `${x.lowStock || 0} low on stock`), kpi("Stock value", peso(x.stockValue || 0)),
         kpi("Utang outstanding", peso(x.utang || 0), `${x.debtors || 0} of ${x.customers || 0} customers`)),
+      (x.branches || []).length ? h("div", { class: "card" }, h("h2", { text: `Branches (${x.branches.length + 1})`, style: "margin-bottom:6px" }), h("div", { class: "table-wrap" }, h("table", {},
+        h("thead", {}, h("tr", {}, ["Branch", "Today", "7 days", "30 days", "Low stock", "Last active"].map((t, i) => h("th", { class: i && i < 5 ? "r" : null, text: t })))),
+        h("tbody", {}, [{ id: "main", name: x.name + " (main)" }, ...x.branches].map((b) => { const z = x.branchSum?.[b.id] || null; return h("tr", {}, h("td", { text: b.name }), h("td", { class: "r num", text: z ? peso(z.today) : "—" }), h("td", { class: "r num", text: z ? peso(z.d7) : "—" }), h("td", { class: "r num", text: z ? peso(z.d30) : "—" }), h("td", { class: "r num", text: z ? String(z.lowStock || 0) : "—" }), h("td", { text: z?.lastActiveAt ? relTime(z.lastActiveAt) : "—" })); }))))) : null,
       h("div", { class: "card" }, h("h2", { text: "Daily sales — last 30 days", style: "margin-bottom:8px" }), salesChart(days)),
       h("div", { class: "grid two" },
         h("div", { class: "card" }, h("h2", { text: "Recent activity", style: "margin-bottom:6px" }),

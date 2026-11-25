@@ -1023,8 +1023,44 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (r.evidence) body.push(h("details", {}, h("summary", { class: "small", style: "cursor:pointer", text: "Paano ko nalaman" }),
       h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, r.evidence.map((e) => h("div", { text: "• " + e })), r.assumptions.map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: "Kumpiyansa: " + r.confidenceWhy }) : null)));
     if (r.alts?.length) body.push(h("div", { class: "pills" }, h("span", { class: "small muted", text: "Ibig mo bang sabihin:" }), r.alts.map((x) => h("button", { onclick: () => askNow(askState.q, x.id) }, x.label))));
-    body.push(h("button", { class: "btn sm", style: "justify-self:start", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; render(); } }, "Ask another"));
+    body.push(h("div", { class: "pills" },
+      h("button", { class: "btn sm", onclick: () => deviceAIDialog(r) }, "✨ Itanong pa sa AI ng device mo"),
+      h("button", { class: "btn sm", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; render(); } }, "Ask another")));
     return h("div", { class: "banner", style: "display:grid;gap:8px;color:var(--fg)" }, body);
+  }
+  // ---------- Ask the device's own AI: share a summary through the phone/computer share sheet, or copy it ----------
+  // Nothing leaves the app until the owner picks an app. Customer and store names are removed first.
+  function redact(t) {
+    let out = t;
+    // longest names first (so "Rosa Cruz" goes before "Rosa"), numbered in the order they appear in the text
+    const names = [...S.customers].map((c) => (c.name || "").trim()).filter((n) => n.length >= 2 && out.includes(n)).sort((x, y) => y.length - x.length);
+    const order = [...names].sort((x, y) => out.indexOf(x) - out.indexOf(y));
+    for (const n of names) out = out.split(n).join("Customer " + (order.indexOf(n) + 1));
+    if (S.store.name) out = out.split(S.store.name).join("ang tindahan ko");
+    return out;
+  }
+  function devicePrompt(r) {
+    const sec = (x) => [`${x.title}:`, ...x.lines.map((l) => "- " + l), x.action ? "- Mungkahi ng app: " + x.action : null].filter(Boolean).join("\n");
+    const parts = r.suggest ? ["sales", "profit", "restock", "best"].map((i) => answerQuestion("", i)).filter(Boolean).map(sec)
+      : [sec(r), r.evidence.length ? "Batayan: " + r.evidence.join(" ") : null, r.assumptions.length ? "Assumptions: " + r.assumptions.join(" ") : null].filter(Boolean);
+    return redact([`May sari-sari store ako sa Pilipinas. Tanong ko: "${askState.q}"`, "", "Datos mula sa store app ko:", ...parts, "",
+      "Pakipaliwanag sa simpleng Taglish at magbigay ng 2–3 praktikal na hakbang. Kung kulang ang datos, sabihin kung ano pa ang dapat kong itala."].join("\n")).slice(0, 2500);
+  }
+  function deviceAIDialog(r) {
+    const ta = h("textarea", { id: "shareTxt", rows: 10, "aria-label": "Text to share", style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit;font-size:.85rem" });
+    ta.value = devicePrompt(r);
+    const canShare = typeof navigator.share === "function";
+    const copy = async () => { try { await navigator.clipboard.writeText(ta.value); toast("Nakopya — i-paste sa AI app mo"); } catch { ta.focus(); ta.select(); toast("Piliin ang text at kopyahin"); } };
+    const share = async () => {
+      try { await navigator.share({ title: "Tanong tungkol sa tindahan ko", text: ta.value }); }
+      catch (e) { if (e?.name !== "AbortError") { toast("Hindi mabuksan ang Share dito — kinopya na lang"); copy(); } }
+    };
+    openDialog("Itanong sa AI ng device mo", h("div", { class: "grid" },
+      h("p", { class: "muted small", text: "Ito mismo ang ibabahagi — puwede mo itong i-edit. Walang ipapadala hangga't hindi ka pumipili ng app. Tinanggal na ang pangalan ng customer at ng tindahan." }),
+      ta,
+      canShare ? h("button", { class: "btn primary big", onclick: share }, "Ibahagi sa AI app (Share)") : null,
+      h("button", { class: canShare ? "btn" : "btn primary big", onclick: copy }, "Kopyahin (Copy)"),
+      h("p", { class: "muted small", text: canShare ? "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app." : "Kopyahin at i-paste sa AI app o assistant ng computer mo." })));
   }
   function aiCard() {
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });

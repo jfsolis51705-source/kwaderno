@@ -42,12 +42,19 @@ nav.tabs a { padding: 8px 12px; border-radius: 8px; text-decoration: none; color
 nav.tabs a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); }
 nav.bottom { display: none; }
 .lockwait #app { visibility: hidden; }
+#stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
+#stockAlert .sa { width: 100%; max-width: 380px; max-height: 100%; overflow: auto; background: var(--surface); color: var(--text, inherit); border-radius: 18px; padding: 18px; display: grid; gap: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.35); border-top: 6px solid var(--bad); }
+#stockAlert .sa h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
+#stockAlert .sa ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#stockAlert .sa li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2, rgba(0,0,0,.04)); }
+#stockAlert .sa li b.out { color: var(--bad); }
+#stockAlert .demo-tag { font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 99px; background: #fff1c2; color: #7a5600; }
+@media (prefers-reduced-motion: no-preference) { #stockAlert .sa { animation: saPop .25s ease-out; } @keyframes saPop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } } }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a { font-size: .66rem; }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a.mid { overflow: visible; }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a.mid svg { width: 26px; height: 26px; padding: 11px; box-sizing: content-box; margin-top: -30px; border-radius: 50%; background: var(--accent); color: #fff; border: 4px solid var(--surface); box-shadow: 0 4px 14px rgba(0,0,0,.22); }
 nav.bottom a.mid svg { color: var(--accent); }
 #lock { position: fixed; inset: 0; z-index: 60; background: var(--bg, var(--surface)); display: grid; place-items: center; padding: 24px; overflow: auto; }
-#phone #lock { position: absolute; }
 #lock .lk { width: 100%; max-width: 340px; display: grid; gap: 12px; text-align: center; }
 #lock .lk .ic { font-size: 2.4rem; }
 .pinin { font-size: 1.6rem; letter-spacing: .5em; text-align: center; }
@@ -248,6 +255,35 @@ dialog .db * { min-width: 0; }
 :root.landscape:not(.admin-mode) .home > .apps-block { grid-column: 2; grid-row: 1; }
 :root[data-layout="tablet"].landscape .home .apps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 :root[data-layout="tablet"].landscape .tiles { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+/* Desktop: use the width of a big monitor — wider page, more product tiles, a roomier current-sale panel. */
+:root[data-layout="desktop"] .wrap { max-width: 1560px; }
+:root[data-layout="desktop"] .tiles { grid-template-columns: repeat(auto-fill, minmax(136px, 1fr)); gap: 10px; }
+:root[data-layout="desktop"] .sell { grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 460px); }
+:root[data-layout="desktop"] .cart.desktop { position: sticky; top: 72px; }
+:root[data-layout="desktop"] .apps { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+@media (min-width: 1500px) { :root[data-layout="desktop"] .kpis { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); } }
+/* Touch-screen monitors and tablets: finger-sized targets everywhere, hover effects not needed to see anything. */
+@media (any-pointer: coarse) {
+  .btn { min-height: 44px; }
+  .btn.sm { min-height: 38px; padding-inline: 12px; }
+  nav.tabs a { padding: 12px 16px; }
+  .cats button, .pills button { min-height: 40px; }
+  input, select, textarea { min-height: 44px; }
+  input[type="checkbox"], input[type="radio"] { min-height: 0; width: 22px; height: 22px; }
+  :root[data-layout="desktop"] .tiles { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+}
+/* Desktop preview of a tablet (upright 3:4 or sideways 4:3) inside a bezel; the rail and buttons stay inside the frame. */
+@media (min-width: 900px) {
+  :root.framed-tab, :root.framed-tab body { height: 100%; }
+  :root.framed-tab body { margin: 0; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 18%, var(--bg)), var(--bg) 70%); }
+  :root.framed-tab body::before { display: none; }
+  :root.framed-tab #phone { position: relative; transform: translateZ(0); margin-left: 0; min-height: 0; background: var(--bg); border: 14px solid #121619; border-radius: 30px; overflow: hidden; box-shadow: 0 0 0 2px #3a4248, 0 30px 70px rgb(0 0 0 / .35);
+    height: min(1100px, calc(100dvh - 40px)); width: min(820px, calc((100dvh - 40px) * .75), calc(100vw - 40px)); }
+  :root.framed-tab.framed-tab-land #phone { width: min(1180px, calc(100vw - 40px), calc((100dvh - 40px) * 1.4)); height: min(820px, calc(100dvh - 40px), calc((100vw - 40px) / 1.4)); }
+  :root.framed-tab #screen { height: 100%; margin-left: 96px; overflow-y: auto; overscroll-behavior: contain; }
+  /* the frame's transform makes the rail, + button, pop-ups and lock screen (all position: fixed) sit inside the tablet */
+  :root.framed-tab .layout-toggle { right: 16px; bottom: 16px; }
+}
 /* Phone held sideways: the bottom bar becomes a slim left rail so the short screen is all content. */
 :root[data-layout="phone"].landscape:not(.admin-mode) nav.bottom { display: flex; flex-direction: column; justify-content: center; gap: 2px; top: 0; bottom: 0; right: auto; width: calc(72px + env(safe-area-inset-left, 0px));
   padding: 8px 4px 8px calc(4px + env(safe-area-inset-left, 0px)); border-top: 0; border-right: 1px solid var(--line); }
@@ -475,16 +511,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     storeUnsubs.forEach((u) => { try { typeof u === "function" && u(); } catch { /* already closed */ } }); storeUnsubs = [];
     S.base = S.rootBase + (S.branch ? `branches/${S.branch}/` : "");
     for (const k of STORE_COLS) S[k] = [];
-    D = derived(); S.ready = false; S.profileLoaded = false; S.hasProfile = false; S.store = { name: "My sari-sari store" }; lastSummary = ""; lastRoute = "";
+    D = derived(); resetStockAlerts(); S.ready = false; S.profileLoaded = false; S.hasProfile = false; S.store = { name: "My sari-sari store" }; lastSummary = ""; lastRoute = "";
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
     const pending = new Set(STORE_COLS);
-    const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
+    const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; scheduleStockCheck(); } };
     for (const k of STORE_COLS) {
       storeUnsubs.push(col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
         if (!snap.metadata.fromCache) done(k);
-        render(); queueSummary();
+        render(); queueSummary(); if (k === "products" || k === "moves" || k === "sales") scheduleStockCheck();
       }, (e) => { S.error = e.code; S.ready = true; clearTimeout(timer); render(); }));
     }
     storeUnsubs.push(ref("store/profile").onSnapshot((d) => { S.profileLoaded = true; S.hasProfile = d.exists; if (d.exists) S.store = { ...S.store, ...d.data() }; render(); queueSummary(); }, () => { S.profileLoaded = true; render(); }));
@@ -494,7 +530,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
   function readHash() {
     const raw = location.hash.slice(1);
-    if (raw === "phone" || raw === "phone-land" || raw === "tablet" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
+    if (raw === "phone" || raw === "phone-land" || raw === "tablet" || raw === "tablet-land" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
     if (raw === "admin-phone" || raw === "admin-desktop") { setAdminLayout(raw.slice(6)); history.replaceState(null, "", "#admin"); view = "admin"; sub = null; return; }
     if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
     const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
@@ -504,14 +540,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   window.addEventListener("hashchange", () => { readHash(); render(); });
 
   // ---------- layout: phone app or desktop ----------
-  const LAYOUTS = ["phone", "phone-land", "tablet", "desktop"];
-  const NEXT_LAYOUT = { phone: "phone-land", "phone-land": "tablet", tablet: "desktop", desktop: "phone" };
-  const LAYOUT_NAME = { phone: "phone", "phone-land": "phone landscape", tablet: "tablet", desktop: "desktop" };
+  const LAYOUTS = ["phone", "phone-land", "tablet", "tablet-land", "desktop"];
+  const NEXT_LAYOUT = { phone: "phone-land", "phone-land": "tablet", tablet: "tablet-land", "tablet-land": "desktop", desktop: "phone" };
+  const LAYOUT_NAME = { phone: "phone", "phone-land": "phone landscape", tablet: "tablet", "tablet-land": "tablet landscape", desktop: "desktop" };
   let layoutChoice = "phone";
   // A touch screen at least 600px on its short side is a tablet; smaller is a phone.
   const touch = () => matchMedia("(pointer: coarse)").matches;
   const isPhone = () => (touch() && Math.min(innerWidth, innerHeight) < 600) || innerWidth < 600;
-  const isTablet = () => touch() && !isPhone();
+  const isTablet = () => touch() && !isPhone() && !touchMonitor();
+  // a touch-screen monitor or laptop: it also has a mouse/trackpad, or its screen is far bigger than any tablet
+  const touchMonitor = () => matchMedia("(any-pointer: fine)").matches || Math.min(screen.width, screen.height) >= 1080;
   try { const saved = localStorage.getItem("kw-layout"); layoutChoice = LAYOUTS.includes(saved) ? saved : isTablet() ? "tablet" : "phone"; } catch { layoutChoice = isTablet() ? "tablet" : "phone"; }
   function setLayout(l) { layoutChoice = LAYOUTS.includes(l) ? l : "phone"; try { localStorage.setItem("kw-layout", layoutChoice); } catch { /* ignore */ } }
   // The Super Admin keeps its own phone/desktop choice (default desktop), separate from the store app's.
@@ -522,12 +560,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const narrow = isPhone(); // a real phone always gets the phone layout, upright or sideways
     const choice = view === "admin" ? adminLayout : layoutChoice;
     const landPreview = !narrow && choice === "phone-land";
-    const layout = narrow || landPreview ? "phone" : choice === "phone-land" ? "phone" : choice, root = document.documentElement;
+    const layout = narrow || landPreview ? "phone" : choice === "phone-land" ? "phone" : choice === "tablet-land" ? "tablet" : choice, root = document.documentElement;
     root.dataset.layout = layout;
     const framed = layout === "phone" && !narrow && innerWidth >= 520; // desktop preview of the phone app
+    // desktop preview of a tablet, upright or sideways, inside a tablet frame (a real tablet just fills its screen)
+    const framedTab = layout === "tablet" && !touch() && innerWidth >= 900 && view !== "admin", tabLand = choice === "tablet-land";
     root.classList.toggle("framed", framed);
     root.classList.toggle("framed-land", framed && landPreview);
-    root.classList.toggle("landscape", (framed && landPreview) || (!framed && layout !== "desktop" && innerWidth > innerHeight));
+    root.classList.toggle("framed-tab", framedTab);
+    root.classList.toggle("framed-tab-land", framedTab && tabLand);
+    root.classList.toggle("landscape", (framed && landPreview) || (framedTab ? tabLand : !framed && layout !== "desktop" && innerWidth > innerHeight));
     const t = $("#layoutToggle");
     t.hidden = narrow;
     const nextMode = view === "admin" ? (choice === "phone" ? "desktop" : "phone") : NEXT_LAYOUT[choice];
@@ -1930,6 +1972,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "muted small", text: L(`${R.bnpcRate}% Senior/PWD discount sa mga kategoryang ito (hanggang ₱${R.bnpcWeeklyPurchase} na bili at ₱${R.bnpcWeeklyDiscount} na discount bawat linggo).`, `${R.bnpcRate}% Senior/PWD discount on these categories (up to ₱${R.bnpcWeeklyPurchase} of purchases and ₱${R.bnpcWeeklyDiscount} of discount a week).`) }),
         cats.length ? checks(bnSel, cats) : h("div", { class: "muted small", text: L("Wala pang produkto.", "No products yet.") })),
       h("div", { class: "card grid" }, h("h2", { text: L("Gamot", "Medicines") }), h("div", { class: "muted small", text: L(`${R.rate20}% + VAT exemption para sa Senior/PWD.`, `${R.rate20}% + VAT exemption for Senior/PWD.`) }), cats.length ? checks(medSel, cats) : null),
+      alertSettingsCard(),
       h("div", { class: "banner small" }, h("b", { text: L(`Batas na sinusunod (ayon sa KELSON, as of ${R.asOf}): `, `Rules followed (kept by KELSON, as of ${R.asOf}): `) }), R.basis),
       h("button", { class: "btn primary big", onclick: (e) => save(e.currentTarget) }, L("I-save", "Save")));
   }
@@ -2234,6 +2277,100 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "muted small", text: L("Fingerprint sa device na ito:", "Fingerprint on this device:") }), bioBox,
       lockOf(cur) || lockOf("owner") ? h("button", { class: "btn", onclick: lockAll }, L("🔒 I-lock ngayon", "🔒 Lock now")) : null,
       h("p", { class: "muted small", style: "margin:0", text: L("Nakalimutan ang owner PIN? Hilingin sa KELSON na i-reset ito.", "Forgot the owner PIN? Ask KELSON to reset it.") }));
+  }
+
+
+  // ---------- LOW-STOCK ALERT: pop-up + sound + voice when an item drops to its reorder level ----------
+  // Real sales trigger it as they happen. Demo mode (on by default for the pilot) also shows it 5 s after opening
+  // and plays a simulated sale every minute — simulated sales live only on this screen and are never saved.
+  const SA = { known: null, demoSold: new Map(), demoT: null, firstT: null, checkT: null, ctx: null, open: false, lastSale: null };
+  const prefOn = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch { return d; } };
+  const setPref = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch { /* ignore */ } };
+  const alertsOn = () => prefOn("kw-stockalert", true), demoOn = () => prefOn("kw-demoalerts", true);
+  const effStock = (id) => stockOf(id) - (SA.demoSold.get(id) || 0);
+  const lowNow = () => activeProducts().filter((p) => (p.reorder || 0) > 0 || stockOf(p.id) > 0).filter((p) => effStock(p.id) <= (p.reorder || 0))
+    .sort((a, b) => effStock(a.id) - (a.reorder || 0) - (effStock(b.id) - (b.reorder || 0)));
+  function resetStockAlerts() { SA.known = null; SA.demoSold.clear(); clearTimeout(SA.firstT); clearInterval(SA.demoT); SA.firstT = SA.demoT = null; document.getElementById("stockAlert")?.remove(); SA.open = false; }
+  // sound: a short two-tone chime, made in the browser (no file). Browsers allow sound only after the first tap.
+  function chime() {
+    try {
+      SA.ctx = SA.ctx || new (window.AudioContext || window.webkitAudioContext)();
+      const c = SA.ctx; if (c.state === "suspended") c.resume().catch(() => {});
+      if (c.state !== "running") return false;
+      [[880, 0], [660, .18], [880, .45], [660, .63]].forEach(([f, t]) => {
+        const o = c.createOscillator(), g = c.createGain(); o.type = "sine"; o.frequency.value = f;
+        g.gain.setValueAtTime(0, c.currentTime + t); g.gain.linearRampToValueAtTime(.28, c.currentTime + t + .02); g.gain.exponentialRampToValueAtTime(.001, c.currentTime + t + .16);
+        o.connect(g).connect(c.destination); o.start(c.currentTime + t); o.stop(c.currentTime + t + .18);
+      });
+      return true;
+    } catch { return false; }
+  }
+  document.addEventListener("pointerdown", () => { try { SA.ctx = SA.ctx || new (window.AudioContext || window.webkitAudioContext)(); if (SA.ctx.state === "suspended") SA.ctx.resume(); } catch { /* no audio */ } }, { capture: true });
+  const qtyWord = (p, n) => `${Math.max(0, Math.round(n * 100) / 100)} ${p.unit || "pc"}`;
+  function alertSpeech(items) {
+    const top = items.slice(0, 3);
+    return { title: L(`Paalala! Paubos na ang ${items.length} paninda.`, `Heads up! ${items.length} item${items.length === 1 ? " is" : "s are"} running low.`),
+      lines: top.map((p) => effStock(p.id) <= 0 ? L(`Ubos na ang ${p.name}.`, `${p.name} is out of stock.`) : L(`${p.name}: ${Math.round(effStock(p.id))} na lang.`, `${p.name}: only ${Math.round(effStock(p.id))} left.`))
+        .concat(items.length > 3 ? [L(`At ${items.length - 3} pa.`, `And ${items.length - 3} more.`)] : []).concat([L("Mag-restock na po.", "Time to restock.")]), lang };
+  }
+  function showStockAlert(items, why) {
+    if (!items.length || !alertsOn() || view === "admin" || document.getElementById("lock")) return;
+    document.getElementById("stockAlert")?.remove();
+    const sale = why === "demo" ? SA.lastSale : null;
+    const close = () => { box.remove(); SA.open = false; window.speechSynthesis?.cancel(); voice.tts?.stop?.(); };
+    const sound = chime(), say = () => { try { speakNow(alertSpeech(items)); } catch { /* no voice */ } };
+    const box = h("div", { id: "stockAlert", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "saTitle", onclick: (e) => { if (e.target === box) close(); } },
+      h("div", { class: "sa" },
+        h("h2", { id: "saTitle" }, h("span", { "aria-hidden": "true", text: "⚠️" }), L("Paubos na!", "Running low!"), why === "demo" ? h("span", { class: "demo-tag", text: "DEMO" }) : null),
+        sale ? h("div", { class: "small muted", text: L(`Bagong benta: ${sale.qty} × ${sale.name} · ${peso(sale.total)}`, `New sale: ${sale.qty} × ${sale.name} · ${peso(sale.total)}`) }) : null,
+        h("ul", {}, items.slice(0, 6).map((p) => { const n = effStock(p.id); return h("li", {}, h("span", { text: p.name }), h("b", { class: n <= 0 ? "out" : null, text: n <= 0 ? L("UBOS", "OUT") : L(`${qtyWord(p, n)} na lang`, `${qtyWord(p, n)} left`) })); })),
+        items.length > 6 ? h("div", { class: "small muted", text: L(`+ ${items.length - 6} pa`, `+ ${items.length - 6} more`) }) : null,
+        sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
+        h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
+          h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "stockin"); } }, L("Mag-stock-in", "Stock-in")),
+          h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
+          h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
+        why === "demo" ? h("div", { class: "small muted", text: L("Demo lang ang bentang ito — hindi naka-save. Patayin sa Settings.", "This sale is a demo and isn't saved. Turn demo off in Settings.") }) : null));
+    ($("#screen") || document.body).append(box); SA.open = true;
+    if (voice.auto) setTimeout(say, sound ? 900 : 0); // after the chime; the mute button in Ask Kwaderno also mutes this
+  }
+  // a real sale or stock change: alert for items that just crossed into low stock
+  function scheduleStockCheck() { clearTimeout(SA.checkT); SA.checkT = setTimeout(() => checkStock("real"), 800); }
+  function checkStock(why) {
+    if (!S.ready || view === "admin") return;
+    const low = lowNow(), ids = new Set(low.map((p) => p.id));
+    if (SA.known === null) { SA.known = ids; startDemo(); return; }
+    const fresh = low.filter((p) => !SA.known.has(p.id));
+    SA.known = ids;
+    if (fresh.length || why === "demo") showStockAlert(why === "demo" ? low : [...fresh, ...low.filter((p) => !fresh.includes(p))], why);
+  }
+  function startDemo() {
+    clearTimeout(SA.firstT); clearInterval(SA.demoT);
+    if (!demoOn() || !alertsOn()) return;
+    SA.firstT = setTimeout(() => showStockAlert(lowNow(), "open"), 5000);
+    SA.demoT = setInterval(demoSale, 60000);
+  }
+  // simulated sale: picks the item closest to its reorder level and sells just enough to reach it
+  function demoSale() {
+    if (document.hidden || SA.open || !demoOn() || !S.ready || view === "admin" || document.getElementById("lock")) return;
+    const ps = activeProducts().filter((p) => effStock(p.id) > 0 && (p.price || 0) > 0);
+    if (!ps.length) return;
+    const above = ps.filter((p) => effStock(p.id) > (p.reorder || 0) && effStock(p.id) - (p.reorder || 0) <= 12).sort((a, b) => effStock(a.id) - (a.reorder || 0) - (effStock(b.id) - (b.reorder || 0)));
+    const p = above[0] || ps[Math.floor(Math.random() * ps.length)];
+    const qty = above[0] ? Math.max(1, Math.ceil(effStock(p.id) - (p.reorder || 0))) : Math.min(effStock(p.id), 1 + Math.floor(Math.random() * 2));
+    SA.demoSold.set(p.id, (SA.demoSold.get(p.id) || 0) + qty);
+    SA.lastSale = { name: p.name, qty, total: qty * p.price };
+    checkStock("demo");
+  }
+  function alertSettingsCard() {
+    return h("div", { class: "card grid" }, h("h2", { text: L("🔔 Alerto sa paubos na stock", "🔔 Low-stock alert") }),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saOn", checked: alertsOn(), onchange: (e) => { setPref("kw-stockalert", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
+        L("Pop-up, tunog at boses kapag umabot sa reorder level ang isang paninda", "Pop-up, sound and voice when an item reaches its reorder level")),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saDemo", checked: demoOn(), onchange: (e) => { setPref("kw-demoalerts", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
+        L("Demo: ipakita 5 segundo pagbukas, at may kunwaring benta bawat 1 minuto (hindi naka-save)", "Demo: show it 5 seconds after opening, plus a simulated sale every minute (not saved)")),
+      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, h("button", { class: "btn", onclick: () => { chime(); showStockAlert(lowNow(), "open"); } }, L("Subukan ngayon", "Test now")),
+        SA.demoSold.size ? h("button", { class: "btn", onclick: () => { SA.demoSold.clear(); SA.known = null; checkStock("real"); toast(L("Na-reset ang demo", "Demo reset")); render(); } }, L("I-reset ang demo", "Reset demo")) : null),
+      h("div", { class: "muted small", text: L("Nakasunod ang boses sa mute at sa piniling boses sa Ask Kwaderno.", "The voice follows the mute switch and voice choice in Ask Kwaderno.") }));
   }
 
   // ---------- EXPENSES (gastos) ----------

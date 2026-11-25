@@ -693,6 +693,34 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const sum = d.reverse().reduce((a, x, i) => a + x * (i % 2 === 0 ? 3 : 1), 0);
     return (10 - (sum % 10)) % 10 === last;
   }
+  /** Where is the barcode? Looks for patches of many thin parallel lines (strong left-right contrast, weak up-down)
+   *  in a small copy of the photo. Returns the likeliest boxes in photo pixels, best first. */
+  function locateBarcodes(bmp) {
+    const W = 400, k = W / bmp.width, H = Math.max(8, Math.round(bmp.height * k)), c = document.createElement("canvas"); c.width = W; c.height = H;
+    const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(bmp, 0, 0, W, H);
+    const px = g.getImageData(0, 0, W, H).data, Lm = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) Lm[i] = px[i * 4] * .3 + px[i * 4 + 1] * .59 + px[i * 4 + 2] * .11;
+    const B = 8, bw = Math.floor(W / B), bh = Math.floor(H / B), sv = new Float32Array(bw * bh), sh = new Float32Array(bw * bh);
+    for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+      const gx = Math.abs(Lm[y * W + x + 1] - Lm[y * W + x - 1]), gy = Math.abs(Lm[(y + 1) * W + x] - Lm[(y - 1) * W + x]);
+      const bi = Math.min(bh - 1, (y / B) | 0) * bw + Math.min(bw - 1, (x / B) | 0); sv[bi] += gx - gy; sh[bi] += gy - gx;
+    }
+    const out = [];
+    for (const [s0, dir] of [[sv, "v"], [sh, "h"]]) {
+      const sm = new Float32Array(s0.length);
+      for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) { let t = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const nx = bx + dx, ny = by + dy; if (nx >= 0 && ny >= 0 && nx < bw && ny < bh) t += Math.max(0, s0[ny * bw + nx]); } sm[by * bw + bx] = t / 9; }
+      let m = 0; for (const v of sm) m = Math.max(m, v); if (!m) continue;
+      const th = m * .3, seen = new Uint8Array(sm.length);
+      for (let st = 0; st < sm.length; st++) {
+        if (seen[st] || sm[st] <= th) continue;
+        const q = [st]; seen[st] = 1; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, tot = 0;
+        while (q.length) { const i = q.pop(), bx = i % bw, by = (i / bw) | 0; tot += sm[i]; x0 = Math.min(x0, bx); x1 = Math.max(x1, bx); y0 = Math.min(y0, by); y1 = Math.max(y1, by);
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = bx + dx, ny = by + dy; if (nx < 0 || ny < 0 || nx >= bw || ny >= bh) continue; const j = ny * bw + nx; if (!seen[j] && sm[j] > th) { seen[j] = 1; q.push(j); } } }
+        out.push({ dir, tot, box: [x0 * B / k, y0 * B / k, (x1 + 1) * B / k, (y1 + 1) * B / k] });
+      }
+    }
+    return out.sort((a, b) => b.tot - a.tot).slice(0, 5);
+  }
   const BC_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
   const barcodeInfo = { native: "BarcodeDetector" in window ? "yes" : "no", reader: "not loaded", tries: 0, ms: 0, step: "" };
   /** Photo → barcode text. Tries the phone's own detector, then the bundled reader on several sizes, crops and turns. */
@@ -721,7 +749,37 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "CODE_39", "ITF", "QR_CODE"].map((f) => ZX.BarcodeFormat[f]).filter((x) => x !== undefined));
     const reader = new ZX.MultiFormatReader(); reader.setHints(hints);
     const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
-    // the barcode is usually in the middle and often small or turned: whole photo, then the centre, at a few sizes
+    const attempt = () => {
+      const src = new ZX.HTMLCanvasElementLuminanceSource(c);
+      for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) {
+        barcodeInfo.tries++;
+        try { const text = reader.decode(new ZX.BinaryBitmap(new Bin(src))).getText().trim(); if (text && eanOk(text)) return text; } catch { /* not here */ } finally { reader.reset(); }
+      }
+      return null;
+    };
+    // 1) find the barcode in the photo, cut it out with a margin and zoom in — works for small, far or tilted barcodes
+    const cands = locateBarcodes(bmp);
+    // quick looks at every likely spot first, then the slower zoom/tilt combinations
+    const passes = [[[1000, 0], [1300, 0]], [[900, -6], [900, 6], [1300, -6], [1300, 6], [600, 0]], [[1300, -12], [1300, 12], [900, -12], [900, 12], [600, -6], [600, 6]]];
+    for (const pass of passes) for (const cand of cands) {
+      const [x0, y0, x1, y1] = cand.box, w = x1 - x0, hh0 = y1 - y0, pxm = w * .15, pym = hh0 * .35;
+      const sx = Math.max(0, x0 - pxm), sy = Math.max(0, y0 - pym), sw = Math.min(bmp.width - sx, w + 2 * pxm), sh = Math.min(bmp.height - sy, hh0 + 2 * pym);
+      if (sw < 16 || sh < 8) continue;
+      for (const [target, tilt] of pass) {
+        if (performance.now() - t0 > 9000) break;
+        const along = cand.dir === "v" ? sw : sh, k = target / along, cw = Math.round(sw * k), ch = Math.round(sh * k);
+        if (cw * ch > 6e6) continue;
+        const turn = cand.dir === "h" ? 90 : 0;
+        c.width = turn ? ch : cw; c.height = turn ? cw : ch;
+        g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
+        g.translate(c.width / 2, c.height / 2); g.rotate((turn + tilt) * Math.PI / 180); g.translate(-cw / 2, -ch / 2);
+        g.imageSmoothingQuality = "high"; g.drawImage(bmp, sx, sy, sw, sh, 0, 0, cw, ch);
+        const text = attempt();
+        if (text) { barcodeInfo.ms = Math.round(performance.now() - t0); barcodeInfo.found = "located"; return text; }
+      }
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    // 2) the barcode is usually in the middle and often small or turned: whole photo, then the centre, at a few sizes
     const plans = [];
     for (const crop of [1, 0.6, 0.38]) for (const max of [1400, 900, 2000]) for (const rot of [0, 90]) plans.push({ crop, max, rot });
     for (const { crop, max, rot } of plans) {
@@ -1517,8 +1575,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // Listening turns speech into text only (Claude page dictation, or the browser's own speech recognition);
   // the answer still comes from the rule-based analyst. Reading aloud uses the phone's own voices first (free, offline).
   const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null, auto: true, style: "uk" };
-  try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; voice.tlStyle = localStorage.getItem("kw-voice-tl") === "std" ? "std" : "friendly";
-    voice.tlGender = localStorage.getItem("kw-voice-tl-g") === "male" ? "male" : "female"; voice.enGender = localStorage.getItem("kw-voice-en-g") === "female" ? "female" : "male"; } catch { voice.tlStyle = "friendly"; voice.tlGender = "female"; voice.enGender = "male"; }
+  try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; voice.tlStyle = ["std", "friendly"].includes(localStorage.getItem("kw-voice-tl")) ? localStorage.getItem("kw-voice-tl") : "calm";
+    voice.tlGender = localStorage.getItem("kw-voice-tl-g") === "female" ? "female" : "male"; voice.enGender = localStorage.getItem("kw-voice-en-g") === "female" ? "female" : "male"; } catch { voice.tlStyle = "calm"; voice.tlGender = "male"; voice.enGender = "male"; }
   // Some browsers load their voice list late; ask once so the British voice is ready for the first answer.
   try { window.speechSynthesis?.getVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", () => {}); } catch { /* no speech here */ }
   function voiceInit() {
@@ -1593,7 +1651,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function speakNow(r) { withLang(r.lang || lang, () => speakIn(r)); }
   function speakIn(r) {
     window.speechSynthesis?.cancel(); voice.tts?.stop?.();
-    const text = speechText(r), en = lang === "en", want = en ? /^en/i : /^(fil|tl)/i, uk = en && voice.style === "uk", friendly = !en && voice.tlStyle !== "std";
+    const text = speechText(r), en = lang === "en", want = en ? /^en/i : /^(fil|tl)/i, uk = en && voice.style === "uk", friendly = !en && voice.tlStyle === "friendly", calm = !en && voice.tlStyle === "calm";
     const gender = en ? voice.enGender : voice.tlGender;
     const all = window.speechSynthesis?.getVoices?.() || [];
     let v = pickVoice(all, want, gender, uk);
@@ -1603,9 +1661,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (window.speechSynthesis && (v.voice || !voice.tts)) {
       const u = new SpeechSynthesisUtterance(text); try { if (v.voice) u.voice = v.voice; } catch { /* keep the default voice */ }
       u.lang = v.voice?.lang || (en ? (uk ? "en-GB" : "en-PH") : all.length ? "en-US" : "fil-PH");
-      let pitch = uk ? 0.85 : friendly ? 1.12 : 1;
+      // "assistant" delivery: a low, steady male voice that doesn't rush — British for English, calm for Tagalog
+      let pitch = uk ? (gender === "male" ? 0.8 : 0.9) : calm ? (gender === "male" ? 0.82 : 0.95) : friendly ? 1.12 : 1;
       if (!v.genderMatched) pitch = gender === "male" ? Math.min(pitch, 0.8) : Math.max(pitch, 1.18); // no voice of that gender on this device: shift the pitch instead
-      u.rate = uk ? 0.92 : friendly ? 1.02 : 0.95; u.pitch = pitch;
+      u.rate = uk ? 0.94 : calm ? 0.95 : friendly ? 1.02 : 0.95; u.pitch = pitch;
       u.onend = u.onerror = () => { voice.speaking = false; speakState(); };
       speechSynthesis.cancel(); speechSynthesis.speak(u); voice.speaking = true; speakState(); return;
     }
@@ -1714,12 +1773,12 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
             render(); draw(); } }, l2)))),
       h("label", { class: "f" }, L("Boses sa Tagalog", "Tagalog voice"),
         h("select", { id: "aiVoiceTl", onchange: (e) => { voice.tlStyle = e.target.value; try { localStorage.setItem("kw-voice-tl", voice.tlStyle); } catch { /* ignore */ } } },
-          h("option", { value: "friendly", text: L("Masigla (friendly)", "Friendly"), selected: voice.tlStyle !== "std" }), h("option", { value: "std", text: "Standard", selected: voice.tlStyle === "std" })),
+          h("option", { value: "calm", text: L("Kalmado (assistant)", "Calm (assistant)"), selected: voice.tlStyle === "calm" }), h("option", { value: "friendly", text: L("Masigla (friendly)", "Friendly"), selected: voice.tlStyle === "friendly" }), h("option", { value: "std", text: "Standard", selected: voice.tlStyle === "std" })),
         h("select", { id: "aiVoiceTlG", "aria-label": L("Babae o lalaki", "Female or male"), style: "margin-top:6px", onchange: (e) => { voice.tlGender = e.target.value; try { localStorage.setItem("kw-voice-tl-g", e.target.value); } catch { /* ignore */ } } },
           h("option", { value: "female", text: L("Babae", "Female"), selected: voice.tlGender === "female" }), h("option", { value: "male", text: L("Lalaki", "Male"), selected: voice.tlGender === "male" })),),
       h("label", { class: "f" }, L("Boses sa English", "English voice"),
         h("select", { id: "aiVoiceStyle", onchange: (e) => { voice.style = e.target.value; try { localStorage.setItem("kw-voice-style", voice.style); } catch { /* ignore */ } } },
-          h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" })),
+          h("option", { value: "uk", text: L("British assistant (kalmado)", "British assistant (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" })),
         h("select", { id: "aiVoiceEnG", "aria-label": L("Babae o lalaki", "Female or male"), style: "margin-top:6px", onchange: (e) => { voice.enGender = e.target.value; try { localStorage.setItem("kw-voice-en-g", e.target.value); } catch { /* ignore */ } } },
           h("option", { value: "female", text: L("Babae", "Female"), selected: voice.enGender === "female" }), h("option", { value: "male", text: L("Lalaki", "Male"), selected: voice.enGender === "male" })),),
       h("p", { class: "muted small", style: "margin:0", text: L("Nakadepende ang boses sa mga boses na naka-install sa phone mo. Kung walang boses na babae o lalaki, iniiba na lang ang tono.", "Voices depend on what is installed on your phone. If there is no female or male voice, the pitch is adjusted instead.") }),

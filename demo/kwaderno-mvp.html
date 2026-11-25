@@ -636,46 +636,125 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     });
   }
   let zxingP = null;
+  const ZXING_URL = () => (window.__OCR_CDN || "https://cdn.jsdelivr.net/npm") + "/@zxing/library@0.21.3/umd/index.min.js";
   const loadZxing = () => (zxingP ??= new Promise((res, rej) => {
     const sc = document.createElement("script");
-    sc.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js";
-    sc.onload = () => (window.ZXing ? res(window.ZXing) : rej(new Error("load")));
-    sc.onerror = () => { zxingP = null; rej(new Error("load")); };
+    sc.src = ZXING_URL();
+    const t = setTimeout(() => { zxingP = null; rej(new Error("load")); }, 20000);
+    sc.onload = () => { clearTimeout(t); window.ZXing ? res(window.ZXing) : (zxingP = null, rej(new Error("load"))); };
+    sc.onerror = () => { clearTimeout(t); zxingP = null; rej(new Error("load")); };
     document.head.append(sc);
   }));
-  async function decodeBarcode(file) {
+  // EAN-13 / EAN-8 / UPC-A check digit, so a misread never gets saved
+  function eanOk(code) {
+    if (!/^\d{8}$|^\d{12,13}$/.test(code)) return true; // other formats (Code 128, QR …) carry their own checks
+    const d = code.padStart(code.length === 8 ? 8 : 13, "0").split("").map(Number), last = d.pop();
+    const sum = d.reverse().reduce((a, x, i) => a + x * (i % 2 === 0 ? 3 : 1), 0);
+    return (10 - (sum % 10)) % 10 === last;
+  }
+  const BC_FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf", "qr_code"];
+  const barcodeInfo = { native: "BarcodeDetector" in window ? "yes" : "no", reader: "not loaded", tries: 0, ms: 0, step: "" };
+  /** Photo → barcode text. Tries the phone's own detector, then the bundled reader on several sizes, crops and turns. */
+  async function decodeBarcode(file, onStep) {
+    const t0 = performance.now(); barcodeInfo.tries = 0; barcodeInfo.step = "open";
     const bmp = await createImageBitmap(file).catch(() => null);
-    if (!bmp) throw new Error("Could not open that photo");
+    if (!bmp) throw new Error("open");
     if ("BarcodeDetector" in window) {
+      barcodeInfo.step = "native";
       try {
         const supported = await BarcodeDetector.getSupportedFormats();
-        const det = new BarcodeDetector({ formats: supported.filter((f) => ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"].includes(f)) });
-        const r = await det.detect(bmp);
-        if (r[0]?.rawValue) return r[0].rawValue;
-      } catch { /* fall back to the bundled reader */ }
+        const formats = supported.filter((f) => BC_FORMATS.includes(f));
+        if (formats.length) {
+          const r = await new BarcodeDetector({ formats }).detect(bmp);
+          const hit = r.map((x) => (x.rawValue || "").trim()).find((v) => v && eanOk(v));
+          if (hit) { barcodeInfo.ms = Math.round(performance.now() - t0); return hit; }
+        } else barcodeInfo.native = "no formats";
+      } catch { barcodeInfo.native = "failed"; }
     }
-    const ZX = await loadZxing();
+    barcodeInfo.step = "reader"; onStep?.("reader");
+    let ZX;
+    try { ZX = await loadZxing(); barcodeInfo.reader = "loaded"; } catch { barcodeInfo.reader = "could not load"; throw new Error("load"); }
+    barcodeInfo.step = "decode"; onStep?.("decode");
     const hints = new Map();
     hints.set(ZX.DecodeHintType.TRY_HARDER, true);
-    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "CODE_39", "QR_CODE"].map((f) => ZX.BarcodeFormat[f]));
-    for (const max of [1600, 1000, 2400]) {
-      const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-      const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-      c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-      try {
-        const reader = new ZX.MultiFormatReader(); reader.setHints(hints);
-        return reader.decode(new ZX.BinaryBitmap(new ZX.HybridBinarizer(new ZX.HTMLCanvasElementLuminanceSource(c)))).getText();
-      } catch { /* try another size */ }
+    hints.set(ZX.DecodeHintType.POSSIBLE_FORMATS, ["EAN_13", "EAN_8", "UPC_A", "UPC_E", "CODE_128", "CODE_39", "ITF", "QR_CODE"].map((f) => ZX.BarcodeFormat[f]).filter((x) => x !== undefined));
+    const reader = new ZX.MultiFormatReader(); reader.setHints(hints);
+    const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
+    // the barcode is usually in the middle and often small or turned: whole photo, then the centre, at a few sizes
+    const plans = [];
+    for (const crop of [1, 0.6, 0.38]) for (const max of [1400, 900, 2000]) for (const rot of [0, 90]) plans.push({ crop, max, rot });
+    for (const { crop, max, rot } of plans) {
+      if (performance.now() - t0 > 12000) break;
+      const sw = bmp.width * crop, sh = bmp.height * crop, sx = (bmp.width - sw) / 2, sy = (bmp.height - sh) / 2;
+      const k = Math.min(1, max / Math.max(sw, sh)) || 1, w = Math.round(sw * k), hh = Math.round(sh * k);
+      if (w < 120 || hh < 60) continue;
+      c.width = rot ? hh : w; c.height = rot ? w : hh;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      if (rot) { g.translate(c.width / 2, c.height / 2); g.rotate(Math.PI / 2); g.translate(-w / 2, -hh / 2); }
+      g.drawImage(bmp, sx, sy, sw, sh, 0, 0, w, hh);
+      const src = new ZX.HTMLCanvasElementLuminanceSource(c);
+      for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) {
+        barcodeInfo.tries++;
+        try {
+          const text = reader.decode(new ZX.BinaryBitmap(new Bin(src))).getText().trim();
+          if (text && eanOk(text)) { barcodeInfo.ms = Math.round(performance.now() - t0); return text; }
+        } catch { /* not found in this try */ } finally { reader.reset(); }
+      }
+      await new Promise((r) => setTimeout(r, 0)); // keep the screen responsive
     }
+    barcodeInfo.ms = Math.round(performance.now() - t0);
     throw new Error("none");
   }
-  /** Take a photo, read the barcode. Resolves the code or null (with a message). */
-  async function scanBarcode() {
-    const file = await pickPhoto(true);
-    if (!file) return null;
-    toast("Reading barcode…");
-    try { const code = (await decodeBarcode(file)).trim(); toast(`Barcode ${code}`); return code; }
-    catch (e) { toast(e?.message === "load" ? "Barcode reader couldn't load — check internet, or type the number" : "No barcode found — hold closer, keep it sharp and well lit, or type the number"); return null; }
+  /**
+   * Get a barcode: photo (camera or gallery) or typed by hand. Resolves the code, or null if cancelled.
+   * ask: start with the choice screen (used for "Add barcode"); otherwise open the camera straight away
+   * (Sell / Scan) and show the choice screen only if reading fails.
+   */
+  function scanBarcode(opts = {}) {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; resolve(v); };
+      const status = h("div", { class: "small", role: "status", style: "min-height:1.3em" });
+      const thumb = h("img", { alt: "", hidden: true, style: "max-height:140px;border-radius:10px;justify-self:start" });
+      const typed = h("input", { type: "text", inputmode: "numeric", autocomplete: "off", id: "bcTyped", placeholder: L("hal. 4800016644290", "e.g. 4800016644290"), maxlength: 48 });
+      const detail = h("div", { class: "muted small", style: "font-size:.72rem" });
+      const useTyped = () => {
+        const v = typed.value.replace(/\s+/g, "");
+        if (!v) return status.textContent = L("I-type ang numero sa ilalim ng barcode.", "Type the number under the barcode.");
+        if (!eanOk(v)) return status.textContent = L("Mukhang mali ang isang numero — pakisuri ulit.", "One digit looks wrong — please check the number again.");
+        dlg.close(); finish(v);
+      };
+      const tryFile = async (file) => {
+        if (!file) return;
+        thumb.src = URL.createObjectURL(file); thumb.hidden = false;
+        status.style.color = ""; status.textContent = L("Binabasa ang barcode…", "Reading the barcode…");
+        try {
+          const code = await decodeBarcode(file, (st) => { status.textContent = st === "reader" ? L("Kinukuha ang barcode reader…", "Loading the barcode reader…") : L("Binabasa ang barcode…", "Reading the barcode…"); });
+          toast(L(`Barcode ${code}`, `Barcode ${code}`)); if (dlg.open && dlg.contains(status)) dlg.close(); finish(code);
+        } catch (e) {
+          status.style.color = "var(--bad)";
+          status.textContent = e?.message === "load" ? L("Hindi ma-load ang barcode reader — tingnan ang internet, o i-type ang numero.", "The barcode reader couldn't load — check the internet, or type the number.")
+            : e?.message === "open" ? L("Hindi mabuksan ang litratong iyon. Subukan ulit.", "That photo couldn't be opened. Try again.")
+            : L("Walang nabasang barcode. Ilapit (mga 15 cm), ituwid, iwasan ang silaw — o i-type ang numero.", "No barcode found. Get closer (about 15 cm), keep it straight, avoid glare — or type the number.");
+          detail.textContent = `phone reader: ${barcodeInfo.native} · KWADERNO reader: ${barcodeInfo.reader} · ${barcodeInfo.tries} tries · ${barcodeInfo.ms} ms`;
+          if (!(dlg.open && dlg.contains(status))) showChoices();
+          setTimeout(() => typed.focus(), 50);
+        }
+      };
+      const showChoices = () => {
+        openDialog(opts.title || L("Magdagdag ng barcode", "Add barcode"), h("div", { class: "grid" },
+          h("button", { class: "btn primary big", onclick: async () => tryFile(await pickPhoto(true)) }, camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")),
+          h("button", { class: "btn", onclick: async () => tryFile(await pickPhoto(false)) }, L("🖼️ Pumili sa gallery", "🖼️ Choose from gallery")),
+          thumb, status,
+          h("label", { class: "f" }, L("O i-type ang numero sa ilalim ng barcode", "Or type the number under the barcode"), typed),
+          h("button", { class: "btn", onclick: useTyped }, L("Gamitin ang numerong ito", "Use this number")),
+          h("p", { class: "muted small", style: "margin:0", text: L("Tip: punuin ng barcode ang gitna ng litrato, maliwanag at hindi malabo.", "Tip: fill the middle of the photo with the barcode, well lit and sharp.") }), detail));
+        typed.addEventListener("keydown", (e) => { if (e.key === "Enter") useTyped(); });
+        dlg.addEventListener("close", () => finish(null), { once: true });
+      };
+      if (opts.ask) return showChoices();
+      pickPhoto(true).then((f) => (f ? tryFile(f) : finish(null)));
+    });
   }
   const byBarcode = (code) => S.products.find((p) => !p.archived && (p.barcodes || []).includes(code));
   function unknownBarcode(code) {
@@ -2920,7 +2999,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         i("pf-reorder", "Low-stock alert at", v.reorder, { inputmode: "decimal" }),
         h("label", { class: "f" }, "Barcode (optional)", h("div", { style: "display:flex;gap:6px" },
           h("input", { type: "text", id: "pf-code", value: (v.barcodes || [])[0] || (p ? "" : pendingBarcode), inputmode: "numeric" }),
-          h("button", { class: "btn", type: "button", "aria-label": "Scan barcode", onclick: async () => { const code = await scanBarcode(); if (code) $("#pf-code").value = code; } }, camIcon()))),
+          h("button", { class: "btn", type: "button", "aria-label": "Scan barcode", onclick: async () => { const code = await scanBarcode({ ask: true }); if (code) $("#pf-code").value = code; } }, camIcon()))),
         p ? null : i("pf-open", "Stock on hand now", "0", { inputmode: "decimal" })),
       h("div", { class: "pills" }, h("button", { class: "btn primary", type: "submit" }, p ? "Save changes" : "Add product"), h("button", { class: "btn", type: "button", onclick: () => go("products", p ? "p-" + p.id : null) }, "Cancel")));
     return h("div", { class: "view" }, h("h1", { text: p ? "Edit product" : "Add product" }), form);
@@ -2934,7 +3013,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: p.name, style: "margin-top:8px" }), h("div", { class: "muted small", text: [p.category, (p.barcodes || [])[0] && "Barcode " + p.barcodes[0]].filter(Boolean).join(" · ") })),
         h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => adjustDialog(p) }, "Adjust stock"), h("button", { class: "btn", onclick: () => go("products", "edit-" + p.id) }, "Edit"),
-          h("button", { class: "btn", onclick: async () => { const code = await scanBarcode(); if (!code) return; const other = byBarcode(code); if (other && other.id !== p.id) return toast(`Barcode already used by ${other.name}`); await write("products/" + p.id, { ...strip(p), barcodes: [...new Set([...(p.barcodes || []), code])] }); toast("Barcode saved"); } }, camIcon(), "Add barcode"),
+          h("button", { class: "btn", onclick: async () => { const code = await scanBarcode({ ask: true }); if (!code) return; const other = byBarcode(code); if (other && other.id !== p.id) return toast(L(`Gamit na ang barcode na ito ng ${other.name}`, `Barcode already used by ${other.name}`)); if ((p.barcodes || []).includes(code)) return toast(L("Naka-save na ang barcode na ito", "This barcode is already saved")); try { await write("products/" + p.id, { ...strip(p), barcodes: [...new Set([...(p.barcodes || []), code])] }); toast(L(`Na-save ang barcode ${code}`, `Barcode ${code} saved`)); } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); } } }, camIcon(), "Add barcode"),
           h("button", { class: "btn", onclick: () => expiryCapture(p.id) }, "Track expiry"),
           h("button", { class: "btn danger", onclick: async () => { await write("products/" + p.id, { ...strip(p), archived: true }); toast("Archived — history kept"); go("products"); } }, "Archive"))),
       h("div", { style: "display:flex;gap:14px;align-items:end;flex-wrap:wrap" },

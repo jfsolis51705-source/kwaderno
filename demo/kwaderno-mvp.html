@@ -193,6 +193,24 @@ dialog .db * { min-width: 0; }
 .ledger-bal { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .amt-in { color: var(--good); font-weight: 700; } .amt-out { color: var(--bad); font-weight: 700; }
 .daygrp { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0 4px; font-weight: 700; font-size: .85rem; color: var(--muted); border-bottom: 1px solid var(--line); }
+/* Tablet layout (data-layout="tablet"): a slim icon rail on the left, wider grids, till beside the products. */
+:root[data-layout="tablet"] nav.tabs, :root[data-layout="tablet"] .wrap:has(> nav.tabs) { display: none; }
+:root[data-layout="tablet"] nav.bottom { display: flex; flex-direction: column; gap: 4px; position: fixed; left: 0; top: 0; bottom: 0; width: 96px; z-index: 20; padding: calc(16px + env(safe-area-inset-top, 0px)) 8px 16px; background: var(--surface); border-right: 1px solid var(--line); }
+:root[data-layout="tablet"] nav.bottom a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; border-radius: 14px; text-decoration: none; color: var(--muted); font-size: .8rem; font-weight: 600; }
+:root[data-layout="tablet"] nav.bottom a:hover { background: var(--surface-2); }
+:root[data-layout="tablet"] nav.bottom a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
+:root[data-layout="tablet"] nav.bottom svg { width: 24px; height: 24px; }
+:root[data-layout="tablet"] #phone { margin-left: 96px; min-height: 100dvh; }
+:root[data-layout="tablet"] header.top { padding-top: env(safe-area-inset-top, 0px); }
+:root[data-layout="tablet"] main.wrap { max-width: 1040px; padding-top: 16px; padding-bottom: 32px; }
+:root[data-layout="tablet"] .apps { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+:root[data-layout="tablet"] .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+:root[data-layout="tablet"] .sell { grid-template-columns: minmax(0, 1fr) 320px; }
+:root[data-layout="tablet"] .cart.desktop { display: block; }
+:root[data-layout="tablet"] .kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+:root[data-layout="tablet"] .fab { display: grid; place-items: center; position: fixed; right: 28px; bottom: 28px; z-index: 26; width: 62px; height: 62px; border-radius: 50%; border: 0; background: var(--accent); color: var(--accent-fg); box-shadow: 0 10px 24px rgb(0 0 0 / .25); }
+:root[data-layout="tablet"] .fab svg { width: 28px; height: 28px; }
+:root[data-layout="tablet"] .layout-toggle { right: 28px; bottom: 104px; }
 /* On a tablet or computer, show the app inside a phone-shaped screen. Fixed bars (bottom tabs,
    cart button, toast) pin to the phone because #phone is transformed and does not scroll. */
 @media (min-width: 520px) {
@@ -387,7 +405,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
   function readHash() {
     const raw = location.hash.slice(1);
-    if (raw === "phone" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
+    if (raw === "phone" || raw === "tablet" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
     if (raw === "admin-phone" || raw === "admin-desktop") { setAdminLayout(raw.slice(6)); history.replaceState(null, "", "#admin"); view = "admin"; sub = null; return; }
     if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
     const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
@@ -397,23 +415,27 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   window.addEventListener("hashchange", () => { readHash(); render(); });
 
   // ---------- layout: phone app or desktop ----------
+  const LAYOUTS = ["phone", "tablet", "desktop"];
+  const NEXT_LAYOUT = { phone: "tablet", tablet: "desktop", desktop: "phone" };
+  const LAYOUT_NAME = { phone: "phone", tablet: "tablet", desktop: "desktop" };
   let layoutChoice = "phone";
-  try { layoutChoice = localStorage.getItem("kw-layout") || "phone"; } catch { /* private mode */ }
-  function setLayout(l) { layoutChoice = l; try { localStorage.setItem("kw-layout", l); } catch { /* ignore */ } }
+  try { const saved = localStorage.getItem("kw-layout"); if (LAYOUTS.includes(saved)) layoutChoice = saved; } catch { /* private mode */ }
+  function setLayout(l) { layoutChoice = LAYOUTS.includes(l) ? l : "phone"; try { localStorage.setItem("kw-layout", layoutChoice); } catch { /* ignore */ } }
   // The Super Admin keeps its own phone/desktop choice (default desktop), separate from the store app's.
   let adminLayout = "desktop";
   try { adminLayout = localStorage.getItem("kw-admin-layout") || "desktop"; } catch { /* private mode */ }
   function setAdminLayout(l) { adminLayout = l; try { localStorage.setItem("kw-admin-layout", l); } catch { /* ignore */ } }
   function applyLayout() {
-    const narrow = window.innerWidth < 760; // a real phone always gets the phone layout
+    const narrow = window.innerWidth < 600; // a real phone always gets the phone layout
     const choice = view === "admin" ? adminLayout : layoutChoice;
     document.documentElement.dataset.layout = narrow ? "phone" : choice;
     const t = $("#layoutToggle");
     t.hidden = narrow;
-    t.textContent = choice === "phone" ? "Switch to desktop view" : "Switch to phone view";
+    const nextMode = view === "admin" ? (choice === "phone" ? "desktop" : "phone") : NEXT_LAYOUT[choice];
+    t.textContent = `Switch to ${LAYOUT_NAME[nextMode]} view`;
   }
   $("#layoutToggle").addEventListener("click", () => {
-    if (view === "admin") setAdminLayout(adminLayout === "phone" ? "desktop" : "phone"); else setLayout(layoutChoice === "phone" ? "desktop" : "phone");
+    if (view === "admin") setAdminLayout(adminLayout === "phone" ? "desktop" : "phone"); else setLayout(NEXT_LAYOUT[layoutChoice]);
     render();
   });
   window.addEventListener("resize", () => applyLayout());

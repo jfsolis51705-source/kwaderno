@@ -160,6 +160,13 @@ dialog .db * { min-width: 0; }
 :root[data-layout="phone"] .demo-pill { display: none; }
 :root[data-layout="phone"] .admin-link { margin-left: auto; }
 .layout-toggle[hidden] { display: none; }
+:root[data-layout="phone"] .admin-mode .tabs-admin, :root[data-layout="phone"].admin-mode .tabs-admin { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+:root[data-layout="phone"].admin-mode .tabs-admin a { white-space: nowrap; flex: none; }
+:root[data-layout="phone"].admin-mode .adm-2col { grid-template-columns: 1fr !important; }
+:root[data-layout="phone"].admin-mode .two { grid-template-columns: 1fr; }
+:root[data-layout="phone"].admin-mode .kpis.wide { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:root[data-layout="phone"].admin-mode .kpi .value { font-size: 1.15rem; overflow-wrap: anywhere; }
+:root[data-layout="phone"].admin-mode main { padding-bottom: 24px; }
 .admin-mode nav.tabs, .admin-mode .wrap:has(> nav.tabs), .admin-mode nav.bottom { display: none !important; }
 .libgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 52vh; overflow-y: auto; }
 .libitem { display: grid; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); text-align: left; min-width: 0; }
@@ -212,7 +219,6 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       KWADERNO
     </div>
     <span class="store-name" id="storeName"></span>
-    <a class="admin-link" id="adminLink" href="#admin" hidden>Super-Admin</a>
     <span class="demo-pill" title="Lightweight online version for testing. The full system adds receipt AI, offline mode, roles and the admin portal.">Pilot demo</span>
   </div>
   <div class="wrap"><nav class="tabs" aria-label="Main" id="tabs"></nav></div>
@@ -330,6 +336,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function readHash() {
     const raw = location.hash.slice(1);
     if (raw === "phone" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
+    if (raw === "admin-phone" || raw === "admin-desktop") { setAdminLayout(raw.slice(6)); history.replaceState(null, "", "#admin"); view = "admin"; sub = null; return; }
     if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
     const v = VIEWS.find(([k]) => raw === k || raw.startsWith(k + "-"));
     view = v ? v[0] : "home";
@@ -341,14 +348,22 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   let layoutChoice = "phone";
   try { layoutChoice = localStorage.getItem("kw-layout") || "phone"; } catch { /* private mode */ }
   function setLayout(l) { layoutChoice = l; try { localStorage.setItem("kw-layout", l); } catch { /* ignore */ } }
+  // The Super Admin keeps its own phone/desktop choice (default desktop), separate from the store app's.
+  let adminLayout = "desktop";
+  try { adminLayout = localStorage.getItem("kw-admin-layout") || "desktop"; } catch { /* private mode */ }
+  function setAdminLayout(l) { adminLayout = l; try { localStorage.setItem("kw-admin-layout", l); } catch { /* ignore */ } }
   function applyLayout() {
     const narrow = window.innerWidth < 760; // a real phone always gets the phone layout
-    document.documentElement.dataset.layout = narrow ? "phone" : view === "admin" ? "desktop" : layoutChoice;
+    const choice = view === "admin" ? adminLayout : layoutChoice;
+    document.documentElement.dataset.layout = narrow ? "phone" : choice;
     const t = $("#layoutToggle");
-    t.hidden = narrow || view === "admin";
-    t.textContent = layoutChoice === "phone" ? "Switch to desktop view" : "Switch to phone view";
+    t.hidden = narrow;
+    t.textContent = choice === "phone" ? "Switch to desktop view" : "Switch to phone view";
   }
-  $("#layoutToggle").addEventListener("click", () => { setLayout(layoutChoice === "phone" ? "desktop" : "phone"); render(); });
+  $("#layoutToggle").addEventListener("click", () => {
+    if (view === "admin") setAdminLayout(adminLayout === "phone" ? "desktop" : "phone"); else setLayout(layoutChoice === "phone" ? "desktop" : "phone");
+    render();
+  });
   window.addEventListener("resize", () => applyLayout());
 
   // ---------- dialog ----------
@@ -376,7 +391,6 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.error === "nodb") return app.replaceChildren(h("div", { class: "card" }, h("h2", { text: "Sign in to use the store" }), h("p", { class: "muted", text: "This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor)." })));
     if (!S.ready) return app.replaceChildren(h("div", { class: "empty", text: S.error === "slow" ? "Still connecting… check your internet connection." : "Loading your store…" }));
     if (S.error && S.error !== "slow") app.prepend?.(h("div", { class: "note err", text: "Some data could not load (" + S.error + "). Reload the page to try again." }));
-    $("#adminLink").hidden = !S.owner || view === "admin";
     const route = view + "/" + sub;
     if (route === lastRoute && app.querySelector("[data-keep]")) return; // keep what's typed in an open form
     lastRoute = route;
@@ -1355,7 +1369,7 @@ ${catalog}`;
     return h("div", { class: "view" },
       h("div", { class: "head" },
         h("div", {}, h("div", { class: "muted small", text: "KELSON · Super Admin · visible only to you" }), h("h1", { text: "All stores" })),
-        h("div", { class: "pills" }, h("a", { class: "btn", href: "#home", onclick: (e) => { e.preventDefault(); go("home"); } }, "‹ My store"))),
+        null),
       adminTabs("stores"),
       samples ? h("div", { class: "banner", style: "display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between" },
         h("span", {}, adminSample ? `Includes ${samples} SAMPLE stores with made-up numbers, so you can see how 100 stores look. Real stores appear here as merchants sign up.` : `Sample stores hidden — showing ${stores.length} real store(s).`),
@@ -1743,7 +1757,7 @@ ${catalog}`;
     for (const d of pts) dot(zoom, zx(d.lng), zy(d.lat), d, 5);
     const cities = new Map(); for (const d of pts) { const c = d.city || "Not stated"; if (!cities.has(c)) cities.set(c, []); cities.get(c).push(d); }
     for (const [c, ds] of cities) if (c !== "Not stated") { const x = ds.reduce((a, d) => a + zx(d.lng), 0) / ds.length, yv = Math.min(...ds.map((d) => zy(d.lat))) - 10; { const anchor = x > ZW * 0.7 ? "end" : x < ZW * 0.3 ? "start" : "middle"; zoom.append(el("text", { x: Math.min(ZW - 6, Math.max(6, x)), y: Math.max(14, yv), "text-anchor": anchor, fill: "var(--fg)", "font-size": 12, "font-weight": 600, stroke: "var(--surface-2)", "stroke-width": 3, "paint-order": "stroke" }, `${c} (${ds.length})`)); } }
-    return h("div", { class: "grid", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;align-items:start" },
+    return h("div", { class: "grid adm-2col", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);gap:14px;align-items:start" },
       h("div", {}, h("div", { class: "muted small", style: "margin-bottom:4px", text: "Philippines" }), big),
       h("div", {}, h("div", { class: "muted small", style: "margin-bottom:4px", text: "Zoomed to the outlets" }), zoom, info));
   }
@@ -1820,7 +1834,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       try { await cur.save(np); toast(v === "approved" && cur.app ? `Approved — ${POINTS_PER_PHOTO} points to ${cur.store}` : "Status saved"); } catch { toast("Could not save"); } };
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("admin", "audit-subs") }, "‹ Submissions"), h("h2", { style: "margin-top:8px", text: `Display drilldown — ${a.store}` }), h("div", { class: "muted small", text: `${fmtDate(visit.date)} · ${visit.photos.length} photo(s) sent that day` }))),
-      h("div", { class: "grid", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;align-items:start" },
+      h("div", { class: "grid adm-2col", style: "grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:16px;align-items:start" },
         h("div", { class: "grid", style: "gap:12px" },
           h("div", { class: "card", style: "padding:10px" },
             h("div", { class: "pills", style: "margin-bottom:8px" },
@@ -1964,7 +1978,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       h("div", { class: "head" },
         h("div", {}, back ? h("button", { class: "btn sm", style: "margin-bottom:8px", onclick: () => go("admin", tab) }, "‹ Visual inventory") : null,
           h("div", { class: "muted small", text: "KELSON · Super Admin · visible only to you" }), h("h1", { text: title })),
-        h("div", { class: "pills" }, h("a", { class: "btn", href: "#home", onclick: (e) => { e.preventDefault(); go("home"); } }, "‹ My store"))),
+        null),
       adminTabs(tab), body);
   }
   const kpiBox = (label, value, hint) => h("div", { class: "card kpi" }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);

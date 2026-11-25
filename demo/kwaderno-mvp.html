@@ -49,7 +49,7 @@ main { padding-block: 18px 110px; }
 :root[data-layout="phone"] nav.bottom a { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 0 10px; text-decoration: none; color: var(--muted); font-size: .72rem; font-weight: 600; }
 :root[data-layout="phone"] nav.bottom a[aria-current="page"] { color: var(--accent); }
 :root[data-layout="phone"] nav.bottom svg { width: 22px; height: 22px; }
-.view { display: grid; gap: 16px; }
+.view { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
 .head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 10px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; min-width: 0; }
 .grid { display: grid; gap: 12px; }
@@ -142,6 +142,57 @@ dialog .db * { min-width: 0; }
 .plots { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .plot { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: var(--surface-2); }
 .plot svg { width: 100%; height: auto; display: block; }
+/* Store home: money card, app-tile grid, quick-add button */
+.hero { border-radius: 18px; padding: 16px; color: #fff; background: linear-gradient(135deg, #0e7c86 0%, #0b5d73 55%, #123f5c 100%); display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; box-shadow: 0 8px 24px rgb(14 124 134 / .25); }
+.hero .top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .82rem; opacity: .9; }
+.hero .big { font-family: var(--font-display); font-size: 2.1rem; font-weight: 700; line-height: 1.1; letter-spacing: -.01em; }
+.hero .top > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hero .eye { white-space: nowrap; flex: none; border: 0; background: rgb(255 255 255 / .16); color: #fff; border-radius: 99px; padding: 4px 10px; font-size: .78rem; font-weight: 600; }
+.hero .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.hero .stats > * { background: rgb(255 255 255 / .12); border: 0; color: #fff; text-align: left; border-radius: 12px; padding: 8px 10px; min-width: 0; }
+.hero .stats .l { font-size: .72rem; opacity: .85; } .hero .stats .v { font-weight: 700; font-size: .98rem; overflow-wrap: anywhere; }
+.hero .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hero .acts button { min-height: 44px; border-radius: 12px; border: 0; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.hero .acts button:first-child { background: #fff; color: #0b5d73; } .hero .acts button:last-child { background: rgb(255 255 255 / .18); color: #fff; }
+.hero .acts svg { width: 18px; height: 18px; }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 2px -6px; }
+.sec-title h2 { font-size: 1rem; letter-spacing: .02em; }
+.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 8px; }
+:root[data-layout="phone"] .apps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.app { position: relative; border: 0; background: transparent; display: grid; justify-items: center; gap: 6px; padding: 6px 2px; border-radius: 12px; font-size: .74rem; font-weight: 600; line-height: 1.2; text-align: center; color: var(--fg); }
+.app:hover { background: var(--surface-2); }
+.app .ic { width: 46px; height: 46px; border-radius: 15px; display: grid; place-items: center; background: color-mix(in srgb, var(--c) 15%, var(--surface)); color: var(--c); }
+.app .ic svg { width: 24px; height: 24px; }
+.app .bdg { position: absolute; top: 0; left: calc(50% + 12px); min-width: 20px; height: 20px; padding: 0 6px; border-radius: 99px; background: var(--bad); color: #fff; font-size: .7rem; font-weight: 700; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--surface); }
+.fab { display: none; }
+:root[data-layout="phone"] .fab { display: grid; place-items: center; position: fixed; right: max(18px, env(safe-area-inset-right, 0px)); bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 26; width: 58px; height: 58px; border-radius: 50%; border: 0;
+  background: var(--accent); color: var(--accent-fg); box-shadow: 0 10px 24px rgb(0 0 0 / .25); }
+.fab svg { width: 28px; height: 28px; }
+:root[data-layout="phone"] main { padding-bottom: 96px; }
+.sheet { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.sheet .app { border: 1px solid var(--line); padding: 12px 4px; }
+/* POS */
+.cats { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.cats::-webkit-scrollbar { display: none; }
+.cats button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 7px 14px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+.cats button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+.pos-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pos-acts .btn { min-height: 44px; padding: 8px 6px; font-size: .84rem; }
+.pos-acts .btn { white-space: nowrap; }
+.pwrap { position: relative; }
+.stockb { position: absolute; left: 6px; top: 6px; padding: 2px 7px; border-radius: 99px; font-size: .68rem; font-weight: 700; background: rgb(255 255 255 / .92); color: #14262b; box-shadow: 0 1px 4px rgb(0 0 0 / .15); }
+.stockb.low { background: #fff3dc; color: #8a5200; } .stockb.out { background: #c0392b; color: #fff; }
+.qtyb { position: absolute; right: 6px; top: 6px; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 99px; background: var(--accent); color: var(--accent-fg); font-weight: 700; font-size: .82rem; display: grid; place-items: center; box-shadow: 0 2px 6px rgb(0 0 0 / .2); }
+.tile .price { font-weight: 700; color: var(--accent); }
+.tile.oos .pimg, .tile.oos .ph { filter: grayscale(.8); opacity: .6; }
+:root[data-layout="phone"] .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+:root[data-layout="phone"] .tile .body { padding: 6px 7px 8px; gap: 3px; }
+:root[data-layout="phone"] .tile .n { font-size: .76rem; }
+:root[data-layout="phone"] .tile .price { font-size: .82rem; }
+@media print { body * { visibility: hidden !important; } dialog[open], dialog[open] * { visibility: visible !important; } dialog[open] { position: absolute; inset: 0 auto auto 0; width: 80mm; box-shadow: none; } dialog .x, dialog .btn { display: none !important; } }
+.ledger-bal { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.amt-in { color: var(--good); font-weight: 700; } .amt-out { color: var(--bad); font-weight: 700; }
+.daygrp { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0 4px; font-weight: 700; font-size: .85rem; color: var(--muted); border-bottom: 1px solid var(--line); }
 /* On a tablet or computer, show the app inside a phone-shaped screen. Fixed bars (bottom tabs,
    cart button, toast) pin to the phone because #phone is transformed and does not scroll. */
 @media (min-width: 520px) {
@@ -262,10 +313,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
-  let view = "home", sub = null, productFilter = "all", search = "";
+  let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
+  try { hideMoney = localStorage.getItem("kw-hide-money") === "1"; } catch { /* private mode */ }
   const VIEWS = [
     ["home", "Home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"],
     ["sell", "Sell", "M3 4h2l2 12h11l2-8H7M9 20a1 1 0 1 0 0 .1M17 20a1 1 0 1 0 0 .1"],
@@ -279,7 +331,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     for (const m of S.moves) stock.set(m.productId, (stock.get(m.productId) || 0) + Number(m.qty || 0));
     for (const s of S.sales) {
       if (s.voided) continue;
-      for (const l of s.lines || []) { stock.set(l.productId, (stock.get(l.productId) || 0) - Number(l.qty || 0)); sold.set(l.productId, (sold.get(l.productId) || 0) + Number(l.qty || 0)); }
+      for (const l of s.lines || []) { if (!l.productId) continue; stock.set(l.productId, (stock.get(l.productId) || 0) - Number(l.qty || 0)); sold.set(l.productId, (sold.get(l.productId) || 0) + Number(l.qty || 0)); }
       if (s.method === "credit" && s.customerId) balance.set(s.customerId, (balance.get(s.customerId) || 0) + s.total);
     }
     for (const p of S.payments) balance.set(p.customerId, (balance.get(p.customerId) || 0) - p.amount);
@@ -318,9 +370,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
-    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries"]);
+    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses"]);
     const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
-    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries"]) {
+    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses"]) {
       col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
@@ -635,42 +687,349 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Smart tips", style: "margin-top:8px" }))),
       body, T ? h("p", { class: "muted small", text: tipsSourceNote(T.ins) }) : null);
   }
+  const IC = {
+    sell: "M3 4h2l2 12h11l2-8H7M9 20a1 1 0 1 0 0 .1M17 20a1 1 0 1 0 0 .1",
+    stockin: "M12 3v12M7 10l5 5 5-5M4 21h16",
+    products: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5",
+    add: "M12 5v14M5 12h14",
+    utang: "M16 11a4 4 0 1 0-8 0M4 21a8 8 0 0 1 16 0",
+    expense: "M3 7h18v12H3zM16 13h2M3 7l3-4h12l3 4",
+    reports: "M4 20V10M10 20V4M16 20v-7M22 20H2",
+    expiry: "M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18",
+    low: "M12 3l10 18H2zM12 10v5M12 18v.01",
+    tips: "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3",
+    photo: "M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+    history: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
+    scan: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 8v8M11 8v8M14 8v8M17 8v8",
+    tag: "M3 12V3h9l9 9-9 9zM7.5 7.5v.01",
+    cash: "M2 7h20v10H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 10v4M19 10v4",
+    bill: "M7 3h10v18H7zM10 7h4M10 11h4M10 15h2M4 6v12M20 6v12",
+    sms: "M4 4h16v12H8l-4 4zM8 9h8M8 12h5",
+    eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  };
+  const appTile = (label, icon, color, onclick, badge) => h("button", { class: "app", style: `--c:${color}`, onclick },
+    h("span", { class: "ic" }, svgIcon(icon)), badge ? h("span", { class: "bdg num", text: badge > 99 ? "99+" : String(badge), "aria-label": `${badge} to check` }) : null, h("span", { text: label }));
+  const speso = (c) => (c < 0 ? "−" : "") + peso(Math.abs(c));
+  const money = (c) => (hideMoney ? "₱ •••••" : speso(c));
+  const saleCost = (s) => (s.lines || []).reduce((a, l) => a + Math.round(Number(l.qty || 0) * (l.cost || 0)), 0);
+  const isExpense = (e) => !e.deleted && (!e.kind || e.kind === "expense");
+  const expensesOn = (from, to = "9999") => S.expenses.filter((e) => isExpense(e) && e.date >= from && e.date <= to);
+  const billsDue = (days = 3) => { const lim = new Date(); lim.setDate(lim.getDate() + days); const k = dayKey(lim.toISOString()); return S.expenses.filter((b) => b.kind === "bill" && !b.deleted && !b.paid && b.due <= k); };
+  function quickSheet() {
+    const run = (fn) => () => { dlg.close(); fn(); };
+    openDialog("Quick add", h("div", { class: "sheet" },
+      appTile("New sale", IC.sell, "var(--accent)", run(() => go("sell"))),
+      appTile("Stock-in / receipt", IC.stockin, "var(--s1)", run(() => go("products", "stockin"))),
+      appTile("Add product", IC.add, "var(--s3)", run(() => go("products", "new"))),
+      appTile("Add expense", IC.expense, "var(--s2)", run(() => go("home", "expenses"))),
+      appTile("Cash in / out", IC.cash, "var(--good)", run(() => go("home", "cash"))),
+      appTile("Add bill", IC.bill, "var(--s1)", run(() => go("home", "bills"))),
+      appTile("Utang / payment", IC.utang, "var(--bad)", run(() => go("utang"))),
+      S.owner ? appTile("Expiry date", IC.expiry, "var(--warn)", run(() => go("products", "expiry"))) : appTile("Shelf photo", IC.photo, "var(--warn)", run(() => go("home", "shelf")))));
+  }
+  // ---------- ASK KWADERNO: AI answers about this store's own numbers ----------
+  const ai = { draft: "", q: "", a: "", busy: false, err: "", ctrl: null, listening: false };
+  function storeFacts() {
+    const now = Date.now(), t = todayKey(), month = t.slice(0, 8) + "01";
+    const win = (days) => S.sales.filter((x) => !x.voided && now - new Date(x.at).getTime() < days * DAYMS);
+    const tot = (arr) => ({ sales: arr.length, revenue: +(arr.reduce((a, x) => a + x.total, 0) / 100).toFixed(2), grossProfit: +(arr.reduce((a, x) => a + x.total - saleCost(x), 0) / 100).toFixed(2) });
+    const by = new Map();
+    for (const x of win(30)) for (const l of x.lines || []) { const k = l.productId || "custom:" + l.name; const r = by.get(k) || { name: l.name, qty30: 0, qty7: 0, revenue30: 0, profit30: 0 }; r.qty30 += l.qty; r.revenue30 += l.qty * l.price / 100; r.profit30 += l.qty * (l.price - (l.cost || 0)) / 100; if (now - new Date(x.at).getTime() < 7 * DAYMS) r.qty7 += l.qty; by.set(k, r); }
+    const top = [...by.entries()].sort((a, b) => b[1].revenue30 - a[1].revenue30).slice(0, 15).map(([k, r]) => ({ ...r, revenue30: +r.revenue30.toFixed(2), profit30: +r.profit30.toFixed(2), stock: productById(k) ? stockOf(k) : null }));
+    const prods = activeProducts();
+    const exp = new Map(); for (const e of expensesOn(month)) exp.set(expCat(e.category), +((exp.get(expCat(e.category)) || 0) + e.amount / 100).toFixed(2));
+    const owed = [...D.balance.values()].filter((v) => v > 0);
+    return {
+      store: S.store.name, barangay: S.store.barangay || null, today: t, currency: "PHP (pesos)",
+      today_: tot(win(1).filter((x) => dayKey(x.at) === t)), last7days: tot(win(7)), last30days: tot(win(30)),
+      expensesThisMonthByCategory: Object.fromEntries(exp),
+      topProducts30d: top,
+      outOfStock: prods.filter((p) => stockOf(p.id) <= 0).map((p) => p.name).slice(0, 25),
+      lowStock: prods.filter((p) => stockOf(p.id) > 0 && stockOf(p.id) <= (p.reorder || 0)).map((p) => ({ name: p.name, stock: stockOf(p.id), reorderAt: p.reorder })).slice(0, 25),
+      noSales30dWithStock: prods.filter((p) => stockOf(p.id) > 0 && !by.has(p.id)).map((p) => p.name).slice(0, 20),
+      utang: { customersOwing: owed.length, totalOwed: +(owed.reduce((a, v) => a + v, 0) / 100).toFixed(2) },
+      billsDueSoon: billsDue(7).map((b) => ({ name: b.name, due: b.due, amount: (b.amount || 0) / 100 })),
+      expiringIn7Days: activeExpiries().filter((e) => daysLeft(e.date) <= 7).map((e) => ({ product: productById(e.productId)?.name, date: e.date })).slice(0, 15),
+      productCount: prods.length,
+    };
+  }
+  async function askAI(q) {
+    q = String(q || "").trim().slice(0, 300); if (!q || ai.busy) return;
+    const sample = await window.claude?.use?.("sample");
+    if (!sample) { ai.err = "The AI assistant isn't available here."; render(); return; }
+    ai.q = q; ai.draft = ""; ai.a = ""; ai.err = ""; ai.busy = true; ai.ctrl?.abort(); ai.ctrl = new AbortController(); render();
+    const prompt = `You are Kwaderno, a friendly business helper for a Filipino sari-sari store owner.
+Answer the owner's question using ONLY the store data below. Reply in the same language the owner used (Tagalog, Taglish or English). Be short and practical: at most 6 lines or bullets, peso amounts like ₱1,234.00, and end with one concrete action for today when it helps. If the data can't answer it, say so plainly and say what to record in the app. Never invent numbers. Do not give credit, loan, tax or legal advice beyond general tips.
+
+STORE DATA (JSON, amounts in pesos):
+${JSON.stringify(storeFacts())}
+
+OWNER'S QUESTION: ${q}`;
+    try {
+      const r = await sample(prompt, { modelTier: "quick", signal: ai.ctrl.signal, onText: ({ text }) => { ai.a = text; const el = document.getElementById("aiAns"); if (el) el.textContent = text; } });
+      ai.a = r.text;
+    } catch (e) { if (e?.name !== "AbortError") ai.err = claudeError(e); }
+    ai.busy = false; render();
+  }
+  let dictP = null;
+  async function dictate() {
+    const d = await (dictP ??= window.claude?.use?.("dictation").catch(() => null));
+    if (!d) return toast("Voice input isn't available in this browser — type instead");
+    if (ai.listening) { await d.stop().catch(() => {}); return; }
+    let said = "";
+    d.onPartial(({ text }) => { ai.draft = (said + " " + text).trim(); const i = document.getElementById("aiQ"); if (i) i.value = ai.draft; });
+    d.onFinal(({ text }) => { said = (said + " " + text).trim(); ai.draft = said; const i = document.getElementById("aiQ"); if (i) i.value = said; });
+    d.onState(({ state }) => { ai.listening = state === "listening"; const b = document.getElementById("aiMic"); if (b) b.setAttribute("aria-pressed", String(ai.listening)); if (state === "idle" && said) askAI(said); });
+    d.start().catch((e) => toast(e?.code === "not_granted" ? "Microphone not allowed — type your question" : "Couldn't start voice input"));
+  }
+  function aiCard() {
+    const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno AI", value: ai.draft, oninput: (e) => { ai.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askAI(e.target.value); } });
+    const chips = ["Ano ang dapat kong i-restock ngayon?", "Kumita ba ako this month?", "Which products should I stop buying?", "Magkano ang utang na hindi pa bayad?"];
+    return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno AI" },
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { text: "✨ Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "AI · reads only your store's data" })),
+      h("div", { style: "display:flex;gap:6px" }, input,
+        h("button", { class: "btn", id: "aiMic", "aria-label": "Speak your question", "aria-pressed": String(ai.listening), onclick: dictate }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
+        h("button", { class: "btn primary", disabled: ai.busy, onclick: () => askAI(input.value) }, ai.busy ? "…" : "Ask")),
+      !ai.q ? h("div", { class: "cats" }, chips.map((c) => h("button", { onclick: () => askAI(c) }, c))) : null,
+      ai.q ? h("div", { class: "banner", style: "display:grid;gap:6px;color:var(--fg)" }, h("div", { class: "small muted", text: "You asked: " + ai.q }),
+        h("div", { id: "aiAns", style: "white-space:pre-wrap", text: ai.a || (ai.busy ? "Thinking…" : "") }),
+        ai.err ? h("div", { class: "small", style: "color:var(--bad)", text: ai.err }) : null,
+        !ai.busy ? h("button", { class: "btn sm", style: "justify-self:start", onclick: () => { Object.assign(ai, { q: "", a: "", err: "" }); render(); } }, "Ask another") : null) : null);
+  }
   function viewHome() {
     if (sub === "tips") return viewTips();
     if (sub === "shelf") return viewShelfSubmit();
+    if (sub === "expenses") return viewExpenses();
+    if (sub === "history") return viewHistory();
+    if (sub === "cash") return viewCash();
+    if (sub === "bills") return viewBills();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
     const sum = (arr, f) => arr.reduce((a, x) => a + f(x), 0);
     const by = (m) => sum(today.filter((s) => s.method === m), (s) => s.total);
     const prods = activeProducts();
-    const value = sum(prods, (p) => Math.max(0, stockOf(p.id)) * (p.cost || 0));
     const low = prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).sort((a, b) => stockOf(a.id) - (a.reorder || 0) - (stockOf(b.id) - (b.reorder || 0)));
     const owed = [...D.balance.values()].filter((v) => v > 0);
-    const recent = [...S.sales].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 6);
+    const recent = [...S.sales].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 5);
     const exp = activeExpiries().map((e) => daysLeft(e.date));
     const expired = exp.filter((d) => d < 0).length, soon = exp.filter((d) => d >= 0 && d <= 7).length;
-    const kpi = (label, value, hint, onclick) => h(onclick ? "button" : "div", { class: "card kpi", style: onclick ? "text-align:left" : null, onclick }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
+    const salesToday = sum(today, (s) => s.total), spentToday = sum(expensesOn(t, t), (e) => e.amount);
+    const profitToday = salesToday - sum(today, saleCost) - spentToday;
+    const T = computeTips();
+    const stat = (l, v, onclick) => h(onclick ? "button" : "div", { onclick }, h("div", { class: "l", text: l }), h("div", { class: "v num", text: v }));
     return h("div", { class: "view" },
-      h("div", { class: "head" }, h("div", {}, h("div", { class: "muted small", text: new Date().toLocaleDateString("en-PH", { weekday: "long", month: "long", day: "numeric" }) }), h("h1", { text: "Magandang araw!" })),
-        h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => go("sell") }, "Record a sale"), h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in / receipt"), h("button", { class: "btn", onclick: () => go("products", "new") }, "Add product"), h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"))),
+      h("section", { class: "hero", "aria-label": "Today" },
+        h("div", { class: "top" }, h("span", { class: "trunc", text: `${S.store.name} · ${new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}` }),
+          h("button", { class: "eye", "aria-pressed": String(hideMoney), onclick: () => { hideMoney = !hideMoney; try { localStorage.setItem("kw-hide-money", hideMoney ? "1" : "0"); } catch { /* ignore */ } render(); } }, hideMoney ? "Show ₱" : "Hide ₱")),
+        h("div", {}, h("div", { class: "small", style: "opacity:.85", text: "Benta ngayon · Sales today" }), h("div", { class: "big num", text: money(salesToday) })),
+        h("div", { class: "stats" },
+          stat("Kita · Profit", money(profitToday), () => go("reports")),
+          stat("Sales", String(today.length), () => go("home", "history")),
+          stat("Gastos · Spent", money(spentToday), () => go("home", "expenses"))),
+        h("div", { class: "small", style: "opacity:.85", text: hideMoney ? "Amounts hidden" : `Cash ${peso(by("cash"))} · GCash ${peso(by("gcash"))} · Utang ${peso(by("credit"))}` }),
+        h("div", { class: "acts" },
+          h("button", { onclick: () => go("sell") }, svgIcon(IC.sell), "Magbenta · Sell"),
+          h("button", { onclick: () => go("products", "stockin") }, svgIcon(IC.stockin), "Stock-in"))),
       expired || soon ? h("button", { class: "note" + (expired ? " err" : ""), style: "text-align:left;border:0", onclick: () => go("products", "expiry") }, expired ? `${expired} batch(es) expired` + (soon ? `, ${soon} more expire this week` : "") + " — check the expiry list" : `${soon} batch(es) expire within 7 days — check the expiry list`) : null,
-      tipsCard(), shelfCard(),
-      h("div", { class: "grid kpis" },
-        kpi("Sales today", peso(sum(today, (s) => s.total)), `${today.length} sale(s)`),
-        kpi("Cash · GCash · Utang", `${peso(by("cash"))}`, `GCash ${peso(by("gcash"))} · Utang ${peso(by("credit"))}`),
-        kpi("Inventory value", peso(value), `${prods.length} products at cost`, () => go("reports")),
-        kpi("Low stock", String(low.length), "At or below reorder level", () => { productFilter = "low"; go("products"); }),
-        kpi("Utang outstanding", peso(sum(owed, (x) => x)), `${owed.length} customer(s)`, () => go("utang"))),
+      billsDue().length ? h("button", { class: "note", style: "text-align:left;border:0", onclick: () => go("home", "bills") }, `${billsDue().length} bill(s) due soon or overdue — ${billsDue().map((b) => b.name).slice(0, 3).join(", ")}`) : null,
+      h("div", { class: "sec-title" }, h("h2", { text: "Kwaderno" }), h("span", { class: "muted small", text: "Your store ledger" })),
+      h("nav", { class: "apps", "aria-label": "Store tools" },
+        appTile("Sell (POS)", IC.sell, "var(--accent)", () => go("sell")),
+        appTile("Stock-in", IC.stockin, "var(--s1)", () => go("products", "stockin")),
+        appTile("Products", IC.products, "var(--s3)", () => { productFilter = "all"; go("products"); }),
+        appTile("Low stock", IC.low, "var(--bad)", () => { productFilter = "low"; go("products"); }, low.length),
+        appTile("Utang", IC.utang, "var(--bad)", () => go("utang"), owed.length),
+        appTile("Cash ledger", IC.cash, "var(--good)", () => go("home", "cash")),
+        appTile("Expenses", IC.expense, "var(--warn)", () => go("home", "expenses")),
+        appTile("Bills", IC.bill, "var(--s2)", () => go("home", "bills"), billsDue().length),
+        appTile("Sales history", IC.history, "var(--s1)", () => go("home", "history")),
+        appTile("Reports", IC.reports, "var(--good)", () => go("reports")),
+        appTile("Expiry", IC.expiry, "var(--warn)", () => go("products", "expiry"), expired + soon),
+        appTile("Smart tips", IC.tips, "var(--accent)", () => go("home", "tips"), T?.count || 0),
+        !S.owner ? appTile("Shelf photo", IC.photo, "var(--s2)", () => go("home", "shelf")) : null,
+        appTile("Add product", IC.add, "var(--s3)", () => go("products", "new"))),
+      aiCard(), tipsCard(), shelfCard(),
       h("div", { class: "grid two" },
-        h("div", { class: "card" }, h("h2", { text: "Recent sales" }),
-          recent.length ? h("ul", { class: "list" }, recent.map((s) => h("li", {},
+        h("div", { class: "card" }, h("div", { style: "display:flex;justify-content:space-between;align-items:baseline;gap:8px" }, h("h2", { text: "Recent sales" }), h("button", { class: "btn sm", onclick: () => go("home", "history") }, "All ›")),
+          recent.length ? h("ul", { class: "list" }, recent.map((s) => h("li", { style: "cursor:pointer", onclick: () => showReceipt(s) },
             h("div", { class: "grow" }, h("div", { class: "trunc", style: s.voided ? "text-decoration:line-through" : null, text: (s.lines || []).map((l) => `${qtyFmt(l.qty)}× ${l.name}`).join(", ") }), h("div", { class: "muted small", text: `${when(s.at)}${s.customerId ? " · " + (custName(s.customerId)) : ""}` })),
             h("span", { class: "chip " + (s.method === "credit" ? "credit" : ""), text: s.voided ? "voided" : s.method === "credit" ? "utang" : s.method }),
-            h("span", { class: "num", text: peso(s.total) }),
-            h("button", { class: "btn sm", onclick: () => showReceipt(s) }, "View"))))
-            : h("div", { class: "empty", text: "No sales yet. Tap “Record a sale”." })),
+            h("span", { class: "num", text: money(s.total) }))))
+            : h("div", { class: "empty", text: "No sales yet. Tap “Sell”." })),
         h("div", { class: "card" }, h("h2", { text: "Low stock" }),
-          low.length ? h("ul", { class: "list" }, low.slice(0, 8).map((p) => h("li", {}, h("span", { class: "grow trunc", text: p.name }), stockChip(p)))) : h("div", { class: "empty", text: prods.length ? "Everything is above its reorder level." : "Add products to start tracking stock." }))));
+          low.length ? h("ul", { class: "list" }, low.slice(0, 6).map((p) => h("li", {}, h("span", { class: "thumb" }, productImage(p)), h("span", { class: "grow trunc", text: p.name }), stockChip(p)))) : h("div", { class: "empty", text: prods.length ? "Everything is above its reorder level." : "Add products to start tracking stock." }))),
+      h("button", { class: "fab", "aria-label": "Quick add", onclick: quickSheet }, svgIcon(IC.add)));
+  }
+
+  // ---------- EXPENSES (gastos) ----------
+  const EXP_CATS = [["stock", "Paninda (stock)"], ["power", "Kuryente"], ["water", "Tubig"], ["rent", "Upa · Rent"], ["transport", "Pamasahe"], ["load", "Load / Internet"], ["supplies", "Supplies"], ["salary", "Sahod"], ["other", "Other"]];
+  const expCat = (k) => EXP_CATS.find(([c]) => c === k)?.[1] || "Other";
+  const expForm = { amount: "", cat: "power", method: "cash", note: "", date: "" };
+  function viewExpenses() {
+    const t = todayKey(), month = t.slice(0, 8) + "01";
+    const list = expensesOn("0000").sort((a, b) => (b.date + b.at).localeCompare(a.date + a.at));
+    const tot = (arr) => arr.reduce((a, e) => a + e.amount, 0);
+    const monthList = list.filter((e) => e.date >= month);
+    const byCat = new Map(); for (const e of monthList) byCat.set(e.category, (byCat.get(e.category) || 0) + e.amount);
+    const top = [...byCat.entries()].sort((a, b) => b[1] - a[1])[0];
+    const monthSales = S.sales.filter((s) => !s.voided && dayKey(s.at) >= month);
+    const net = monthSales.reduce((a, s) => a + s.total - saleCost(s), 0) - tot(monthList);
+    let saving = false;
+    const save = async () => {
+      const amount = toCentavos(expForm.amount);
+      if (!amount) return toast("Enter the amount, e.g. 250");
+      if (saving) return; saving = true;
+      try {
+        await write("expenses/" + uid(), { amount, category: expForm.cat, method: expForm.method, note: expForm.note.trim().slice(0, 120), date: expForm.date || t, at: new Date().toISOString(), by: S.me || null, deleted: false, kind: "expense" });
+        Object.assign(expForm, { amount: "", note: "", date: "" }); toast("Expense saved"); render();
+      } catch (e) { toast("Could not save: " + (e?.code || e?.message || "try again")); } finally { saving = false; }
+    };
+    const del = (e) => openDialog("Delete this expense?", h("div", { class: "grid" }, h("p", { text: `${expCat(e.category)} · ${peso(e.amount)} on ${e.date}` }),
+      h("button", { class: "btn danger big", onclick: async () => { try { await ref("expenses/" + e.id).update({ deleted: true, deletedAt: new Date().toISOString() }); dlg.close(); toast("Deleted"); } catch (x) { toast("Could not delete: " + (x?.code || "try again")); } } }, "Delete"),
+      h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel")));
+    const groups = new Map(); for (const e of list.slice(0, 200)) { if (!groups.has(e.date)) groups.set(e.date, []); groups.get(e.date).push(e); }
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Expenses · Gastos", style: "margin-top:8px" }))),
+      h("div", { class: "grid kpis" },
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Today" }), h("div", { class: "value num", text: peso(tot(list.filter((e) => e.date === t))) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "This month" }), h("div", { class: "value num", text: peso(tot(monthList)) }), top ? h("div", { class: "muted small", text: `Most: ${expCat(top[0])} ${peso(top[1])}` }) : null),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Net profit this month" }), h("div", { class: "value num", style: `color:var(${net < 0 ? "--bad" : "--good"})`, text: speso(net) }), h("div", { class: "muted small", text: "Sales − cost of goods − expenses" }))),
+      h("div", { class: "card grid" }, h("h2", { text: "Add expense" }),
+        h("label", { class: "f" }, "Amount ₱", h("input", { type: "text", inputmode: "decimal", id: "expAmt", placeholder: "0.00", value: expForm.amount, oninput: (e) => { expForm.amount = e.target.value; } })),
+        h("div", { class: "cats", role: "radiogroup", "aria-label": "Category", style: "flex-wrap:wrap" }, EXP_CATS.map(([k, l]) => h("button", { role: "radio", "aria-checked": String(expForm.cat === k), "aria-pressed": String(expForm.cat === k), onclick: () => { expForm.cat = k; render(); } }, l))),
+        h("div", { class: "methods", style: "grid-template-columns:1fr 1fr", role: "radiogroup", "aria-label": "Paid with" }, [["cash", "Cash"], ["gcash", "GCash"]].map(([m, l]) => h("button", { role: "radio", "aria-checked": String(expForm.method === m), onclick: () => { expForm.method = m; render(); } }, l))),
+        h("div", { class: "form" },
+          h("label", { class: "f" }, "Note (optional)", h("input", { type: "text", id: "expNote", maxlength: 120, placeholder: "e.g. Meralco bill October", value: expForm.note, oninput: (e) => { expForm.note = e.target.value; } })),
+          h("label", { class: "f" }, "Date", h("input", { type: "date", id: "expDate", max: t, value: expForm.date || t, oninput: (e) => { expForm.date = e.target.value; } }))),
+        h("button", { class: "btn primary big", onclick: save }, "Save expense")),
+      h("div", { class: "card" }, h("h2", { text: "History" }),
+        groups.size ? [...groups.entries()].flatMap(([d, arr]) => [h("div", { class: "daygrp" }, h("span", { text: new Date(d + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) }), h("span", { class: "num", text: peso(tot(arr)) })),
+          h("ul", { class: "list" }, arr.map((e) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: expCat(e.category) }), h("div", { class: "muted small trunc", text: [e.method === "gcash" ? "GCash" : "Cash", e.note].filter(Boolean).join(" · ") })),
+            h("span", { class: "num", style: "font-weight:600", text: peso(e.amount) }), h("button", { class: "btn sm", "aria-label": "Delete expense", onclick: () => del(e) }, "×"))))])
+          : h("div", { class: "empty", text: "No expenses yet. Add bills, rent, transport and other costs to see your real profit." })));
+  }
+
+  // ---------- CASH LEDGER (kaha): every peso in and out of the cash drawer ----------
+  let cashRange = 1;
+  function cashEntries() {
+    const rows = [];
+    for (const x of S.sales) if (!x.voided && x.method === "cash") rows.push({ at: x.at, label: "Cash sale", note: (x.lines || []).map((l) => `${qtyFmt(l.qty)}× ${l.name}`).join(", "), amt: x.total });
+    for (const p of S.payments) if (p.method !== "gcash") rows.push({ at: p.at, label: "Utang payment", note: custName(p.customerId), amt: p.amount });
+    for (const e of S.expenses) {
+      if (e.deleted) continue;
+      if (isExpense(e) && e.method !== "gcash") rows.push({ at: e.at, day: e.date, label: "Expense · " + expCat(e.category), note: e.note, amt: -e.amount, doc: e });
+      if (e.kind === "cash_in") rows.push({ at: e.at, day: e.date, label: e.category === "opening" ? "Opening cash" : "Cash in", note: e.note, amt: e.amount, doc: e });
+      if (e.kind === "purchase" && e.method === "cash") rows.push({ at: e.at, day: e.date, label: "Stock purchase", note: e.note, amt: -e.amount, doc: e });
+      if (e.kind === "cash_out") rows.push({ at: e.at, day: e.date, label: "Cash out", note: e.note, amt: -e.amount, doc: e });
+    }
+    for (const r of rows) r.day ||= dayKey(r.at);
+    return rows.sort((a, b) => (a.day + a.at).localeCompare(b.day + b.at));
+  }
+  function cashMoveDialog(kind) {
+    const amt = h("input", { type: "text", inputmode: "decimal", id: "cmAmt", placeholder: "0.00" });
+    const note = h("input", { type: "text", id: "cmNote", maxlength: 120, placeholder: kind === "cash_in" ? "e.g. Panimula sa umaga, dagdag puhunan" : "e.g. Kinuha ng may-ari, deposito sa bangko" });
+    let opening = false;
+    const open = kind === "cash_in" ? h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", onchange: (e) => { opening = e.target.checked; } }), "This is today's opening cash (panimula)") : null;
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      const a = toCentavos(amt.value); if (!a) return toast("Enter the amount");
+      btn.disabled = true;
+      try { await write("expenses/" + uid(), { kind, amount: a, category: opening ? "opening" : kind, note: note.value.trim().slice(0, 120), method: "cash", date: todayKey(), at: new Date().toISOString(), by: S.me || null, deleted: false }); dlg.close(); toast("Saved"); }
+      catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, kind === "cash_in" ? "Save cash in" : "Save cash out");
+    openDialog(kind === "cash_in" ? "Cash in" : "Cash out", h("div", { class: "grid" },
+      h("p", { class: "muted small", text: kind === "cash_in" ? "Money put into the drawer that is not a sale — opening cash, extra capital, change fund." : "Money taken out that is not a store expense — owner withdrawal, bank deposit." }),
+      h("label", { class: "f" }, "Amount ₱", amt), h("label", { class: "f" }, "Note", note), open, btn));
+    setTimeout(() => amt.focus(), 50);
+  }
+  function viewCash() {
+    const all = cashEntries();
+    const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - (cashRange - 1)); const from = dayKey(since.toISOString());
+    let run = 0; for (const r of all) { run += r.amt; r.after = run; }
+    const inRange = all.filter((r) => r.day >= from);
+    const cin = inRange.filter((r) => r.amt > 0).reduce((a, r) => a + r.amt, 0), cout = inRange.filter((r) => r.amt < 0).reduce((a, r) => a - r.amt, 0);
+    const groups = new Map(); for (const r of [...inRange].reverse()) { if (!groups.has(r.day)) groups.set(r.day, []); groups.get(r.day).push(r); }
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Cash ledger · Kaha", style: "margin-top:8px" }))),
+      h("section", { class: "hero" },
+        h("div", { class: "small", style: "opacity:.85", text: "Expected cash in the drawer" }), h("div", { class: "big num", text: money(run) }),
+        h("div", { class: "stats", style: "grid-template-columns:1fr 1fr" }, h("div", {}, h("div", { class: "l", text: cashRange === 1 ? "Pumasok today" : `In · ${cashRange} days` }), h("div", { class: "v num", text: money(cin) })), h("div", {}, h("div", { class: "l", text: cashRange === 1 ? "Lumabas today" : `Out · ${cashRange} days` }), h("div", { class: "v num", text: money(cout) }))),
+        h("div", { class: "acts" }, h("button", { onclick: () => cashMoveDialog("cash_in") }, "+ Cash in"), h("button", { onclick: () => cashMoveDialog("cash_out") }, "− Cash out"))),
+      h("p", { class: "muted small", text: "Counts cash sales, cash utang payments, cash expenses and your cash in/out. GCash is not counted here. Count your drawer — if it differs, record a cash in or out with a note." }),
+      h("div", { class: "cats" }, [[1, "Today"], [7, "7 days"], [30, "30 days"]].map(([n, l]) => h("button", { "aria-pressed": String(cashRange === n), onclick: () => { cashRange = n; render(); } }, l))),
+      h("div", { class: "card" }, groups.size ? [...groups.entries()].flatMap(([d, arr]) => [
+        h("div", { class: "daygrp" }, h("span", { text: new Date(d + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) }), h("span", { class: "num", text: "End " + peso(arr[0].after) })),
+        h("ul", { class: "list" }, arr.map((r) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: r.label }), h("div", { class: "muted small trunc", text: [new Date(r.at).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }), r.note].filter(Boolean).join(" · ") })),
+          h("span", { class: "num " + (r.amt >= 0 ? "amt-in" : "amt-out"), text: (r.amt >= 0 ? "+" : "−") + peso(Math.abs(r.amt)) }))))]) : h("div", { class: "empty", text: "No cash movement in this period. Start the day with “+ Cash in” → opening cash." })));
+  }
+
+  // ---------- BILLS (payment ledger): rent, kuryente, tubig… with due dates ----------
+  const addMonth = (d) => { const [y, m, dd] = d.split("-").map(Number); const last = new Date(y, m + 1, 0).getDate(); return `${m === 12 ? y + 1 : y}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}-${String(Math.min(dd, last)).padStart(2, "0")}`; };
+  function billDialog() {
+    const name = h("input", { type: "text", id: "bName", maxlength: 60, placeholder: "e.g. Meralco, Maynilad, Upa sa pwesto" });
+    const amt = h("input", { type: "text", inputmode: "decimal", id: "bAmt", placeholder: "Usual amount (optional)" });
+    const due = h("input", { type: "date", id: "bDue", value: todayKey() });
+    const cat = h("select", { id: "bCat" }, EXP_CATS.filter(([k]) => k !== "stock").map(([k, l]) => h("option", { value: k, text: l, selected: k === "power" })));
+    const rep = h("select", { id: "bRep" }, h("option", { value: "monthly", text: "Every month" }), h("option", { value: "none", text: "One time" }));
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      if (!name.value.trim()) return toast("Enter the bill name"); if (!due.value) return toast("Pick the due date");
+      const a = amt.value.trim() ? toCentavos(amt.value) : 0; if (a == null) return toast("Enter a valid amount");
+      btn.disabled = true;
+      try { await write("expenses/" + uid(), { kind: "bill", name: name.value.trim().slice(0, 60), category: cat.value, amount: a, due: due.value, repeat: rep.value, paid: false, deleted: false, at: new Date().toISOString(), by: S.me || null }); dlg.close(); toast("Bill added"); }
+      catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, "Add bill");
+    openDialog("New bill", h("div", { class: "grid" }, h("label", { class: "f" }, "Bill", name), h("div", { class: "form" }, h("label", { class: "f" }, "Amount ₱", amt), h("label", { class: "f" }, "Due date", due)), h("div", { class: "form" }, h("label", { class: "f" }, "Category", cat), h("label", { class: "f" }, "Repeats", rep)), btn));
+  }
+  function payBillDialog(b) {
+    const amt = h("input", { type: "text", inputmode: "decimal", id: "pbAmt", value: b.amount ? (b.amount / 100).toFixed(2) : "" });
+    let method = "cash";
+    const methods = h("div", { class: "methods", style: "grid-template-columns:1fr 1fr" });
+    const draw = () => methods.replaceChildren(...[["cash", "Cash (from drawer)"], ["gcash", "GCash"]].map(([m, l]) => h("button", { role: "radio", "aria-checked": String(method === m), onclick: () => { method = m; draw(); } }, l)));
+    draw();
+    const btn = h("button", { class: "btn primary big", onclick: async () => {
+      const a = toCentavos(amt.value); if (!a) return toast("Enter the amount paid");
+      btn.disabled = true;
+      try {
+        await write("expenses/" + uid(), { kind: b.purchase ? "purchase" : "expense", amount: a, category: b.category, method, note: b.name + " (due " + b.due + ")", date: todayKey(), at: new Date().toISOString(), by: S.me || null, deleted: false, billId: b.id });
+        await ref("expenses/" + b.id).update(b.repeat === "monthly" ? { due: addMonth(b.due), amount: a, lastPaidAt: new Date().toISOString() } : { paid: true, lastPaidAt: new Date().toISOString() });
+        dlg.close(); toast(b.repeat === "monthly" ? `Paid — next due ${addMonth(b.due)}` : "Paid");
+      } catch (e) { btn.disabled = false; toast("Could not save: " + (e?.code || "try again")); }
+    } }, "Mark as paid");
+    openDialog("Pay " + b.name, h("div", { class: "grid" }, h("p", { class: "muted small", text: "Saved as an expense, so it shows in your profit and cash ledger." }), h("label", { class: "f" }, "Amount paid ₱", amt), methods, btn,
+      h("button", { class: "btn danger", onclick: async () => { try { await ref("expenses/" + b.id).update({ deleted: true }); dlg.close(); toast("Bill removed"); } catch (e) { toast("Could not remove: " + (e?.code || "try again")); } } }, "Remove this bill")));
+  }
+  function viewBills() {
+    const t = todayKey();
+    const bills = S.expenses.filter((b) => b.kind === "bill" && !b.deleted).sort((a, b) => (a.paid - b.paid) || a.due.localeCompare(b.due));
+    const paidLog = S.expenses.filter((e) => !e.deleted && (isExpense(e) || e.kind === "purchase") && e.billId).sort((a, b) => b.at.localeCompare(a.at)).slice(0, 20);
+    const status = (b) => { if (b.paid) return ["ok", "Paid"]; const d = daysLeft(b.due); return d < 0 ? ["out", `${-d} day(s) overdue`] : d === 0 ? ["out", "Due today"] : d <= 3 ? ["low", `Due in ${d} day(s)`] : ["", "Due " + new Date(b.due + "T00:00:00").toLocaleDateString("en-PH", { month: "short", day: "numeric" })]; };
+    const unpaid = bills.filter((b) => !b.paid);
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Bills · Bayarin", style: "margin-top:8px" })), h("button", { class: "btn primary", onclick: billDialog }, "+ Add bill")),
+      h("div", { class: "grid kpis" },
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Overdue or due in 3 days" }), h("div", { class: "value num", style: billsDue().length ? "color:var(--bad)" : null, text: String(billsDue().length) })),
+        h("div", { class: "card kpi" }, h("div", { class: "label", text: "Unpaid (usual amounts)" }), h("div", { class: "value num", text: peso(unpaid.reduce((a, b) => a + (b.amount || 0), 0)) }))),
+      h("div", { class: "card" }, bills.length ? h("ul", { class: "list" }, bills.map((b) => { const [cls, txt] = status(b); return h("li", {},
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: b.name }), h("div", { class: "muted small", text: [expCat(b.category), b.repeat === "monthly" ? "monthly" : "one time", b.amount ? peso(b.amount) : null].filter(Boolean).join(" · ") })),
+        h("span", { class: "chip " + cls, text: txt }), b.paid ? null : h("button", { class: "btn sm primary", onclick: () => payBillDialog(b) }, "Pay")); }))
+        : h("div", { class: "empty", text: "No bills yet. Add rent, kuryente, tubig, internet — we'll remind you before they're due." })),
+      paidLog.length ? h("div", { class: "card" }, h("h2", { text: "Recently paid" }), h("ul", { class: "list" }, paidLog.map((e) => h("li", {}, h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: e.note || expCat(e.category) }), h("div", { class: "muted small", text: `${e.date} · ${e.method === "gcash" ? "GCash" : "Cash"}` })), h("span", { class: "num", text: peso(e.amount) }))))) : null);
+  }
+
+  // ---------- SALES HISTORY ----------
+  function viewHistory() {
+    const all = [...S.sales].sort((a, b) => b.at.localeCompare(a.at)).filter((s) => histFilter === "all" || (histFilter === "voided" ? s.voided : !s.voided && s.method === histFilter));
+    const groups = new Map(); for (const s of all.slice(0, 300)) { const d = dayKey(s.at); if (!groups.has(d)) groups.set(d, []); groups.get(d).push(s); }
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Sales history", style: "margin-top:8px" }))),
+      h("div", { class: "cats" }, [["all", "All"], ["cash", "Cash"], ["gcash", "GCash"], ["credit", "Utang"], ["voided", "Voided"]].map(([k, l]) => h("button", { "aria-pressed": String(histFilter === k), onclick: () => { histFilter = k; render(); } }, l))),
+      h("div", { class: "card" }, groups.size ? [...groups.entries()].flatMap(([d, arr]) => [
+        h("div", { class: "daygrp" }, h("span", { text: new Date(d + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) + ` · ${arr.length} sale(s)` }), h("span", { class: "num", text: peso(arr.filter((s) => !s.voided).reduce((a, s) => a + s.total, 0)) })),
+        h("ul", { class: "list" }, arr.map((s) => h("li", { style: "cursor:pointer", onclick: () => showReceipt(s) },
+          h("div", { class: "grow" }, h("div", { class: "trunc", style: s.voided ? "text-decoration:line-through" : null, text: (s.lines || []).map((l) => `${qtyFmt(l.qty)}× ${l.name}`).join(", ") }),
+            h("div", { class: "muted small", text: new Date(s.at).toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" }) + (s.customerId ? " · " + custName(s.customerId) : "") })),
+          h("span", { class: "chip " + (s.method === "credit" ? "credit" : ""), text: s.voided ? "voided" : s.method === "credit" ? "utang" : s.method }),
+          h("span", { class: "num", style: "font-weight:600", text: peso(s.total) }))))]) : h("div", { class: "empty", text: "No sales here yet." })),
+      all.length > 300 ? h("p", { class: "muted small", text: "Showing the latest 300. Download everything from Reports." }) : null);
   }
   const custName = (id) => S.customers.find((c) => c.id === id)?.name || "Customer";
   function stockChip(p) {
@@ -686,26 +1045,45 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     render();
   }
   function cartCalc() {
-    const lines = cart.lines.map((l) => ({ ...l, p: productById(l.productId), q: Number(l.qty) || 0 })).filter((l) => l.p);
+    const lines = cart.lines.map((l) => ({ ...l, p: l.custom ? { id: l.productId, name: l.custom.name, price: l.custom.price, cost: 0, custom: true } : productById(l.productId), q: Number(l.qty) || 0 })).filter((l) => l.p);
     const subtotal = lines.reduce((a, l) => a + Math.round(l.q * l.p.price), 0);
     const disc = toCentavos(cart.discount || "0") ?? 0;
     const total = Math.max(0, subtotal - disc);
     const tendered = cart.tendered ? toCentavos(cart.tendered) : null;
-    const short = lines.filter((l) => l.q > stockOf(l.productId));
+    const short = lines.filter((l) => !l.custom && l.q > stockOf(l.productId));
     return { lines, subtotal, disc, total, tendered, change: tendered != null ? tendered - total : null, short };
   }
   function viewSell() {
     const prods = activeProducts();
     const best = [...prods].sort((a, b) => (D.sold.get(b.id) || 0) - (D.sold.get(a.id) || 0) || a.name.localeCompare(b.name));
     const f = search.trim().toLowerCase();
-    const shown = (f ? best.filter((p) => p.name.toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim())) : best).slice(0, 60);
+    const catCount = new Map(); for (const p of prods) { const k = p.category || "Other"; catCount.set(k, (catCount.get(k) || 0) + 1); }
+    const cats = [...catCount.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+    if (sellCat !== "all" && sellCat !== "best" && !catCount.has(sellCat)) sellCat = "all";
+    const inCat = sellCat === "all" ? best : sellCat === "best" ? best.filter((p) => (D.sold.get(p.id) || 0) > 0).slice(0, 18) : best.filter((p) => (p.category || "Other") === sellCat);
+    const shown = (f ? best.filter((p) => p.name.toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim())) : inCat).slice(0, 90);
+    const customItem = () => {
+      const name = h("input", { type: "text", id: "ciName", maxlength: 60, placeholder: "e.g. Yelo, tingi na asukal, piso-net" });
+      const price = h("input", { type: "text", inputmode: "decimal", id: "ciPrice", placeholder: "0.00" });
+      const qty = h("input", { type: "text", inputmode: "decimal", id: "ciQty", value: "1" });
+      openDialog("Custom item", h("div", { class: "grid" },
+        h("p", { class: "muted small", text: "For things you don't track in stock. It is added to this sale and to your sales totals, but no stock is deducted." }),
+        h("label", { class: "f" }, "Item name", name), h("div", { class: "form" }, h("label", { class: "f" }, "Price ₱ (each)", price), h("label", { class: "f" }, "Qty", qty)),
+        h("button", { class: "btn primary big", onclick: () => {
+          const pr = toCentavos(price.value), q = Number(qty.value);
+          if (!pr) return toast("Enter the price"); if (!(q > 0)) return toast("Enter the quantity");
+          cart.lines.push({ productId: "custom-" + uid(), qty: String(q), custom: { name: name.value.trim().slice(0, 60) || "Custom item", price: pr } });
+          dlg.close(); toast("Added to the sale"); render();
+        } }, "Add to sale")));
+      setTimeout(() => name.focus(), 50);
+    };
     const c = cartCalc();
     const checkout = () => {
       currentCheckout = checkout;
       const box = h("div", { class: "grid", style: "gap:12px" });
       if (!c.lines.length) { box.append(h("div", { class: "empty", text: "Tap products to add them here." })); return box; }
       box.append(h("ul", { class: "list" }, c.lines.map((l) => h("li", {},
-        h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: l.p.name }), h("div", { class: "small " + (l.q > stockOf(l.productId) ? "" : "muted"), style: l.q > stockOf(l.productId) ? "color:var(--bad)" : null, text: `${peso(l.p.price)} · ${qtyFmt(stockOf(l.productId))} left` })),
+        h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: l.p.name }), l.custom ? h("div", { class: "small muted", text: `${peso(l.p.price)} · not tracked in stock` }) : h("div", { class: "small " + (l.q > stockOf(l.productId) ? "" : "muted"), style: l.q > stockOf(l.productId) ? "color:var(--bad)" : null, text: `${peso(l.p.price)} · ${qtyFmt(stockOf(l.productId))} left` })),
         h("div", { class: "qty" },
           h("button", { "aria-label": "Less", onclick: () => { const n = (Number(l.qty) || 0) - 1; if (n <= 0) cart.lines = cart.lines.filter((x) => x.productId !== l.productId); else cart.lines.find((x) => x.productId === l.productId).qty = String(n); render(); } }, "−"),
           h("input", { type: "text", inputmode: "decimal", value: l.qty, "aria-label": "Quantity", id: "q-" + l.productId, oninput: (e) => { cart.lines.find((x) => x.productId === l.productId).qty = e.target.value; render(); } }),
@@ -738,20 +1116,27 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       return box;
     };
     return h("div", { class: "view" },
-      h("div", { class: "head" }, h("h1", { text: "Sell" }), h("span", { class: "muted small", text: "Tap a product, or type/scan its barcode and press Enter." })),
+      h("div", { class: "head" }, h("h1", { text: "Sell" }), h("span", { class: "muted small", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." })),
       h("div", { class: "sell" },
         h("div", { class: "grid", style: "gap:10px" },
-          h("button", { class: "btn primary", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); } else unknownBarcode(code); } }, camIcon(), "Scan barcode (photo)"),
+          h("div", { class: "pos-acts" },
+            h("button", { class: "btn primary", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); } else unknownBarcode(code); } }, svgIcon(IC.scan), "Scan"),
+            h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
+            h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
           h("input", { type: "search", id: "sellSearch", placeholder: "Search product or type barcode", value: search, "aria-label": "Search products",
             oninput: (e) => { search = e.target.value; render(); },
             onkeydown: (e) => { if (e.key === "Enter") { const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } } }),
+          prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
           prods.length ? h("div", { class: "tiles", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id); const q = stockOf(p.id);
-            return h("button", { class: "tile" + (inCart ? " in" : ""), role: "listitem", onclick: () => addToCart(p) },
-              productImage(p),
+            const st = q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "";
+            return h("button", { class: "tile" + (inCart ? " in" : "") + (q <= 0 ? " oos" : ""), role: "listitem", "aria-label": `${p.name}, ${peso(p.price)}, ${q <= 0 ? "out of stock" : qtyFmt(q) + " in stock"}${inCart ? `, ${inCart.qty} in sale` : ""}`, onclick: () => addToCart(p) },
+              h("span", { class: "pwrap" }, productImage(p),
+                h("span", { class: "stockb num " + st, text: q <= 0 ? "Out" : `Stock ${qtyFmt(q)}` }),
+                inCart ? h("span", { class: "qtyb num", text: inCart.qty }) : null),
               h("span", { class: "body" },
-                h("span", { class: "n", text: p.name }),
-                h("span", { class: "r" }, h("b", { class: "num", text: peso(p.price) }), h("span", { class: "small num", style: q <= 0 ? "color:var(--bad)" : "color:var(--muted)", text: inCart ? `×${inCart.qty}` : `${qtyFmt(q)} left` }))));
+                h("span", { class: "price num", text: peso(p.price) }),
+                h("span", { class: "n", text: p.name })));
           })) : h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))),
         h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
       c.lines.length ? h("button", { class: "mobile-cart", onclick: () => openDialog("Current sale", checkoutDialog()) }, h("span", { text: `${c.lines.length} item(s)` }), h("span", { class: "num", text: `${peso(c.total)} ›` })) : null);
@@ -778,7 +1163,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       at: new Date().toISOString(), by: S.me || null, method: cart.method, subtotal: c.subtotal, discount: c.disc, total: c.total,
       tendered: cart.method === "cash" ? c.tendered ?? c.total : null, ref: cart.method === "gcash" ? cart.ref.trim() || null : null,
       customerId: cart.method === "credit" ? cart.customerId : null, voided: false,
-      lines: c.lines.map((l) => ({ productId: l.productId, name: l.p.name, qty: l.q, price: l.p.price, cost: l.p.cost || 0 })),
+      lines: c.lines.map((l) => ({ productId: l.custom ? null : l.productId, name: l.p.name, qty: l.q, price: l.p.price, cost: l.p.cost || 0, ...(l.custom ? { custom: true } : {}) })),
     };
     charging = true;
     const id = uid(); // client id: a retried save can never create two sales
@@ -804,6 +1189,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         change != null && change > 0 ? h("div", { class: "row", style: "font-weight:700" }, h("span", { text: "Sukli" }), h("span", { class: "num", text: peso(change) })) : null,
         h("div", { class: "muted small", style: "text-align:center", text: "Salamat po! · Not an official receipt" })),
       h("button", { class: "btn primary big", onclick: () => dlg.close() }, "New sale"),
+      h("button", { class: "btn", onclick: () => { try { window.print(); } catch { toast("Printing is not available here"); } } }, "Print receipt (Bluetooth / USB printer)"),
       !s.voided && s.id ? h("button", { class: "btn danger", onclick: () => voidSale(s) }, "Void this sale") : null);
     openDialog(s.method === "credit" ? "Utang recorded" : "Sale", body);
   }
@@ -956,7 +1342,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     openDialog("Adjust stock — " + p.name, h("div", { class: "grid" }, h("label", { class: "f" }, "What happened?", sel), h("label", { class: "f" }, "Quantity", qty), h("label", { class: "f" }, "Reason", reason), hint, btn));
   }
   const stockLines = [];
-  const si = { supplier: "", ref: "", unmatched: [], reading: false, note: "" };
+  const si = { supplier: "", ref: "", unmatched: [], reading: false, note: "", pay: "cash", dueDays: "7" };
   async function readReceipt() {
     const file = await pickPhoto(true);
     if (!file) return;
@@ -1028,6 +1414,11 @@ ${catalog}`;
           h("label", { class: "f", style: "width:110px" }, "Unit cost ₱", h("input", { type: "text", inputmode: "decimal", id: "sic-" + l.productId, value: l.cost, oninput: (e) => { l.cost = e.target.value; render(); } })),
           h("button", { class: "btn sm danger", "aria-label": "Remove", onclick: () => { stockLines.splice(stockLines.indexOf(l), 1); render(); } }, "×")); })) : h("div", { class: "empty", text: "Add the products in this delivery." }),
         h("div", { class: "total" }, h("span", { class: "muted", text: "Total cost" }), h("span", { class: "v num", style: "font-size:1.4rem", text: peso(total) })),
+        h("div", { class: "grid", style: "gap:6px" }, h("div", { class: "small", style: "font-weight:600", text: "Paid with · Pinambayad" }),
+          h("div", { class: "cats", role: "radiogroup", "aria-label": "Paid with", style: "flex-wrap:wrap" }, [["cash", "Cash from drawer"], ["gcash", "GCash"], ["later", "Pay later (supplier credit)"], ["none", "Personal money / not tracked"]].map(([k, l]) =>
+            h("button", { role: "radio", "aria-checked": String(si.pay === k), "aria-pressed": String(si.pay === k), onclick: () => { si.pay = k; render(); } }, l))),
+          si.pay === "later" ? h("label", { class: "f", style: "max-width:220px" }, "Pay supplier within (days)", h("input", { type: "text", inputmode: "numeric", id: "siDue", value: si.dueDays, oninput: (e) => (si.dueDays = e.target.value) })) : null,
+          h("div", { class: "muted small", text: si.pay === "cash" ? "Deducted from your cash ledger." : si.pay === "gcash" ? "Recorded as paid by GCash." : si.pay === "later" ? "Added to Bills so you're reminded before it's due." : "Stock is added; no money movement is recorded." })),
         h("button", { class: "btn primary big", disabled: !ok, onclick: async (e) => {
           e.target.disabled = true;
           const supplier = si.supplier.trim() || null, ref = si.ref.trim() || null, at = new Date().toISOString(), batch = uid();
@@ -1037,6 +1428,8 @@ ${catalog}`;
               await write("moves/" + uid(), { productId: l.productId, kind: "stock_in", qty: Number(l.qty), cost, supplier, ref, batch, at, by: S.me || null, reason: [supplier, ref && "#" + ref].filter(Boolean).join(" ") || "Stock-in" });
               const p = productById(l.productId); if (p && cost > 0 && cost !== p.cost) await write("products/" + p.id, { ...strip(p), cost });
             }
+            if (total > 0 && (si.pay === "cash" || si.pay === "gcash")) await write("expenses/" + uid(), { kind: "purchase", amount: total, category: "stock", method: si.pay, note: [supplier, ref && "#" + ref].filter(Boolean).join(" ") || "Stock purchase", date: todayKey(), at, by: S.me || null, deleted: false, batch });
+            if (total > 0 && si.pay === "later") { const d = new Date(); d.setDate(d.getDate() + Math.max(0, Math.min(120, parseInt(si.dueDays, 10) || 7))); await write("expenses/" + uid(), { kind: "bill", purchase: true, name: (supplier || "Supplier") + (ref ? " #" + ref : "") + " (stock)", category: "stock", amount: total, due: dayKey(d.toISOString()), repeat: "none", paid: false, deleted: false, at, by: S.me || null, batch }); }
             toast(`Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; Object.assign(si, { supplier: "", ref: "", unmatched: [], note: "" }); go("products");
           } catch (err) { e.target.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
         } }, "Confirm stock-in")));
@@ -1173,12 +1566,22 @@ ${catalog}`;
     rows.reverse();
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("utang") }, "‹ Customers"), h("h1", { text: c.name, style: "margin-top:8px" }), h("div", { class: "muted small", text: [c.phone, c.limit ? "Limit " + peso(c.limit) : null].filter(Boolean).join(" · ") || "" })),
-        bal > 0 ? h("button", { class: "btn primary", onclick: () => paymentDialog(c, bal) }, "Record payment") : null),
+        h("div", { class: "pills" }, bal > 0 ? h("button", { class: "btn primary", onclick: () => paymentDialog(c, bal) }, "Record payment") : null, bal > 0 ? h("button", { class: "btn", onclick: () => remindDialog(c, bal) }, svgIcon(IC.sms), "Remind") : null)),
       h("div", { class: "card kpi" }, h("div", { class: "label", text: "Utang balance" }), h("div", { class: "value num", style: bal > 0 ? "color:var(--bad)" : null, text: peso(bal) })),
       h("div", { class: "card" }, h("h2", { text: "Utang history", style: "margin-bottom:6px" }),
         rows.length ? h("ul", { class: "list" }, rows.map((r) => h("li", {},
           h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: r.label }), h("div", { class: "muted small trunc", text: `${when(r.at)}${r.note ? " · " + r.note : ""}` })),
           h("div", { style: "text-align:right" }, h("div", { class: "num", style: r.amt > 0 ? "color:var(--bad);font-weight:600" : "color:var(--good);font-weight:600", text: (r.amt > 0 ? "+" : r.amt < 0 ? "−" : "") + peso(Math.abs(r.amt)) }), h("div", { class: "muted small num", text: "Balance " + peso(r.after) }))))) : h("div", { class: "empty", text: "No utang yet." })));
+  }
+  function remindDialog(c, bal) {
+    const msg = `Magandang araw po, ${c.name}! Paalala lang po mula sa ${S.store.name}: ang inyong utang ay ${peso(bal)}. Maaari po kayong magbayad sa tindahan o sa GCash. Salamat po!`;
+    const box = h("textarea", { id: "remMsg", rows: 5, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); box.value = msg;
+    const num = (c.phone || "").replace(/^0/, "+63");
+    openDialog("Utang reminder", h("div", { class: "grid" },
+      h("p", { class: "muted small", text: "Opens your phone's own Messages app with this text — normal SMS rates from your load apply. Be polite: a friendly reminder keeps the suki." }),
+      box,
+      c.phone ? h("a", { class: "btn primary big", href: `sms:${num}?body=${encodeURIComponent(msg)}`, onclick: (e) => { e.currentTarget.href = `sms:${num}?body=${encodeURIComponent(box.value)}`; } }, "Open Messages") : h("div", { class: "note", text: "No mobile number saved for this customer — copy the text and send it on Messenger, or add their number." }),
+      h("button", { class: "btn", onclick: async () => { try { await navigator.clipboard.writeText(box.value); toast("Copied"); } catch { box.select(); toast("Select and copy the text"); } } }, "Copy text")));
   }
   function paymentDialog(c, bal) {
     const amt = h("input", { type: "text", inputmode: "decimal", id: "payAmt", placeholder: (bal / 100).toFixed(2) });
@@ -1200,6 +1603,27 @@ ${catalog}`;
 
   // ---------- REPORTS ----------
   let range = 7;
+  let plPeriod = "month";
+  function plCard() {
+    const now = new Date(), t = todayKey();
+    const startOf = { day: t, week: (() => { const d = new Date(now); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dayKey(d.toISOString()); })(), month: t.slice(0, 8) + "01", year: t.slice(0, 5) + "01-01" };
+    const from = startOf[plPeriod];
+    const sales = S.sales.filter((s) => !s.voided && dayKey(s.at) >= from);
+    const revenue = sales.reduce((a, s) => a + s.subtotal || a + s.total, 0), discounts = sales.reduce((a, s) => a + (s.discount || 0), 0);
+    const net = sales.reduce((a, s) => a + s.total, 0), cogs = sales.reduce((a, s) => a + saleCost(s), 0);
+    const exps = expensesOn(from); const byCat = new Map(); for (const e of exps) byCat.set(e.category, (byCat.get(e.category) || 0) + e.amount);
+    const opex = exps.reduce((a, e) => a + e.amount, 0), gross = net - cogs, np = gross - opex;
+    const row = (l, v, opts = {}) => h("tr", {}, h("td", { style: opts.indent ? "padding-left:22px" : opts.bold ? "font-weight:700" : null, text: l }), h("td", { class: "r num", style: (opts.bold ? "font-weight:700;" : "") + (opts.color ? `color:var(${opts.color})` : ""), text: (v < 0 ? "−" : "") + peso(Math.abs(v)) }));
+    return h("div", { class: "card" },
+      h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("h2", { text: "Profit & loss", style: "margin-right:auto" }),
+        h("div", { class: "pills" }, [["day", "Today"], ["week", "This week"], ["month", "This month"], ["year", "This year"]].map(([k, l]) => h("button", { "aria-pressed": String(plPeriod === k), onclick: () => { plPeriod = k; render(); } }, l)))),
+      h("div", { class: "table-wrap" }, h("table", {}, h("tbody", {},
+        row("Sales", revenue), discounts ? row("Less discounts", -discounts, { indent: true }) : null, row("Net sales", net, { bold: true }),
+        row("Cost of goods sold", -cogs, { indent: true }), row("Gross profit", gross, { bold: true }),
+        [...byCat.entries()].sort((a, b) => b[1] - a[1]).map(([k, v]) => row(expCat(k), -v, { indent: true })),
+        row("Total expenses", -opex), row("Net profit", np, { bold: true, color: np < 0 ? "--bad" : "--good" })))),
+      h("div", { class: "muted small", style: "margin-top:6px", text: `From ${from}. Cost of goods uses each product's cost at the time of sale. Utang sales count as sales when made.` }));
+  }
   function viewReports() {
     const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - (range - 1));
     const sales = S.sales.filter((s) => !s.voided && new Date(s.at) >= since);
@@ -1210,7 +1634,7 @@ ${catalog}`;
       const r = days.get(dayKey(s.at)); if (!r) continue;
       r.n++; r[s.method] += s.total; r.total += s.total;
       const cost = (s.lines || []).reduce((a, l) => a + Math.round(l.qty * (l.cost || 0)), 0); r.profit += s.total - cost;
-      for (const l of s.lines || []) { const x = byProduct.get(l.productId) || { name: l.name, qty: 0, revenue: 0, profit: 0 }; x.qty += l.qty; x.revenue += Math.round(l.qty * l.price); x.profit += Math.round(l.qty * (l.price - (l.cost || 0))); byProduct.set(l.productId, x); }
+      for (const l of s.lines || []) { const x = byProduct.get(l.productId || "custom:" + l.name) || { name: l.name, qty: 0, revenue: 0, profit: 0 }; x.qty += l.qty; x.revenue += Math.round(l.qty * l.price); x.profit += Math.round(l.qty * (l.price - (l.cost || 0))); byProduct.set(l.productId || "custom:" + l.name, x); }
     }
     const dayRows = [...days.entries()].reverse();
     const tot = dayRows.reduce((a, [, r]) => ({ n: a.n + r.n, cash: a.cash + r.cash, gcash: a.gcash + r.gcash, credit: a.credit + r.credit, total: a.total + r.total, profit: a.profit + r.profit }), { n: 0, cash: 0, gcash: 0, credit: 0, total: 0, profit: 0 });
@@ -1231,8 +1655,11 @@ ${catalog}`;
       h("div", { class: "grid kpis" },
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Sales" }), h("div", { class: "value num", text: peso(tot.total) }), h("div", { class: "muted small", text: `${tot.n} sale(s)` })),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Gross profit" }), h("div", { class: "value num", style: "color:var(--good)", text: peso(tot.profit) })),
+        (() => { const spent = expensesOn(dayKey(since.toISOString())).reduce((a, e) => a + e.amount, 0); const net = tot.profit - spent;
+          return h("button", { class: "card kpi", style: "text-align:left", onclick: () => go("home", "expenses") }, h("div", { class: "label", text: "Net profit (after expenses)" }), h("div", { class: "value num", style: `color:var(${net < 0 ? "--bad" : "--good"})`, text: speso(net) }), h("div", { class: "muted small", text: `Expenses ${peso(spent)}` })); })(),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Utang given" }), h("div", { class: "value num", text: peso(tot.credit) })),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Stock value now" }), h("div", { class: "value num", text: peso(inv.reduce((a, x) => a + Math.max(0, x.q) * (x.p.cost || 0), 0)) }))),
+      plCard(),
       h("div", { class: "card" }, h("h2", { text: "Daily sales", style: "margin-bottom:6px" }), h("div", { class: "table-wrap" }, h("table", {},
         h("thead", {}, h("tr", {}, ["Date", "Sales", "Cash", "GCash", "Utang", "Total", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
         h("tbody", {}, dayRows.map(([d, r]) => h("tr", {}, h("td", { text: new Date(d + "T00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) }), h("td", { class: "r num", text: r.n }), [r.cash, r.gcash, r.credit, r.total, r.profit].map((v) => h("td", { class: "r num", text: peso(v) }))))),

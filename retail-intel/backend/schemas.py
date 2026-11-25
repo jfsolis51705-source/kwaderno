@@ -109,3 +109,33 @@ class MemberIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     password: str | None = Field(default=None, min_length=8, max_length=200)
     role: Literal["staff", "owner"] = "staff"
+
+
+# ---------- online ordering ----------
+class ShopIn(BaseModel):
+    slug: str | None = Field(default=None, pattern=r"^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$")
+    enabled: bool = True
+    pickup: bool = True
+    delivery: bool = False
+    delivery_fee: float = Field(default=0, ge=0, le=10_000)
+    min_order: float = Field(default=0, ge=0, le=100_000)
+    note: str | None = Field(default=None, max_length=300)
+
+
+class OrderItemIn(BaseModel):
+    product_id: int
+    qty: int = Field(ge=1, le=99)
+
+
+class PublicOrderIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    phone: str = Field(pattern=r"^(\+?63|0)9\d{9}$")
+    fulfillment: Literal["pickup", "delivery"]
+    address: str | None = Field(default=None, max_length=300)
+    note: str | None = Field(default=None, max_length=300)
+    items: list[OrderItemIn] = Field(min_length=1, max_length=50)
+    website: str | None = Field(default=None, max_length=200)  # honeypot: people never fill this hidden field
+
+
+class CustomerOrderStatusIn(BaseModel):
+    status: Literal["accepted", "ready", "completed", "cancelled"]

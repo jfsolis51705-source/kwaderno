@@ -52,6 +52,14 @@ New merchants register at `/register`; that creates their store with them as own
 | **Business score** (owners) | A **cash-flow readiness score** (0–100, banded Building / Fair / Strong) built only from the store's own records. Five weighted factors, each with its points and a plain explanation: sales recorded regularly 35, stock vs sales 20, wholesale restocks 15, clear original photos 15, time on KWADERNO 15. Shows how to raise it, with a disclaimer that it is **not a credit decision**. |
 | **Sync** | Offline queue with pending and failed items, plus **Sync now**. |
 
+### Online ordering (store link, `/shop/<link-name>`)
+- **Online** tab: the owner picks a link name, turns on pickup and/or delivery, sets a delivery fee, minimum order and a note, then shares the link (Facebook, group chat, QR).
+- Customers open the link **without an account**: a photo menu of items in stock, a cart that survives a reload, checkout for pickup or delivery, then an order code with a live status page.
+- Prices always come from the store's Stock list (the browser can't set them); costs, SKUs and exact stock are never shown. Stock is checked when ordering and again on completion, and is deducted only when the store marks the order **Complete** (`online_order` movement with the order code).
+- Order flow: new → accepted → ready → completed (or cancelled at any step before completion). The customer's status link uses a private token stored only as a hash; the public status page doesn't repeat the name, phone or address.
+- Abuse limits: per-device rate limit (`ORDER_RATE_LIMIT`, default 10 per 10 min), a hidden honeypot field, PH mobile number check, 50 lines × 99 qty max.
+- Payment is cash or the store's own QR Ph on pickup/delivery — nothing here claims a payment was verified.
+
 ### Operations portal (`/portal/...`)
 - **Overview:** each store's **units sold per day** (supply-chain velocity), **check-in streak** and **cash-flow score**; totals, share of shelf by brand (from each store's latest verified shelf photo), SKU stock health per store, a store table, and out-of-stock and low-stock alerts.
 - **Wholesale orders:** the queue across all stores, with totals per distributor. Fulfil or cancel orders here.
@@ -132,6 +140,11 @@ The full interactive reference is at http://localhost:8100/docs.
   - `GET /portal/overview`
   - `GET /portal/audit`
 - **Health:** `GET /health`
+
+### Online ordering
+- `GET|PUT /api/stores/{id}/shop` — link settings (PUT: owner only)
+- `GET /api/stores/{id}/customer-orders?status=open|new|…`, `POST /api/customer-orders/{id}/status` `{status}`
+- Public, no login: `GET /api/shop/{slug}`, `POST /api/shop/{slug}/orders`, `GET /api/shop/{slug}/orders/{code}?t=<token>`
 
 ## Tests
 

@@ -13,6 +13,8 @@ import SyncQueue from "./pages/store/SyncQueue";
 import Overview from "./pages/portal/Overview";
 import PortalOrders from "./pages/portal/Orders";
 import AuditLog from "./pages/portal/Audit";
+import Online from "./pages/store/Online";
+import Shop from "./pages/shop/Shop";
 
 const Logo = () => (
   <Link to="/" className="flex items-center gap-2 font-bold tracking-wide text-slate-900">
@@ -30,7 +32,7 @@ function StorePicker() {
   );
 }
 
-const STORE_TABS = [["capture", "Capture"], ["catalog", "Stock"], ["orders", "Restock"], ["rewards", "Rewards"], ["sync", "Sync"]] as const;
+const STORE_TABS = [["capture", "Capture"], ["catalog", "Stock"], ["orders", "Restock"], ["online", "Online"], ["rewards", "Rewards"], ["sync", "Sync"]] as const;
 
 /** Sends visitors to /login; optionally requires the KELSON operations role. */
 function RequireAuth({ ops, children }: { ops?: boolean; children: React.ReactNode }) {
@@ -55,7 +57,7 @@ function StoreLayout() {
         </nav>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-4"><Outlet /></main>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-slate-200 bg-white md:hidden" aria-label="Store">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-7 border-t border-slate-200 bg-white md:hidden" aria-label="Store">
         {[...STORE_TABS, ["account", "Account"] as const].map(([to, label]) => <NavLink key={to} to={`/store/${to}`} className={({ isActive }) => `py-3 text-center text-xs font-semibold ${isActive ? "text-brand-600" : "text-slate-500"}`}>{label}</NavLink>)}
       </nav>
       <Toast />
@@ -101,11 +103,13 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<AuthPage mode="login" />} />
       <Route path="/register" element={<AuthPage mode="register" />} />
+      <Route path="/shop/:slug" element={<Shop />} />
       <Route path="/store" element={<RequireAuth><StoreLayout /></RequireAuth>}>
         <Route index element={<Navigate to="capture" replace />} />
         <Route path="capture" element={<CaptureHub />} />
         <Route path="catalog" element={<Catalog />} />
         <Route path="orders" element={<StoreOrders />} />
+        <Route path="online" element={<Online />} />
         <Route path="rewards" element={<RewardsPage />} />
         <Route path="sync" element={<SyncQueue />} />
         <Route path="account" element={<Account />} />

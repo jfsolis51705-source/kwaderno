@@ -183,6 +183,52 @@ class SyncOp(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class Shop(Base):
+    """A store's public ordering page (its own table, so existing databases gain it without a migration)."""
+    __tablename__ = "shops"
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), primary_key=True)
+    slug: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    pickup: Mapped[bool] = mapped_column(Boolean, default=True)
+    delivery: Mapped[bool] = mapped_column(Boolean, default=False)
+    delivery_fee_cents: Mapped[int] = mapped_column(Integer, default=0)
+    min_order_cents: Mapped[int] = mapped_column(Integer, default=0)
+    note: Mapped[str | None] = mapped_column(String(300))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class CustomerOrder(Base):
+    """An order a customer placed on the store's public page. Stock is deducted only when the store completes it."""
+    __tablename__ = "customer_orders"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(8), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64))  # the customer's private status link; only the hash is kept
+    customer_name: Mapped[str] = mapped_column(String(80))
+    phone: Mapped[str] = mapped_column(String(20))
+    fulfillment: Mapped[str] = mapped_column(String(10))  # pickup | delivery
+    address: Mapped[str | None] = mapped_column(String(300))
+    note: Mapped[str | None] = mapped_column(String(300))
+    status: Mapped[str] = mapped_column(String(12), default="new")  # new | accepted | ready | completed | cancelled
+    subtotal_cents: Mapped[int] = mapped_column(Integer)
+    delivery_fee_cents: Mapped[int] = mapped_column(Integer, default=0)
+    total_cents: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    lines: Mapped[list["CustomerOrderLine"]] = relationship(back_populates="order", cascade="all, delete-orphan")
+
+
+class CustomerOrderLine(Base):
+    __tablename__ = "customer_order_lines"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("customer_orders.id", ondelete="CASCADE"), index=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"))
+    name: Mapped[str] = mapped_column(String(160))
+    qty: Mapped[int] = mapped_column(Integer)
+    price_cents: Mapped[int] = mapped_column(Integer)
+    order: Mapped[CustomerOrder] = relationship(back_populates="lines")
+
+
 class Database:
     def __init__(self, url: str | None = None):
         self.url = url or default_url()

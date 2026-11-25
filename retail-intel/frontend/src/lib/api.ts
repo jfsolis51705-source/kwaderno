@@ -1,4 +1,4 @@
-import type { AuditEntry, Cashflow, Checkins, Capture, CaptureItem, CaptureKind, Order, Overview, Product, Rewards, Store } from "./types";
+import type { AuditEntry, Cashflow, Checkins, Capture, CaptureItem, CaptureKind, CustomerOrder, CustomerOrderStatus, Order, Overview, Product, Rewards, ShopCatalog, ShopSettings, Store } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -69,4 +69,14 @@ export const api = {
     call<{ results: { op_id: string; ok: boolean; duplicate?: boolean; error?: string; product?: Product }[] }>("/api/sync", json("POST", { store_id: storeId, ops })),
   overview: () => call<Overview>("/api/portal/overview"),
   audit: (storeId?: number) => call<AuditEntry[]>(`/api/portal/audit${storeId ? `?store_id=${storeId}` : ""}`),
+  // online ordering
+  shopSettings: (storeId: number) => call<ShopSettings>(`/api/stores/${storeId}/shop`),
+  saveShop: (storeId: number, b: Omit<ShopSettings, "store_id" | "path">) => call<ShopSettings>(`/api/stores/${storeId}/shop`, json("PUT", b)),
+  customerOrders: (storeId: number, status?: string) => call<CustomerOrder[]>(`/api/stores/${storeId}/customer-orders${status ? `?status=${status}` : ""}`),
+  customerOrderStatus: (id: number, status: Exclude<CustomerOrderStatus, "new">) => call<CustomerOrder>(`/api/customer-orders/${id}/status`, json("POST", { status })),
+  // public (no login)
+  shop: (slug: string) => call<ShopCatalog>(`/api/shop/${encodeURIComponent(slug)}`),
+  placeOrder: (slug: string, b: { name: string; phone: string; fulfillment: "pickup" | "delivery"; address?: string; note?: string; items: { product_id: number; qty: number }[]; website?: string }) =>
+    call<CustomerOrder>(`/api/shop/${encodeURIComponent(slug)}/orders`, json("POST", b)),
+  publicOrder: (slug: string, code: string, token: string) => call<CustomerOrder>(`/api/shop/${encodeURIComponent(slug)}/orders/${encodeURIComponent(code)}?t=${encodeURIComponent(token)}`),
 };

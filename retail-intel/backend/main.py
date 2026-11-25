@@ -2,7 +2,8 @@
 
 Run:  uvicorn main:app --reload --port 8100      (from backend/)
 Docs: http://localhost:8100/docs
-Every endpoint except /api/health, /api/auth/register|login and signed /api/media links needs `Authorization: Bearer <token>`.
+Every endpoint except /api/health, /api/auth/register|login, signed /api/media links and the public store pages
+(/api/shop/{slug}…) needs `Authorization: Bearer <token>`.
 """
 from __future__ import annotations
 
@@ -20,8 +21,8 @@ import auth
 import insights
 import services as svc
 from db import Capture, Database, Product, Store, StoreMember, User, WholesaleOrder
-from schemas import (AdjustIn, ConfirmCapture, LoginIn, MemberIn, OrderDraftIn, OrderPatch, OrderStatusIn, ProductIn,
-                     ProductPatch, RegisterIn, StoreIn, SyncIn)
+from schemas import (AdjustIn, ConfirmCapture, CustomerOrderStatusIn, LoginIn, MemberIn, OrderDraftIn, OrderPatch, OrderStatusIn,
+                     ProductIn, ProductPatch, PublicOrderIn, RegisterIn, ShopIn, StoreIn, SyncIn)
 from vision_service import KINDS, VisionProvider, get_provider
 
 MAX_UPLOAD = int(os.environ.get("MAX_UPLOAD_MB", "10")) * 1024 * 1024
@@ -35,6 +36,7 @@ def create_app(database_url: str | None = None, upload_dir: str | None = None, v
     provider = vision or get_provider()
     do_seed = seed if seed is not None else os.environ.get("SEED_DEMO", "1") == "1"
     limiter = auth.RateLimiter(limit=int(os.environ.get("LOGIN_RATE_LIMIT", "8")), window=300)
+    order_limiter = auth.RateLimiter(limit=int(os.environ.get("ORDER_RATE_LIMIT", "10")), window=600)  # public orders per device
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -341,6 +343,41 @@ def create_app(database_url: str | None = None, upload_dir: str | None = None, v
         return svc.order_out(o)
 
     # ---------- rewards ----------
+    # ---------- online ordering ----------
+    @app.get("/api/stores/{store_id}/shop")
+    def get_shop(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id)
+        return svc.get_shop_settings(s, store_id)
+
+    @app.put("/api/stores/{store_id}/shop")
+    def put_shop(store_id: int, body: ShopIn, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id, owner_only=True)
+        return svc.save_shop(s, store_id, body.model_dump())
+
+    @app.get("/api/shop/{slug}")
+    def shop_page(slug: str, s: Session = Depends(session)):
+        return svc.public_catalog(s, slug)
+
+    @app.post("/api/shop/{slug}/orders", status_code=201)
+    def shop_order(slug: str, body: PublicOrderIn, request: Request, s: Session = Depends(session)):
+        order_limiter.check(f"order:{request.client.host if request.client else '-'}")
+        return svc.place_customer_order(s, slug, body.model_dump())
+
+    @app.get("/api/shop/{slug}/orders/{code}")
+    def shop_order_status(slug: str, code: str, t: str = Query(min_length=8, max_length=64), s: Session = Depends(session)):
+        return svc.public_order_status(s, slug, code, t)
+
+    @app.get("/api/stores/{store_id}/customer-orders")
+    def customer_orders(store_id: int, status: str | None = None, u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_store(s, u, store_id)
+        return svc.list_customer_orders(s, store_id, status)
+
+    @app.post("/api/customer-orders/{oid}/status")
+    def customer_order_status(oid: int, body: CustomerOrderStatusIn, u: User = Depends(current_user), s: Session = Depends(session)):
+        o = svc.get_customer_order(s, oid)
+        auth.require_store(s, u, o.store_id)
+        return svc.set_customer_order_status(s, o, body.status)
+
     @app.get("/api/stores/{store_id}/rewards")
     def rewards(store_id: int, u: User = Depends(current_user), s: Session = Depends(session)):
         auth.require_store(s, u, store_id)

@@ -53,3 +53,14 @@ export interface Cashflow {
   factors: { key: string; label: string; weight: number; score: number; points: number; detail: string }[];
   metrics: { avg_daily_sales: number; sales_30d: number; ledger_days_30d: number; stock_value: number; orders_received_60d: number; checkin_streak: number };
 }
+
+// ---------- online ordering ----------
+export interface ShopSettings { store_id: number; slug: string; enabled: boolean; pickup: boolean; delivery: boolean; delivery_fee: number; min_order: number; note: string | null; path: string | null }
+export interface ShopProduct { id: number; name: string; brand: string | null; variant: string | null; price: number; max_qty: number; thumbnail_url: string | null }
+export interface ShopCatalog { store: { name: string; barangay: string | null; city: string | null }; shop: { pickup: boolean; delivery: boolean; delivery_fee: number; min_order: number; note: string | null }; products: ShopProduct[] }
+export type CustomerOrderStatus = "new" | "accepted" | "ready" | "completed" | "cancelled";
+export interface CustomerOrder {
+  id: number; code: string; status: CustomerOrderStatus; fulfillment: "pickup" | "delivery"; subtotal: number; delivery_fee: number; total: number; created_at: string; updated_at: string | null;
+  lines: { product_id: number | null; name: string; qty: number; price: number }[];
+  customer_name?: string; phone?: string; address?: string | null; note?: string | null; token?: string; store?: string;
+}

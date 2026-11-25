@@ -158,11 +158,55 @@ try {
   await m.screenshot({ path: join(shots, "phone-score.png"), fullPage: true });
   await m.screenshot({ path: join(shots, "phone-rewards.png") });
   let wide = [];
-  for (const path of ["capture", "catalog", "orders", "rewards", "sync", "account"]) {
+  for (const path of ["capture", "catalog", "orders", "online", "rewards", "sync", "account"]) {
     await m.goto(`${BASE}/store/${path}`); await m.waitForTimeout(400);
     if (await m.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1)) wide.push(path);
   }
   check(!wide.length, `no sideways scrolling on phone screens ${wide.join(",")}`);
+  // ---------- online ordering: store opens its link, a customer orders without logging in ----------
+  await m.goto(`${BASE}/store/online`);
+  await m.getByLabel("Link name").waitFor();
+  await m.getByLabel("Link name").fill("e2e-tindahan");
+  await m.getByLabel(/Taking orders/).check();
+  await m.getByLabel(/Delivery$/).check();
+  await m.getByLabel("Delivery fee (₱)").fill("25");
+  await m.getByRole("button", { name: "Save" }).click();
+  const shopUrl = await m.getByTestId("shop-link").innerText();
+  check(shopUrl.endsWith("/shop/e2e-tindahan"), `store gets a shareable link (${shopUrl})`);
+  const cctx = await browser.newContext({ ...devices["Pixel 7 landscape"] });
+  const c = await cctx.newPage();
+  c.on("pageerror", (e) => errors.push(e.message));
+  globalThis.__page = c;
+  await c.goto(shopUrl);
+  await c.getByTestId("shop-item").first().waitFor();
+  check((await c.getByTestId("shop-item").count()) > 0, "customer sees the store menu without logging in (phone landscape)");
+  await c.screenshot({ path: join(shots, "shop-landscape.png") });
+  const first = c.getByTestId("shop-item").first();
+  await first.getByRole("button", { name: /Add/ }).click();
+  await first.getByRole("button", { name: /^More / }).click();
+  await c.getByRole("button", { name: /Checkout/ }).click();
+  await c.getByRole("radio", { name: /Delivery/ }).click();
+  await c.getByLabel(/Name/).fill("Maria Santos");
+  await c.getByLabel("Mobile number").fill("0917 555 1234");
+  await c.getByLabel("Address").fill("Blk 3 Lot 5, Culiat");
+  const total = await c.getByTestId("checkout-total").innerText();
+  await c.getByRole("button", { name: /Place order/ }).click();
+  await c.getByTestId("order-status").waitFor();
+  check((await c.getByTestId("order-status-text").innerText()).includes("Received"), `customer gets an order code and live status (${total})`);
+  await m.getByRole("button", { name: "Refresh" }).click();
+  const co = m.getByTestId("customer-order").filter({ hasText: "Maria Santos" });
+  await co.waitFor();
+  check((await co.innerText()).includes("Blk 3 Lot 5"), "store sees the order with the delivery address");
+  await m.screenshot({ path: join(shots, "phone-online-orders.png"), fullPage: true });
+  for (const b of [/Accept/, /Ready/, /Complete/]) { await co.getByRole("button", { name: b }).click(); await m.waitForTimeout(500); }
+  await m.getByText(/completed — stock updated/).waitFor();
+  check(true, "store accepts → ready → completes the order (stock deducted)");
+  await c.reload();
+  await c.getByText(/Completed/).waitFor();
+  check(true, "customer status page shows Completed");
+  globalThis.__page = m;
+  await cctx.close();
+
   await m.goto(`${BASE}/portal/overview`);
   await m.getByText("This area is for KELSON operations accounts.").waitFor();
   check(true, "merchant cannot open the operations portal");

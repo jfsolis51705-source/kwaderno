@@ -1,7 +1,10 @@
 """Business rules: capture verification, inventory, wholesale orders, rewards, offline sync and portal analytics."""
 from __future__ import annotations
 
+import hashlib
 import os
+import re
+import secrets
 from collections import defaultdict
 from datetime import datetime
 
@@ -11,8 +14,8 @@ from sqlalchemy.orm import Session
 import image_checks
 import insights
 from auth import sign_media
-from db import (AuditLog, Capture, InventoryMovement, OrderLine, Product, RewardEntry, Store, SyncOp, WholesaleOrder,
-                utcnow)
+from db import (AuditLog, Capture, CustomerOrder, CustomerOrderLine, InventoryMovement, OrderLine, Product, RewardEntry, Shop,
+                Store, SyncOp, WholesaleOrder, utcnow)
 from vision_service import VisionProvider
 
 POINTS = {"shelf": 10, "receipt": 15, "ledger": 15}
@@ -407,3 +410,160 @@ def audit_list(s: Session, store_id: int | None, limit: int) -> list[dict]:
 
 def to_dt(v: str | None) -> datetime | None:
     return datetime.fromisoformat(v) if v else None
+
+
+# ---------- online ordering (public store page) ----------
+CODE_CHARS = "ACDEFGHJKLMNPQRTUVWXY3479"  # no look-alikes (0/O, 1/I, 5/S, 8/B)
+ORDER_FLOW = {"new": {"accepted", "cancelled"}, "accepted": {"ready", "cancelled"}, "ready": {"completed", "cancelled"}, "completed": set(), "cancelled": set()}
+
+
+def slugify(name: str) -> str:
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:32].strip("-")
+    return base if len(base) >= 3 else f"store-{base}".strip("-")
+
+
+def shop_out(sh: Shop, store: Store) -> dict:
+    return {"store_id": store.id, "slug": sh.slug, "enabled": sh.enabled, "pickup": sh.pickup, "delivery": sh.delivery,
+            "delivery_fee": sh.delivery_fee_cents / 100, "min_order": sh.min_order_cents / 100, "note": sh.note, "path": f"/shop/{sh.slug}"}
+
+
+def get_shop_settings(s: Session, store_id: int) -> dict:
+    store = get_store(s, store_id)
+    sh = s.get(Shop, store_id)
+    if sh:
+        return shop_out(sh, store)
+    slug, n = slugify(store.name), 2
+    while s.scalar(select(Shop).where(Shop.slug == slug)):
+        slug, n = f"{slugify(store.name)[:34]}-{n}", n + 1
+    return {"store_id": store_id, "slug": slug, "enabled": False, "pickup": True, "delivery": False, "delivery_fee": 0, "min_order": 0, "note": None, "path": None}
+
+
+def save_shop(s: Session, store_id: int, data: dict) -> dict:
+    store = get_store(s, store_id)
+    sh = s.get(Shop, store_id)
+    slug = data.get("slug") or (sh.slug if sh else get_shop_settings(s, store_id)["slug"])
+    other = s.scalar(select(Shop).where(Shop.slug == slug, Shop.store_id != store_id))
+    if other:
+        raise AppError(409, "That link is already used by another store — choose another")
+    if not data.get("pickup", True) and not data.get("delivery", False):
+        raise AppError(400, "Offer pickup, delivery or both")
+    if not sh:
+        sh = Shop(store_id=store_id, slug=slug)
+        s.add(sh)
+    sh.slug, sh.enabled, sh.pickup, sh.delivery = slug, data.get("enabled", True), data.get("pickup", True), data.get("delivery", False)
+    sh.delivery_fee_cents, sh.min_order_cents = cents(data.get("delivery_fee", 0)), cents(data.get("min_order", 0))
+    sh.note = (data.get("note") or "").strip() or None
+    audit(s, "shop.saved", "shop", store_id, store_id, slug=slug, enabled=sh.enabled)
+    s.commit()
+    return shop_out(sh, store)
+
+
+def open_shop(s: Session, slug: str) -> tuple[Shop, Store]:
+    sh = s.scalar(select(Shop).where(Shop.slug == slug))
+    if not sh or not sh.enabled:
+        raise AppError(404, "This store isn't taking online orders")
+    return sh, get_store(s, sh.store_id)
+
+
+def public_catalog(s: Session, slug: str) -> dict:
+    sh, store = open_shop(s, slug)
+    prods = s.scalars(select(Product).where(Product.store_id == store.id, Product.qty_on_hand > 0, Product.price_cents > 0).order_by(Product.name)).all()
+    # no costs, SKUs or exact stock: customers only see what they can order
+    items = [{"id": p.id, "name": p.name, "brand": p.brand, "variant": p.variant, "price": p.price_cents / 100, "max_qty": min(p.qty_on_hand, 99),
+              "thumbnail_url": sign_media(p.thumbnail_url) if p.thumbnail_url else None} for p in prods]
+    return {"store": {"name": store.name, "barangay": store.barangay, "city": store.city},
+            "shop": {"pickup": sh.pickup, "delivery": sh.delivery, "delivery_fee": sh.delivery_fee_cents / 100, "min_order": sh.min_order_cents / 100, "note": sh.note},
+            "products": items}
+
+
+def _token_hash(t: str) -> str:
+    return hashlib.sha256(t.encode()).hexdigest()
+
+
+def customer_order_out(o: CustomerOrder, private: bool = True) -> dict:
+    out = {"id": o.id, "code": o.code, "status": o.status, "fulfillment": o.fulfillment, "subtotal": o.subtotal_cents / 100, "delivery_fee": o.delivery_fee_cents / 100,
+           "total": o.total_cents / 100, "created_at": o.created_at.isoformat(), "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+           "lines": [{"product_id": l.product_id, "name": l.name, "qty": l.qty, "price": l.price_cents / 100} for l in o.lines]}
+    if private:  # the store sees who ordered; the public status page does not repeat it
+        out.update({"customer_name": o.customer_name, "phone": o.phone, "address": o.address, "note": o.note})
+    return out
+
+
+def place_customer_order(s: Session, slug: str, data: dict) -> dict:
+    sh, store = open_shop(s, slug)
+    if data.get("website"):
+        raise AppError(400, "Order could not be placed")
+    ful = data["fulfillment"]
+    if ful == "pickup" and not sh.pickup or ful == "delivery" and not sh.delivery:
+        raise AppError(400, f"This store doesn't offer {ful}")
+    address = (data.get("address") or "").strip()
+    if ful == "delivery" and len(address) < 5:
+        raise AppError(400, "Enter the delivery address")
+    qty_by_id: dict[int, int] = defaultdict(int)
+    for it in data["items"]:
+        qty_by_id[it["product_id"]] += it["qty"]
+    prods = {p.id: p for p in s.scalars(select(Product).where(Product.store_id == store.id, Product.id.in_(list(qty_by_id)))).all()}
+    lines, subtotal = [], 0
+    for pid, q in qty_by_id.items():
+        p = prods.get(pid)
+        if not p or p.price_cents <= 0:
+            raise AppError(400, "An item in your cart is no longer available")
+        if q > p.qty_on_hand:
+            raise AppError(409, f"Only {p.qty_on_hand} {p.name} left — change the quantity")
+        lines.append(CustomerOrderLine(product_id=p.id, name=p.name, qty=q, price_cents=p.price_cents))  # price from the store, never the browser
+        subtotal += q * p.price_cents
+    if subtotal < sh.min_order_cents:
+        raise AppError(400, f"Minimum order is ₱{sh.min_order_cents / 100:,.2f}")
+    fee = sh.delivery_fee_cents if ful == "delivery" else 0
+    token = secrets.token_urlsafe(18)
+    code = "".join(secrets.choice(CODE_CHARS) for _ in range(5))
+    o = CustomerOrder(store_id=store.id, code=code, token_hash=_token_hash(token), customer_name=data["name"].strip(), phone=data["phone"].strip(), fulfillment=ful,
+                      address=address or None, note=(data.get("note") or "").strip() or None, subtotal_cents=subtotal, delivery_fee_cents=fee, total_cents=subtotal + fee, lines=lines)
+    s.add(o)
+    s.flush()
+    audit(s, "online_order.placed", "customer_order", o.id, store.id, code=code, total=o.total_cents)
+    s.commit()
+    return {**customer_order_out(o, private=False), "token": token, "store": store.name}
+
+
+def public_order_status(s: Session, slug: str, code: str, token: str) -> dict:
+    sh, store = open_shop(s, slug)
+    o = s.scalar(select(CustomerOrder).where(CustomerOrder.store_id == store.id, CustomerOrder.code == code.upper()))
+    if not o or not secrets.compare_digest(o.token_hash, _token_hash(token)):
+        raise AppError(404, "Order not found")
+    return {**customer_order_out(o, private=False), "store": store.name}
+
+
+def list_customer_orders(s: Session, store_id: int, status: str | None) -> list[dict]:
+    q = select(CustomerOrder).where(CustomerOrder.store_id == store_id)
+    if status == "open":
+        q = q.where(CustomerOrder.status.in_(["new", "accepted", "ready"]))
+    elif status:
+        q = q.where(CustomerOrder.status == status)
+    return [customer_order_out(o) for o in s.scalars(q.order_by(CustomerOrder.created_at.desc()).limit(200)).all()]
+
+
+def get_customer_order(s: Session, oid: int) -> CustomerOrder:
+    o = s.get(CustomerOrder, oid)
+    if not o:
+        raise AppError(404, "Order not found")
+    return o
+
+
+def set_customer_order_status(s: Session, o: CustomerOrder, to: str) -> dict:
+    if to not in ORDER_FLOW.get(o.status, set()):
+        raise AppError(409, f"Can't change an order from {o.status} to {to}")
+    if to == "completed":  # stock leaves the shelf now; check again, it may have sold in the store meanwhile
+        for l in o.lines:
+            p = s.get(Product, l.product_id) if l.product_id else None
+            if p and l.qty > p.qty_on_hand:
+                raise AppError(409, f"Only {p.qty_on_hand} {p.name} in stock — adjust the order or restock first")
+        for l in o.lines:
+            p = s.get(Product, l.product_id) if l.product_id else None
+            if p:
+                move(s, p, -l.qty, "online_order", ref=o.code)
+    o.status = to
+    o.updated_at = utcnow()
+    audit(s, "online_order." + to, "customer_order", o.id, o.store_id, code=o.code)
+    s.commit()
+    return customer_order_out(o)

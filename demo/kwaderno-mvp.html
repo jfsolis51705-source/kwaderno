@@ -136,9 +136,15 @@ nav.bottom { display: none; }
 .rail-x .rx-ic b { position: absolute; top: -7px; right: -12px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px; background: var(--bad); color: #fff; font-size: .62rem; display: grid; place-items: center; }
 :root[data-layout="tablet"] nav.bottom { overflow-y: auto; }
 @media (max-height: 860px) {
-  :root[data-layout="tablet"] nav.bottom { gap: 2px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 10px; }
-  :root[data-layout="tablet"] nav.bottom a { min-height: 54px; gap: 2px; }
-  :root[data-layout="tablet"] nav.bottom a.rail-x { min-height: 46px; }
+  :root[data-layout="tablet"] nav#bottom { gap: 2px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 10px; }
+  :root[data-layout="tablet"] nav#bottom a { min-height: 54px; gap: 2px; }
+  :root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 46px; }
+}
+@media (max-height: 760px) {
+  :root[data-layout="tablet"] nav#bottom a { min-height: 48px; font-size: .74rem; }
+  :root[data-layout="tablet"] nav#bottom svg { width: 21px; height: 21px; }
+  :root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 42px; font-size: .66rem; }
+  :root[data-layout="tablet"] nav#bottom .rail-spacer { margin: 2px 10px; }
 }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
@@ -788,14 +794,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     }));
     // tablet side bar: quick shortcuts in the empty space at the bottom
     if (withIcons && document.documentElement.dataset.layout === "tablet" && view !== "admin" && S.ready) {
-      let tips = 0, low = 0; try { tips = computeTips()?.count || 0; } catch { /* no tips yet */ } try { low = lowCount(); } catch { /* not loaded */ }
+      let tips = 0, low = 0, toBuy = 0; try { tips = computeTips()?.count || 0; } catch { /* no tips yet */ } try { low = lowCount(); watchRestock(); toBuy = restockItems().filter((x) => !x.done).length; } catch { /* not loaded */ }
       const x = (key, label, icon, badge, isCur, onclick) => h("a", { href: "#" + key, class: "rail-x", "aria-current": isCur ? "page" : null, onclick: (e) => { e.preventDefault(); onclick(); } },
         h("span", { class: "rx-ic" }, svgIcon(icon), badge ? h("b", { class: "num", text: badge > 99 ? "99+" : String(badge) }) : null), label);
       container.append(h("div", { class: "rail-spacer", "aria-hidden": "true" }),
         x("home", L("Itanong", "Ask Kwaderno"), "M4 5h16v11H9l-5 4zM8 9h8M8 12h5", 0, false, () => { go("home"); setTimeout(() => { const q = document.getElementById("aiQ"); q?.scrollIntoView({ block: "center", behavior: "smooth" }); q?.focus({ preventScroll: true }); }, 60); }),
         x("home-tips", L("Smart tips", "Smart tips"), IC.tips, tips, view === "home" && sub === "tips", () => go("home", "tips")),
         x("home-history", L("Huling benta", "Recent sales"), IC.history, 0, view === "home" && sub === "history", () => go("home", "history")),
-        x("products-checklist", L("Paubos", "Low stock"), IC.low, low, view === "products" && sub === "checklist", () => go("products", "checklist")));
+        x("products", L("Paubos", "Low stock"), IC.low, low, view === "products" && !sub && productFilter === "low", () => { productFilter = "low"; go("products"); }),
+        x("products-checklist", L("Bibilhin", "Restock list"), "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 12l2 2 4-4M8.5 17h7", toBuy, view === "products" && sub === "checklist", () => go("products", "checklist")));
     }
   }
   function svgIcon(d) {

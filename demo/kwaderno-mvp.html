@@ -69,6 +69,12 @@ nav.bottom { display: none; }
 .tile .pwrap { position: relative; }
 .sell-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .sell-head h1 { margin: 0; margin-right: auto; }
+.pos-acts.in-head { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; }
+:root[data-layout="phone"].landscape .pos-acts.in-head { display: flex; flex-wrap: nowrap; }
+:root[data-layout="phone"].landscape .sell-head { flex-wrap: nowrap; }
+@media (max-width: 760px) { .pos-acts.in-head .lbl-opt { display: none; } .pos-acts.in-head .btn { padding: 6px 9px; } }
+.pos-acts.in-head .btn { min-height: 38px; padding: 6px 10px; font-size: .8rem; }
+.pos-acts.in-head .btn svg { width: 16px; height: 16px; }
 .sell-head .sell-hint { flex: 1 1 240px; min-width: 0; text-align: right; line-height: 1.3; }
 :root[data-layout="phone"].landscape .sell-head .sell-hint { font-size: .72rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cartchip { position: relative; }
@@ -3277,6 +3283,12 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       return box;
     };
     const dock = phoneDock();
+    const landActs = document.documentElement.dataset.layout === "phone" && document.documentElement.classList.contains("landscape");
+    const posActs = (extra = "") => h("div", { class: "pos-acts" + extra },
+      scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+      h("button", { class: "btn", "aria-label": "Custom item", onclick: customItem }, svgIcon(IC.tag), h("span", { class: "lbl-opt", text: tx("Custom item") })),
+      h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
+      h("button", { class: "btn", "aria-label": "Product", onclick: () => go("products", "new") }, svgIcon(IC.add), h("span", { class: "lbl-opt", text: tx("Product") })));
     const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); };
     const openCart = () => openDialog("Current sale", checkoutDialog());
     const searchBox = () => h("input", { type: "search", id: "sellSearch", placeholder: L("Hanapin o i-type ang barcode", "Search product or type barcode"), value: search, "aria-label": "Search products",
@@ -3285,7 +3297,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const items = c.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0);
     return h("div", { class: "view selling" + (c.lines.length ? " has-cart" : "") },
       h("div", { class: "sell-head" }, h("h1", { text: "Sell" }),
-        dock ? null : h("span", { class: "muted small sell-hint", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
+        dock || landActs ? null : h("span", { class: "muted small sell-hint", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
+        landActs ? posActs(" in-head") : null,
         dock ? h("button", { class: "btn sm" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + openTabs().length) : null,
         h("button", { class: "btn sm", "aria-label": sellViewMode === "grid" ? L("Ipakita bilang listahan", "Show as a list") : L("Ipakita bilang grid", "Show as a grid"), title: sellViewMode === "grid" ? "List" : "Grid",
           onclick: () => { sellViewMode = sellViewMode === "grid" ? "list" : "grid"; try { localStorage.setItem("kw-sellview", sellViewMode); } catch { /* ignore */ } render(); } }, sellViewMode === "grid" ? "☰" : "▦"),
@@ -3299,11 +3312,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), L("Bagong produkto", "Add product")))) : null,
       h("div", { class: "sell" },
         h("div", { class: "grid", style: "gap:10px" },
-          dock ? null : h("div", { class: "pos-acts" },
-            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
-            h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
-            h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
-            h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
+          dock || landActs ? null : posActs(),
           dock ? null : searchBox(),
           prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
           !prods.length ? h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))

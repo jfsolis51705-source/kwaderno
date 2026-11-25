@@ -429,11 +429,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     S.base = S.owner ? "" : `stores/${S.me}/`;
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
-    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
     ref("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
     db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
-    if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; if (view === "admin") render(); }, () => {});
+    if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; scheduleAuto(); if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
@@ -1021,7 +1021,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const KB_EN = {"grow-sales": {"q": "How can I grow my store's sales?", "bullets": ["Always keep your 10 best sellers in stock. An empty shelf is a sale that goes to the store next door.", "Add products that sell well in other stores (see Smart tips).", "Put best sellers and impulse buys (candy, cigarettes, soft drinks) at the front, near the counter.", "Make bundles, e.g. coffee + pandesal or noodles + egg.", "Take care of regulars: correct change, a clean store, and remember their names."], "steps": ["Ask here: “What should I restock?” and buy what is on the list.", "Pick one new product from Smart tips and try it in a small quantity."]}, "pricing": {"q": "How do I price my products?", "bullets": ["Start with the cost per piece: price of the case or pack ÷ pieces inside.", "Example only: a smaller markup on fast sellers, a bigger one on tingi and slow items.", "Compare with the usual price in other stores. Type the product name here to see it.", "Round to easy change (₱8 instead of ₱7.85).", "Remember: a 20% markup is only a 16.7% margin on the price."], "steps": ["Make sure every product has a cost in the app.", "Check your 5 best sellers: is their markup right?"]}, "markup-margin": {"q": "What is the difference between markup and margin?", "bullets": ["Markup = (price − cost) ÷ cost.", "Margin = (price − cost) ÷ price.", "Example: cost ₱10, price ₱12 → markup 20%, margin 16.7%.", "For a 20% margin: price = cost ÷ 0.80 (₱10 → ₱12.50)."], "steps": ["Use margin when checking whether your profit is enough."]}, "cash-missing": {"q": "Why do I have sales but no money?", "bullets": ["Unpaid utang: it is a sale, but the money hasn't come in.", "Money spent on new stock: it is in your products, not lost.", "Personal money taken from the drawer and not recorded.", "Expenses like electricity, transport and load.", "Missing items or wrong change."], "steps": ["Check the Cash ledger and your total utang.", "Record every withdrawal from the drawer as Cash out with a note."]}, "separate-money": {"q": "How do I separate store money from personal money?", "bullets": ["Pay yourself a fixed weekly “salary” instead of taking money whenever needed.", "Record every withdrawal for the household as Cash out.", "If you take products for the house, record them too (as a sale or cash out).", "Use a separate container or GCash account for the store."], "steps": ["Decide your weekly salary based on the net profit in Reports."]}, "restock-qty": {"q": "How much should I buy when I restock?", "bullets": ["Formula: daily sales × (days until delivery + buffer days).", "Example: 4 a day × (3 + 7) = 40, minus the stock you still have.", "Don't overstock slow products; it ties up your capital.", "Buy expiring items more often in smaller amounts."], "steps": ["Ask here: “What should I restock?”. The app calculates this for you."]}, "dead-stock": {"q": "What should I do with products that don't sell?", "bullets": ["Move them to the front or to eye level.", "Bundle them with a best seller.", "Lower the price a little to recover the cost.", "Don't buy more until they are gone.", "Ask the supplier if you can return or swap them."], "steps": ["See the list under “Which products are not selling?”."]}, "expiry": {"q": "How do I avoid expired products?", "bullets": ["FIFO: old stock in front, new stock behind.", "Record the expiry date at every stock-in.", "Check the list of items about to expire every week.", "Buy fewer of the slow items that expire.", "Never sell expired items; remove them from the shelf right away."], "steps": ["Open Expiry on Home and start with the nearest dates."]}, "utang-policy": {"q": "How do I manage customers' utang?", "bullets": ["Set a limit for each customer.", "Record every utang and payment in the app.", "Agree on a payment day, e.g. payday.", "Don't add more utang once someone is over the limit.", "Keep utang a small part of your sales."], "steps": ["Set limits for regular customers in Utang.", "Use Remind for a polite reminder."]}, "utang-collect": {"q": "How do I collect utang without a fight?", "bullets": ["Talk privately and calmly.", "Show the record so the amount is clear.", "Offer installments if they are struggling.", "Remind them on payday.", "Pause new utang until they pay."], "steps": ["Start with the largest and oldest utang."]}, "supplier": {"q": "Where and how can I buy stock cheaper?", "bullets": ["Compare prices from at least two suppliers.", "Buy fast sellers by the case or box.", "Look for a distributor or agent who delivers, to save on transport.", "Record the cost at every stock-in to see who is cheaper."], "steps": ["On your next buying trip, compare prices of your 5 best sellers."]}, "capital": {"q": "How can I increase my capital?", "bullets": ["Put part of the profit back into the store every week.", "Reduce slow stock and collect utang.", "If you borrow, use legitimate lenders: banks, cooperatives or microfinance. Avoid 5-6.", "Check first that your net profit can cover the payments."], "steps": ["Check your net profit this month in Reports."]}, "cut-expenses": {"q": "How do I cut store expenses?", "bullets": ["Find your biggest expense first.", "Electricity: fix the fridge or freezer setting and door seal; use LED bulbs.", "Transport: combine buying trips.", "Record every expense to see your true profit."], "steps": ["Ask here: “What are my expenses this month?”."]}, "records": {"q": "Why should I record every sale?", "bullets": ["To know your real profit, not a guess.", "To see what sells and what doesn't.", "To catch missing items or money.", "It helps when applying for a loan because you have proof of income."], "steps": ["Use Sell for every sale, even small ones."]}, "shrinkage": {"q": "How do I prevent missing stock or money?", "bullets": ["Count the drawer every day and compare with the Cash ledger.", "Count expensive items weekly (cigarettes, milk, liquor).", "Only one person handles the drawer per shift.", "Keep expensive small items behind the counter."], "steps": ["Count the drawer before closing tonight."]}, "display": {"q": "How should I arrange my store display?", "bullets": ["Best sellers and impulse buys at the front, near the counter.", "Group by type: drinks, canned goods, soap, snacks.", "Make prices easy to see.", "Keep the store clean and bright.", "Put new products at eye level."], "steps": ["This week, move your 5 best sellers to the most visible spot."]}, "new-products": {"q": "What new products should I add?", "bullets": ["Check Smart tips: products that sell well in other stores.", "Ask your regulars what they look for.", "Try a small quantity first.", "Check sales after 2 weeks before buying again."], "steps": ["Open Smart tips and pick one."]}, "services": {"q": "What services can I add to earn more?", "bullets": ["E-load and bills payment.", "Cash-in and cash-out as a registered e-wallet agent; follow their rules.", "Ice and cold drinks if you have a freezer.", "Keep service money separate from product money."], "steps": ["Find out which services your regulars ask for most."]}, "gcash-safe": {"q": "How do I accept GCash safely?", "bullets": ["Check your own GCash app that the money arrived before handing over the goods.", "Don't trust a screenshot alone.", "Record the reference number in the app.", "Never share your OTP or PIN with anyone."], "steps": ["Make it a habit to open your GCash app before handing over items."]}, "loyalty": {"q": "How do I keep customers coming back?", "bullets": ["Greet them and remember their names.", "Correct change and honest measures.", "Always stock their favorites.", "A small gift or extra on special occasions.", "Quick service even when busy."], "steps": ["This week, ask 3 regulars what they want you to add."]}, "competition": {"q": "A new store opened near me. What should I do?", "bullets": ["Find out what they don't have, and be strong there.", "Don't rush to cut prices; service and stock win.", "Stay open longer if you can.", "Offer delivery to neighbors."], "steps": ["Check if your sales dropped: ask “Did my sales drop this week?”."]}, "hours": {"q": "What time should my store open and close?", "bullets": ["Check Sales history for your busiest hours.", "Early morning for breakfast and coffee; evening for people coming home.", "Keep a consistent schedule so regulars know."], "steps": ["Track your sales times for a week before changing the schedule."]}, "raise-price": {"q": "How do I raise prices without losing regulars?", "bullets": ["Raise prices when your cost goes up, and say so honestly.", "Raise gradually, not all at once.", "Start with products people rarely price-compare.", "Stay reasonable compared with other stores."], "steps": ["Compare your price with the usual price in other stores before raising it."]}, "promos": {"q": "What promos work for a sari-sari store?", "bullets": ["Bundle: two products at a lower price.", "Buy more, save: e.g. 3 pieces at a special price.", "Stamp card for regulars: a free small item after several purchases.", "Make sure you still profit after the discount."], "steps": ["This week, try a bundle of a slow item and a best seller."]}, "tingi": {"q": "Is tingi or repacking worth it?", "bullets": ["Higher profit, but it takes time and causes some waste.", "Every repack should be clean and labeled.", "Measure the weight or size correctly.", "Check your local rules for repacking food."], "steps": ["Calculate the profit per pack, including bags and time."]}, "stock-count": {"q": "How often should I count my stock?", "bullets": ["Weekly for expensive and fast-moving items.", "Monthly for the whole store.", "Compare the count with the app and correct it with a reason."], "steps": ["This week, count your 10 most expensive products."]}, "reorder-level": {"q": "How do I set a reorder level?", "bullets": ["Reorder level = daily sales × days until delivery + a small reserve.", "Example: 3 a day × 3 days + 3 = 12.", "Higher for best sellers, lower for slow items."], "steps": ["Set the reorder level of your 10 best sellers in Stock."]}, "pnl": {"q": "How do I know if my store is making a profit?", "bullets": ["Net profit = sales − cost of goods sold − expenses.", "Buying stock is not an expense; it becomes the cost of what you sell.", "Check monthly, not just daily.", "Every product needs a cost for the numbers to be right."], "steps": ["Open Profit & loss in Reports."]}, "cash-flow": {"q": "How do I avoid running out of money for restocking?", "bullets": ["Set aside part of each day's sales for restocking.", "Limit customers' utang.", "Don't overstock slow items.", "Use “Pay later” with suppliers if agreed, and pay on time."], "steps": ["Set aside a fixed amount from tomorrow's sales."]}, "permits": {"q": "What permits does a sari-sari store need?", "bullets": ["Usually: a business name from DTI, a barangay clearance, a business permit from the municipality or city, and BIR registration.", "Rules differ in each LGU.", "There are programs for small businesses; ask a DTI Negosyo Center."], "steps": ["Visit or call your municipality or a DTI Negosyo Center for the exact list."]}, "taxes": {"q": "Do I need to pay taxes?", "bullets": ["A registered business has obligations with the BIR.", "There are simplified options for small businesses.", "Ask the BIR (Revenue District Office) or an accountant about your situation.", "Keep records of sales and expenses; the app's Reports help."], "steps": ["Ask your BIR RDO what applies to your store."]}, "staff": {"q": "How do I manage a helper or staff at the store?", "bullets": ["Clear duties and hours.", "Count the drawer at the start and end of every shift.", "Teach them to record every sale in the app.", "Give a small incentive when the count is right."], "steps": ["Count the drawer at every change of shift."]}, "seasons": {"q": "How do I prepare for payday, school opening and Christmas?", "bullets": ["Add stock of best sellers before payday (15th and end of month).", "School opening: school supplies and baon.", "December: noche buena items and gifts.", "Don't overdo it; still base it on how fast items sell."], "steps": ["Check last payday's sales in Sales history."]}, "loan": {"q": "How do I get a loan for my store?", "bullets": ["Prepare records of sales and profit; the app's Reports help.", "Compare interest and the total you will repay.", "Only legitimate lenders: banks, cooperatives, microfinance.", "Borrow for stock that sells, not for personal spending."], "steps": ["Download the last 3 months of Reports as proof of sales."]}, "delivery": {"q": "How do I sell online or deliver to neighbors?", "bullets": ["Create a neighborhood group chat for orders.", "Send a list of available products.", "Set a minimum order or a small delivery fee.", "Make sure payment arrived before sending."], "steps": ["Start with 10 regulars who live nearby."]}, "app-help": {"q": "What can I ask here?", "bullets": ["About your data: sales, profit, restock, best sellers, utang, bills, expiry, cash and expenses.", "About one product: type its name.", "Business advice: pricing, suppliers, capital, utang, display, promos, permits and more.", "Business questions only."], "steps": ["Try: “How can I grow my sales?”"]}};
   // The answer text in the chosen language; English falls back to Tagalog when an admin answer has no English yet.
   const kbText = (e) => lang === "en" && e.en?.q ? e.en : e;
-  const KB_STOP = new Set([...STOP, "ano", "paano", "pano", "bakit", "saan", "kailan", "sino", "magkano", "gaano", "ilan", "ako", "kung", "para", "nang", "po", "naman", "lang", "kaya", "yung", "iyong", "ito", "iyan", "may", "ay", "din", "rin", "dapat", "pwede", "puwede", "gagawin", "how", "what", "why", "when", "where", "which", "can", "does", "you", "your", "the", "are", "kami", "tayo", "natin", "namin", "akin", "aking", "kong", "kang", "nga", "daw", "raw", "pala", "talaga", "yun", "dito", "doon", "nito", "nyo", "ninyo", "sila", "nila", "ko", "ba", "mga", "ang", "sa", "ng", "na", "at", "o", "is", "to", "my", "and", "for", "this", "that", "with"]);
+  const KB_STOP = new Set([...STOP, "ano", "paano", "pano", "bakit", "saan", "kailan", "sino", "magkano", "gaano", "ilan", "ako", "kung", "para", "nang", "po", "naman", "lang", "kaya", "yung", "iyong", "ito", "iyan", "may", "ay", "din", "rin", "dapat", "pwede", "puwede", "gagawin", "how", "what", "why", "when", "where", "which", "can", "does", "you", "your", "the", "are", "kami", "tayo", "natin", "namin", "akin", "aking", "kong", "kang", "nga", "daw", "raw", "pala", "talaga", "yun", "dito", "doon", "nito", "nyo", "ninyo", "sila", "nila", "ko", "ba", "mga", "ang", "sa", "ng", "na", "at", "o", "is", "to", "my", "and", "for", "this", "that", "with", "did", "has", "have", "had", "was", "were", "will", "would", "get", "got", "there", "they", "them", "from", "about", "into", "yan", "iyon", "niyo", "kayo", "siya"]);
   // Light Tagalog stemmer: "nabebenta" / "magbenta" → "benta", "mapapalaki" / "palakihin" / "lumaki" → "laki".
   function stem(w) {
     let x = w;
@@ -1093,7 +1093,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const long = [...B].filter((w) => !w.startsWith("~") && w.length >= 5);
     return qt.some((t) => t.length >= 5 && long.some((w) => Math.abs(w.length - t.length) <= 1 && lev(w, t) <= 1)) ? null : "unrelated";
   }
-  const HOWTO = /\b(paano|pano|how|bakit|why|tips?|payo|advice|paraan|ideas?|ideya|gagawin|dapat ba|tulong|help|suggest|mungkahi|diskarte|strategy|ways? to)\b/;
+  const HOWTO = /\b(paano|pano|how(?!\s+(much|many))|bakit|why|tips?|payo|advice|paraan|ideas?|ideya|gagawin|dapat ba|tulong|help|suggest|mungkahi|diskarte|strategy|ways? to)\b/;
   const noSales = (title) => ({ title, lines: [L("Wala pang naitalang benta sa app, kaya hindi ako makapagbigay ng maaasahang sagot.", "No sales are recorded in the app yet, so I can't give a reliable answer.")], evidence: [], assumptions: [], action: L("Mag-record muna ng benta sa Sell.", "Record sales in Sell first."), confidence: "low" });
   const sumTotal = (arr) => arr.reduce((x, y) => x + y.total, 0);
   // Each answer returns: title, lines (the answer), evidence, assumptions, action, and optionally confidence.
@@ -1266,13 +1266,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     let intent = force || null, alts = [];
     if (!intent) {
       const scored = INTENTS.map((it) => ({ it, score: it.words.reduce((x, w) => x + phraseScore(qt, toks(w).join(" ")) * (toks(w).length > 1 ? 2 : 1), 0) })).sort((x, y) => y.score - x.score);
-      const dataTop = scored[0].score > 0 ? scored[0] : null;
+      // A single keyword only counts for short questions ("Magkano ang benta ko?"); longer or "how to" questions need a strong match,
+      // so "water refilling station" is not answered with the bills screen just because it says "water".
+      const terms = qt.filter((w) => w.length >= 3 && !KB_STOP.has(w));
+      const dataTop = scored[0].score > 0 && (scored[0].score >= 2 || (!howto && terms.length <= 3)) ? scored[0] : null;
       if (prod && !(howto && top && top.cov >= 0.5)) intent = "product";
       else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top && m.cov >= 0.6 && m.tcov >= 0.5).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2));
       else if (dataTop) { intent = dataTop.it.id; alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= dataTop.score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label })); }
     }
     if (!intent) return { kind: "none", title: L("Wala pa akong sagot dito", "I don't have an answer for this yet"),
-      lines: [L("Naipadala ang tanong mo sa KELSON (walang pangalan). Kapag may sagot na, lalabas ito dito para sa lahat ng tindahan.", "Your question was sent to KELSON (no names). When there is an answer, it will show here for every store."), L("Samantala, subukan ang mga tanong sa ibaba.", "Meanwhile, try the questions below.")],
+      lines: [L("Naipadala ang tanong mo sa KELSON (walang pangalan). Kapag may sagot na, babalik ito dito sa tindahan mo — at magagamit din ng lahat ng tindahan.", "Your question was sent to KELSON (no names). When it is answered, the answer comes back here to your store — and every store can use it."), L("Samantala, subukan ang mga tanong sa ibaba.", "Meanwhile, try the questions below.")],
       evidence: [], assumptions: [], action: null, suggest: askExamples() };
     const label = tx(INTENTS.find((i) => i.id === intent)?.label || "Sagot");
     const res = Q.sales === 0 && NEEDS_SALES.has(intent) ? noSales(label) : ANSWERS[intent]({ q, qt, Q, period: periodOf(qt), prod });
@@ -1320,11 +1323,29 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       rec.start(); voice.listening = true; micState();
     } catch { toast(L("Hindi masimulan ang boses", "Couldn't start voice input")); }
   }
-  // Turn an answer into something a voice reads well: pesos as words, no symbols or emoji.
+  // Numbers as Tagalog words, so any voice says them the Filipino way ("dalawang daan apatnapu't tatlong piso").
+  const TL_ONES = ["", "isa", "dalawa", "tatlo", "apat", "lima", "anim", "pito", "walo", "siyam"];
+  const TL_TEENS = ["sampu", "labing-isa", "labindalawa", "labintatlo", "labing-apat", "labinlima", "labing-anim", "labimpito", "labingwalo", "labinsiyam"];
+  const TL_TENS = ["", "", "dalawampu", "tatlumpu", "apatnapu", "limampu", "animnapu", "pitumpu", "walumpu", "siyamnapu"];
+  const tlLink = (w) => (/[aeiou]$/i.test(w) ? w + "ng" : w + " na"); // tatlo → tatlong, apat → apat na
+  const tl99 = (n) => (n < 10 ? TL_ONES[n] : n < 20 ? TL_TEENS[n - 10] : TL_TENS[Math.floor(n / 10)] + (n % 10 ? "'t " + TL_ONES[n % 10] : ""));
+  const tl999 = (n) => { const hd = Math.floor(n / 100), r = n % 100; return [hd ? (hd === 1 ? "isang daan" : /[aeiou]$/.test(TL_ONES[hd]) ? TL_ONES[hd] + "ng daan" : TL_ONES[hd] + " na raan") : "", r ? tl99(r) : ""].filter(Boolean).join(" "); };
+  function tlNum(x) {
+    const n = Math.floor(Math.abs(x)); if (!n) return "sero";
+    const m = Math.floor(n / 1e6), t = Math.floor((n % 1e6) / 1000), r = n % 1000;
+    return [m ? (m === 1 ? "isang milyon" : tlLink(tl999(m)) + " milyon") : "", t ? (t === 1 ? "isang libo" : tlLink(tl999(t)) + " libo") : "", r ? tl999(r) : ""].filter(Boolean).join(" ");
+  }
+  // Turn an answer into something a voice reads well: pesos and numbers as words, no symbols, sizes or emoji.
   function speechText(r) {
     const parts = [r.title, ...(r.lines || []), ...(r.steps?.length ? [L("Mga hakbang:", "Steps:"), ...r.steps] : []), r.mine ? L("Para sa tindahan mo: ", "For your store: ") + [r.mine.title, ...r.mine.lines, r.mine.action].filter(Boolean).join(". ") : null, r.action];
-    return parts.filter(Boolean).join(". ").replace(/[−-]?₱\s?([\d,]+)(\.(\d{2}))?/g, (m, a, _d, c) => `${a}${c && c !== "00" ? ` ${L("at", "and")} ${c} ${L("sentimo", "centavos")}` : ""} ${L("piso", "pesos")}`)
-      .replace(/×/g, L(" beses ", " times ")).replace(/~/g, L("mga ", "about ")).replace(/[→•📊📝🔥📦🏷️🐢⭐✨🧠]/gu, " ").replace(/\.\s*\./g, ".").replace(/\s+/g, " ").slice(0, 1900);
+    let t = parts.filter(Boolean).join(". ").replace(/[→•📊📝🔥📦🏷️🐢⭐✨🧠]/gu, " ").replace(/\b\d+(\.\d+)?\s?(g|ml|kg|mL|L)\b/g, "").replace(/×/g, L(" beses ", " times ")).replace(/~/g, L("mga ", "about "));
+    if (lang === "en") return t.replace(/[−-]?₱\s?([\d,]+)(\.(\d{2}))?/g, (m0, a, _d, c) => `${a}${c && c !== "00" ? ` and ${c} centavos` : ""} pesos`).replace(/\.\s*\./g, ".").replace(/\s+/g, " ").slice(0, 1900);
+    const num = (v) => Number(String(v).replace(/,/g, ""));
+    t = t.replace(/[−-]?₱\s?([\d,]+)(\.(\d{2}))?/g, (m0, a, _d, c) => `${num(a) ? tlLink(tlNum(num(a))) : "sero"} piso${c && c !== "00" ? ` at ${tlLink(tlNum(num(c)))} sentimo` : ""}`)
+      .replace(/(\d+)\s?%/g, (m0, a) => `${tlNum(num(a))} porsyento`)
+      .replace(/\b(\d+)\s?(araw|pcs|piraso|benta|item|customer|bill|batch|produkto|beses)\b/g, (m0, a, u) => `${tlLink(tlNum(num(a)))} ${u === "pcs" ? "piraso" : u}`)
+      .replace(/(^|[^\w-])(\d{1,6})(?![\w%])(?!\s+[A-Z])/g, (m0, pre, a) => `${pre}${tlNum(num(a))}`); // brand numbers before a name ("555 Tuna") stay as they are
+    return t.replace(/\.\s*\./g, ".").replace(/\s+/g, " ").slice(0, 1900);
   }
   const FEMALE_V = /female|woman|samantha|karen|moira|tessa|fiona|victoria|serena|zira|hazel|susan|libby|kate|blessica|aria|jenny|sonia|maisie|natasha|-x-fie|-x-gba|-x-gbc|-x-sfg/i;
   const MALE_V = /(?<!fe)male|\bman\b|daniel|alex\b|fred|arthur|oliver|thomas|david|mark|george|ryan|angelo|guy|william|-x-rjs|-x-gbd|-x-gbb|-x-fid/i;
@@ -1348,10 +1369,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     window.speechSynthesis?.cancel(); voice.tts?.stop?.();
     const text = speechText(r), en = lang === "en", want = en ? /^en/i : /^(fil|tl)/i, uk = en && voice.style === "uk", friendly = !en && voice.tlStyle !== "std";
     const gender = en ? voice.enGender : voice.tlGender;
-    const v = pickVoice(window.speechSynthesis?.getVoices?.() || [], want, gender, uk);
+    const all = window.speechSynthesis?.getVoices?.() || [];
+    let v = pickVoice(all, want, gender, uk);
+    // No Filipino voice on this device: use the closest-sounding one (Indonesian, Malay, Spanish, then English), never a random default
+    if (!en && !v.voice) for (const re of [/^id/i, /^ms/i, /^es/i, /^en[-_]PH/i, /^en/i]) { v = pickVoice(all, re, gender, false); if (v.voice) { v.substitute = true; break; } }
+    voice.using = v.voice ? `${v.voice.name} (${v.voice.lang})` : ""; voice.substitute = !!v.substitute;
     if (window.speechSynthesis && (v.voice || !voice.tts)) {
       const u = new SpeechSynthesisUtterance(text); try { if (v.voice) u.voice = v.voice; } catch { /* keep the default voice */ }
-      u.lang = v.voice?.lang || (en ? (uk ? "en-GB" : "en-PH") : "fil-PH");
+      u.lang = v.voice?.lang || (en ? (uk ? "en-GB" : "en-PH") : all.length ? "en-US" : "fil-PH");
       let pitch = uk ? 0.85 : friendly ? 1.12 : 1;
       if (!v.genderMatched) pitch = gender === "male" ? Math.min(pitch, 0.8) : Math.max(pitch, 1.18); // no voice of that gender on this device: shift the pitch instead
       u.rate = uk ? 0.92 : friendly ? 1.02 : 0.95; u.pitch = pitch;
@@ -1472,13 +1497,37 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("select", { id: "aiVoiceEnG", "aria-label": L("Babae o lalaki", "Female or male"), style: "margin-top:6px", onchange: (e) => { voice.enGender = e.target.value; try { localStorage.setItem("kw-voice-en-g", e.target.value); } catch { /* ignore */ } } },
           h("option", { value: "female", text: L("Babae", "Female"), selected: voice.enGender === "female" }), h("option", { value: "male", text: L("Lalaki", "Male"), selected: voice.enGender === "male" })),),
       h("p", { class: "muted small", style: "margin:0", text: L("Nakadepende ang boses sa mga boses na naka-install sa phone mo. Kung walang boses na babae o lalaki, iniiba na lang ang tono.", "Voices depend on what is installed on your phone. If there is no female or male voice, the pitch is adjusted instead.") }),
+      (() => { const fil = (window.speechSynthesis?.getVoices?.() || []).some((x) => /^(fil|tl)/i.test(x.lang));
+        return h("div", { class: fil ? "banner small" : "note", style: "display:grid;gap:6px" },
+          h("div", { text: fil ? L("May boses na Filipino ang device na ito. 👍", "This device has a Filipino voice. 👍")
+            : L("Walang boses na Filipino ang device na ito, kaya kahawig na boses ang gamit (Indonesian o Malay). Para sa tunay na Tagalog accent: Android phone (Google speech) o Microsoft Edge sa computer.", "This device has no Filipino voice, so a similar one is used (Indonesian or Malay). For a real Tagalog accent: an Android phone (Google speech) or Microsoft Edge on a computer.") }),
+          h("div", { class: "pills", style: "align-items:center" },
+            h("button", { class: "btn sm", id: "aiVoiceTest", onclick: () => { withLang("tl", () => speakIn({ lang: "tl", title: "Magandang araw po!", lines: ["Ang benta ninyo ngayon ay ₱250.00."] })); setTimeout(() => { const el = document.getElementById("aiVoiceUsing"); if (el) el.textContent = voice.using ? L("Gamit: ", "Using: ") + voice.using : ""; }, 50); } }, L("▶ Subukan ang boses na Tagalog", "▶ Test the Tagalog voice")),
+            h("span", { class: "small muted", id: "aiVoiceUsing" }))); })(),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "aiAutoChk", checked: voice.auto, onchange: (e) => { voice.auto = e.target.checked; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ } if (!voice.auto) { window.speechSynthesis?.cancel(); voice.speaking = false; } render(); } }),
         L("Basahin nang malakas ang bawat sagot", "Read every answer aloud")),
       h("button", { class: "btn primary big", onclick: () => dlg.close() }, L("Tapos", "Done")));
     draw(); openDialog(L("Mga setting ng Kwaderno", "Kwaderno settings"), body);
   }
+  // Answers that arrived for this store's own earlier questions (the admin and Claude answered them).
+  function answersBack() {
+    const all = kbAll(), out = [];
+    for (const x of S.questions) {
+      if (!(x.kind === "none" || x.kind === "kb-weak") || x.seenAt) continue;
+      const k = fold(x.q), e = all.find((y) => (y.alts || []).some((a) => fold(a) === k));
+      if (e && (x.kind === "none" || e.id !== x.kb)) out.push({ x, e });
+    }
+    return out.sort((a, b) => String(b.x.at).localeCompare(String(a.x.at)));
+  }
+  function openAnswerBack(x, e) {
+    askState.q = x.q; askState.draft = x.q; askState.qid = x.id; askState.voted = null;
+    const rl = replyLangFor(x.q); askState.res = withLang(rl, () => answerQuestion(x.q, "kb:" + e.id)); if (askState.res) askState.res.lang = rl;
+    ref("questions/" + x.id).update({ kind: "kb", kb: e.id, seenAt: new Date().toISOString() }).catch(() => {});
+    render(); if (voice.auto && askState.res) speakNow(askState.res);
+  }
   function aiCard() {
     voiceInit();
+    const back = answersBack(), pending = S.questions.filter((x) => x.kind === "none" && !x.seenAt).length - back.filter((b) => b.x.kind === "none").length;
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
       h("div", { style: "display:flex;gap:6px;align-items:center" }, h("h2", { text: "🧠 Tanong kay Kwaderno", style: "margin-right:auto" }),
@@ -1490,6 +1539,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("button", { class: "btn", id: "aiMic", "aria-label": L("Magsalita", "Speak"), title: L("Magsalita", "Speak"), "aria-pressed": String(voice.listening), onclick: listen }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
         h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
       !askState.res ? h("div", { class: "cats" }, askExamples().slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
+      back.length ? h("div", { class: "note", style: "display:grid;gap:6px;background:var(--accent-soft);color:var(--fg)" },
+        h("b", { text: L(`📬 May sagot na sa ${back.length} tanong mo`, `📬 ${back.length} of your questions answered`) }),
+        back.slice(0, 5).map(({ x, e }) => h("button", { class: "btn sm", style: "justify-content:flex-start;text-align:left", onclick: () => openAnswerBack(x, e) }, "“" + x.q + "” — " + L("Tingnan", "Open")))) : null,
+      pending > 0 && !back.length ? h("div", { class: "muted small", text: L(`⏳ ${pending} tanong mo ang hinihintay pa ang sagot mula sa KELSON.`, `⏳ ${pending} of your questions are waiting for an answer from KELSON.`) }) : null,
       askState.res ? resultView(askState.res) : null,
       h("p", { class: "muted small", style: "margin:0", text: "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan." }));
   }
@@ -3542,25 +3595,41 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
     await markResolved([g.k]); if (!quiet) toast("Linked — stores will get this answer (no AI used)");
   }
   let autoBusy = false;
-  async function autoAnswer(open, btn) {
-    if (autoBusy) return; autoBusy = true; btn.disabled = true;
+  // Open question groups: unanswered, partly answered or rated unhelpful, not already handled.
+  function openGroups() {
+    const resolved = S.kbMeta.resolved || {}, drafts = S.kbMeta.drafts || [];
+    return askGroups().filter((g) => (g.none > 0 || g.weak > 0 || g.down > g.up) && !(resolved[g.k] && resolved[g.k] >= g.last) && !drafts.some((d) => d.k === g.k)).sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+  }
+  // Auto mode: while this admin page is open, new questions are answered within seconds (reuse first, Claude only for new topics).
+  const AI_DAILY_CAP = 50;
+  let autoT = null;
+  function scheduleAuto() { clearTimeout(autoT); autoT = setTimeout(() => { if (S.owner && S.kbMeta.auto !== false && !autoBusy && openGroups().length) autoAnswer(openGroups(), null, true); }, 3000); }
+  async function autoAnswer(open, btn, background) {
+    if (autoBusy) return; autoBusy = true; if (btn) btn.disabled = true;
+    const today = todayKey(), used = S.kbMeta.aiDay === today ? S.kbMeta.aiUsed || 0 : 0, publish = S.kbMeta.autoPublish !== false;
+    let published = 0;
     const drafts = [...(S.kbMeta.drafts || [])], done = [];
     let reused = 0, drafted = 0, calls = 0, skipped = 0;
     try {
       for (const g of open) {
         if (drafts.some((d) => d.k === g.k)) continue;
-        btn.textContent = `Working… ${reused + drafted + skipped}/${open.length}`;
+        if (btn) btn.textContent = `Working… ${reused + drafted + skipped}/${open.length}`;
         const m = kbBest(g.q);
         if (m && m.cov >= 0.6 && m.tcov >= 0.6) { await linkToExisting(m.e, g, true); reused++; continue; }
-        if (calls >= 10) continue;
+        if (calls >= 10 || used + calls >= AI_DAILY_CAP) continue;
         calls++;
         const r = await claudeDraft(g.q, [...g.variants]);
         if (r.offtopic) { skipped++; done.push(g.k); continue; }
         if (r.bullets.length < 2) { skipped++; continue; }
-        drafts.push({ ...r, k: g.k, variants: [...g.variants], n: g.n, stores: g.stores.size, at: new Date().toISOString() }); drafted++;
+        // Permits, tax and legal answers always wait for the admin; everything else can go straight to the stores.
+        if (publish && r.cat !== "Permit at buwis") {
+          await S.db.doc("network/kb/items/kb-" + uid().replace(/-/g, "").slice(0, 10)).set({ q: r.q, cat: r.cat, kw: r.kw, bullets: r.bullets, steps: r.steps, link: r.link, en: r.en,
+            alts: [...g.variants].slice(-60), status: "published", source: "ai-auto", updatedAt: new Date().toISOString(), by: S.me || null });
+          await markResolved([g.k]); published++;
+        } else { drafts.push({ ...r, k: g.k, variants: [...g.variants], n: g.n, stores: g.stores.size, at: new Date().toISOString() }); drafted++; }
       }
-      await saveKbMeta({ drafts: drafts.slice(-100), dismissed: [...new Set([...(S.kbMeta.dismissed || []), ...done])] });
-      toast(`Reused ${reused} existing answer(s) without AI · ${drafted} new draft(s) from Claude to review${skipped ? ` · ${skipped} not business` : ""}`);
+      await saveKbMeta({ drafts: drafts.slice(-100), dismissed: [...new Set([...(S.kbMeta.dismissed || []), ...done])], aiDay: today, aiUsed: used + calls });
+      if (reused || drafted || published || skipped) toast(`${background ? "Auto: " : ""}reused ${reused} answer(s) without AI · ${published} answered by Claude and sent to stores · ${drafted} waiting for your review${skipped ? ` · ${skipped} not business` : ""}`);
     } catch (e) { toast(claudeError(e)); }
     finally { autoBusy = false; render(); }
   }
@@ -3615,8 +3684,7 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
     const groups = askGroups(), stats = kbStats(), entries = kbAll(), byId = new Map(entries.map((e) => [e.id, e]));
     const asks = S.stores.flatMap((st) => st.asks || []), rated = asks.filter((a) => a.helpful != null), up = rated.filter((a) => a.helpful).length;
     const kinds = (k) => asks.filter((a) => (a.kind || "data") === k).length;
-    const resolved = S.kbMeta.resolved || {}, drafts = S.kbMeta.drafts || [];
-    const open = groups.filter((g) => (g.none > 0 || g.weak > 0 || g.down > g.up) && !(resolved[g.k] && resolved[g.k] >= g.last) && !drafts.some((d) => d.k === g.k)).sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+    const drafts = S.kbMeta.drafts || [], open = openGroups(), aiUsed = S.kbMeta.aiDay === todayKey() ? S.kbMeta.aiUsed || 0 : 0;
     const top = [...groups].sort((a, b) => b.n - a.n);
     const pill = (k, l) => h("button", { "aria-pressed": String(kbTab === k), onclick: () => { kbTab = k; render(); } }, l);
     const groupRow = (g) => { const e = g.kb ? byId.get(g.kb) : null, m = kbTab === "open" && (g.none || g.weak || !e) ? kbBest(g.q) : null; return h("li", { style: "flex-wrap:wrap" },
@@ -3638,7 +3706,11 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
         kpiBox("Needs an answer", String(open.length), "Unanswered or rated unhelpful"),
         kpiBox("Drafts to review", String(drafts.length), "Written by Claude, not live yet"),
         kpiBox("Helpful", rated.length ? Math.round((up / rated.length) * 100) + "%" : "—", `${rated.length} rating(s)`)),
-      h("div", { class: "banner small" }, h("b", { text: "How it works: " }), "stores answer offline from their own data and these guides, with no AI. Questions they can't answer come here. Auto-answer first reuses an existing answer when one fits (no AI cost), and only asks Claude for new topics, using anonymous totals from all stores. Claude's drafts wait for your approval; once published, every store's offline brain knows it."),
+      h("div", { class: "card", style: "display:flex;flex-wrap:wrap;gap:14px;align-items:center" },
+        h("label", { style: "display:flex;gap:8px;align-items:center;font-weight:600" }, h("input", { type: "checkbox", id: "kbAuto", checked: S.kbMeta.auto !== false, onchange: (e) => saveKbMeta({ auto: e.target.checked }).then(() => { if (e.target.checked) scheduleAuto(); render(); }) }), "Answer new questions automatically"),
+        h("label", { style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "kbAutoPub", checked: S.kbMeta.autoPublish !== false, onchange: (e) => saveKbMeta({ autoPublish: e.target.checked }).then(() => render()) }), "Send Claude's answers to stores right away (permits, tax and legal always wait for you)"),
+        h("span", { class: "muted small", style: "margin-left:auto", text: `Claude today: ${aiUsed}/${AI_DAILY_CAP}` })),
+      h("div", { class: "banner small" }, h("b", { text: "How it works: " }), "stores answer offline from their own data and these guides, with no AI. Questions they can't answer come here and, while this page is open, are answered automatically. Auto-answer first reuses an existing answer when one fits (no AI cost), and only asks Claude for new topics, using anonymous totals from all stores. Claude's drafts wait for your approval; once published, every store's offline brain knows it."),
       drafts.length ? h("div", { class: "card" }, h("h2", { text: `Claude drafts to review (${drafts.length})`, style: "margin-bottom:6px" }),
         h("ul", { class: "list" }, drafts.map((dr) => h("li", { style: "flex-wrap:wrap" },
           h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: dr.q }), h("div", { class: "muted small", text: `${dr.cat} · asked ${dr.n}× by ${dr.stores} store(s) · ${dr.bullets[0] || ""}` })),
@@ -3648,7 +3720,7 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
       kbTab === "kb" ? h("div", { class: "card" },
         h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("input", { type: "search", id: "kbSearch", placeholder: "Search answers", value: kbFilter, oninput: (e) => { kbFilter = e.target.value; render(); } }), h("button", { class: "btn primary", onclick: () => kbEditor(null, null) }, "+ New answer")),
         h("ul", { class: "list" }, list.map((e) => { const st = stats.get(e.id); return h("li", { style: "flex-wrap:wrap" },
-          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: e.q }), h("div", { class: "muted small", text: [e.cat, e.source === "admin" ? (e.origin === "ai-approved" ? "Claude, approved" : "KELSON") : "Starter", e.en?.q ? "TL + EN" : "TL only", st ? `used ${st.n}×` : "not used yet", st && (st.up || st.down) ? `👍 ${st.up} · 👎 ${st.down}` : null].filter(Boolean).join(" · ") })),
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: e.q }), h("div", { class: "muted small", text: [e.cat, e.source === "admin" ? (e.origin === "ai-approved" ? "Claude, approved" : e.origin === "ai-auto" ? "Claude, automatic" : "KELSON") : "Starter", e.en?.q ? "TL + EN" : "TL only", st ? `used ${st.n}×` : "not used yet", st && (st.up || st.down) ? `👍 ${st.up} · 👎 ${st.down}` : null].filter(Boolean).join(" · ") })),
           h("div", { class: "pills" }, h("button", { class: "btn sm", onclick: () => kbEditor(e, null) }, "Edit"), h("button", { class: "btn sm", onclick: () => setKbStatus(e, "hidden") }, "Hide"))); })),
         hidden.length ? h("details", { style: "margin-top:10px" }, h("summary", { class: "small", text: `Hidden answers (${hidden.length})` }),
           h("ul", { class: "list" }, hidden.map((e) => h("li", {}, h("span", { class: "grow", text: e.q || e.id }), h("button", { class: "btn sm", onclick: () => setKbStatus({ ...(STARTER_KB.find((x) => x.id === e.id) || {}), ...e }, "published") }, "Show again"))))) : null)

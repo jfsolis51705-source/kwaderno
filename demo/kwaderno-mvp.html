@@ -119,6 +119,9 @@ nav.bottom { display: none; }
   padding: 12px 6px 12px 8px; display: grid; gap: 4px; justify-items: center; box-shadow: -4px 4px 14px rgba(0,0,0,.2); font-weight: 700; }
 .sd-tab svg { width: 20px; height: 20px; }
 .sd-wrap.open .sd-tab { opacity: 0; pointer-events: none; }
+:root[data-layout="tablet"] .sd-tab { display: none; } /* tablets use the button at the end of the category row */
+.sd-open { flex: none; white-space: nowrap; }
+:root[data-layout="tablet"] .sd-panel { width: min(420px, 45vw); }
 :root[data-layout="phone"].framed .sd-wrap { position: absolute; }
 @media (prefers-reduced-motion: reduce) { .sd-panel, .sd-back { transition: none; } }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
@@ -735,7 +738,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     root.classList.toggle("framed-tab-land", framedTab && tabLand);
     root.classList.toggle("landscape", (framed && landPreview) || (framedTab ? tabLand : !framed && layout !== "desktop" && innerWidth > innerHeight));
     const t = $("#layoutToggle");
-    t.hidden = narrow;
+    t.hidden = narrow || isTablet(); // the view switcher is for previewing on a computer, not for real phones and tablets
     const nextMode = view === "admin" ? (choice === "phone" ? "desktop" : "phone") : NEXT_LAYOUT[choice];
     t.textContent = `Switch to ${LAYOUT_NAME[nextMode]} view`;
   }
@@ -744,7 +747,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     render();
   });
   let lastDock = null;
-  window.addEventListener("resize", () => { applyLayout(); const d = document.documentElement.dataset.layout === "phone" && !document.documentElement.classList.contains("landscape"); if (view === "sell" && lastDock !== null && d !== lastDock) render(); lastDock = d; });
+  window.addEventListener("resize", () => { applyLayout(); const r = document.documentElement, d = r.dataset.layout + (r.classList.contains("landscape") ? "-land" : ""); if (view === "sell" && lastDock !== null && d !== lastDock) render(); lastDock = d; });
 
   // ---------- dialog ----------
   const dlg = $("#dlg");
@@ -3225,8 +3228,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   let sellViewMode = (() => { try { return localStorage.getItem("kw-sellview") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
   const phoneDock = () => document.documentElement.dataset.layout === "phone" && !document.documentElement.classList.contains("landscape");
   let sellDrawerOpen = false;
+  // phones and tablets held sideways: photos full screen, actions in the swipe-in side panel
+  const sellDrawerLayout = () => { const r = document.documentElement; return ["phone", "tablet"].includes(r.dataset.layout) && r.classList.contains("landscape"); };
   (() => {
-    const inLand = () => view === "sell" && document.documentElement.dataset.layout === "phone" && document.documentElement.classList.contains("landscape");
+    const inLand = () => view === "sell" && sellDrawerLayout();
     let sx = 0, sy = 0, st = 0, ok = false;
     document.addEventListener("touchstart", (e) => { const t = e.touches[0]; ok = inLand() && e.touches.length === 1 && !e.target.closest(".cats, input, textarea, select, dialog"); sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
     document.addEventListener("touchend", (e) => {
@@ -3309,7 +3314,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     };
     const dock = phoneDock();
     // sideways phone: the photos get the whole screen; title, buttons and search live in a side panel (swipe left)
-    const drawerMode = document.documentElement.dataset.layout === "phone" && document.documentElement.classList.contains("landscape");
+    const drawerMode = sellDrawerLayout();
     const posButtons = () => [
             scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
       h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
@@ -3357,7 +3362,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "grid", style: "gap:10px" },
           dock || drawerMode ? null : h("div", { class: "pos-acts" }, ...posButtons()),
           dock || drawerMode ? null : searchBox(),
-          prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
+          (() => { const catRow = prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null;
+            if (!(drawerMode && document.documentElement.dataset.layout === "tablet")) return catRow;
+            // tablet: the panel button sits at the end of the category row (never over the Current sale panel)
+            return h("div", { style: "display:flex;gap:8px;align-items:center;min-width:0" }, catRow ? h("div", { style: "flex:1;min-width:0" }, catRow) : h("div", { style: "flex:1" }),
+              h("button", { class: "btn primary sd-open", onclick: () => { sellDrawerOpen = true; render(); setTimeout(() => $("#sellSearch")?.focus({ preventScroll: true }), 260); } }, "‹ ", svgIcon(IC.scan), L(" Scan · Hanap", " Scan · Search"))); })(),
           !prods.length ? h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))
           : sellViewMode === "list" ? h("ul", { class: "plist", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id), q = stockOf(p.id), st = q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "";

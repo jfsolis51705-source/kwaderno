@@ -1262,13 +1262,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const prod = qt.length ? findProduct(qt) : null;
     const howto = HOWTO.test(" " + qt.join(" ") + " ");
     const kb = force ? [] : kbSearch(qt), top = kb[0]?.ok ? kb[0] : null;
-    const kbAlts = kb.filter((m, i) => m.ok && (i > 0 || !howto)).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2);
+    const kbAlts = kb.filter((m, i) => m.ok && m.cov >= 0.6 && m.tcov >= 0.5 && (i > 0 || !howto)).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2);
     let intent = force || null, alts = [];
     if (!intent) {
       const scored = INTENTS.map((it) => ({ it, score: it.words.reduce((x, w) => x + phraseScore(qt, toks(w).join(" ")) * (toks(w).length > 1 ? 2 : 1), 0) })).sort((x, y) => y.score - x.score);
       const dataTop = scored[0].score > 0 ? scored[0] : null;
       if (prod && !(howto && top && top.cov >= 0.5)) intent = "product";
-      else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2));
+      else if (top && (howto || !dataTop)) return kbAnswer(top, Q, kb.filter((m) => m.ok && m !== top && m.cov >= 0.6 && m.tcov >= 0.5).map((m) => ({ id: "kb:" + m.e.id, label: kbText(m.e).q })).slice(0, 2));
       else if (dataTop) { intent = dataTop.it.id; alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= dataTop.score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label })); }
     }
     if (!intent) return { kind: "none", title: L("Wala pa akong sagot dito", "I don't have an answer for this yet"),
@@ -1287,7 +1287,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- VOICE: speak a question, hear the answer ----------
   // Listening turns speech into text only (Claude page dictation, or the browser's own speech recognition);
   // the answer still comes from the rule-based analyst. Reading aloud uses the phone's own voices first (free, offline).
-  const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null };
+  const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null, auto: true, style: "uk" };
+  try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; } catch { /* default British */ }
+  // Some browsers load their voice list late; ask once so the British voice is ready for the first answer.
+  try { window.speechSynthesis?.getVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", () => {}); } catch { /* no speech here */ }
   function voiceInit() {
     if (voice.dict !== undefined) return;
     voice.dict = null; voice.tts = null;
@@ -1324,16 +1327,32 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   function speak(r) {
     if (voice.speaking) { speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; speakState(); return; }
-    const text = speechText(r), want = lang === "en" ? /^en/i : /^(fil|tl)/i;
-    const voices = window.speechSynthesis?.getVoices?.() || [], v = voices.find((x) => want.test(x.lang) && /PH/i.test(x.lang)) || voices.find((x) => want.test(x.lang));
+    speakNow(r);
+  }
+  function speakNow(r) { withLang(r.lang || lang, () => speakIn(r)); }
+  function speakIn(r) {
+    window.speechSynthesis?.cancel(); voice.tts?.stop?.();
+    const text = speechText(r), want = lang === "en" ? /^en/i : /^(fil|tl)/i, uk = lang === "en" && voice.style === "uk";
+    const voices = window.speechSynthesis?.getVoices?.() || [];
+    const UK_MALE = /daniel|uk english male|george|ryan|arthur|oliver|malcolm|thomas|en-gb-x-rjs|en-gb-x-gbd|en-gb-x-gbb/i;
+    const v = (uk && (voices.find((x) => /^en[-_]GB/i.test(x.lang) && UK_MALE.test(x.name + " " + (x.voiceURI || ""))) || voices.find((x) => /^en[-_]GB/i.test(x.lang))))
+      || voices.find((x) => want.test(x.lang) && /PH/i.test(x.lang)) || voices.find((x) => want.test(x.lang));
     if (window.speechSynthesis && (v || !voice.tts)) {
-      const u = new SpeechSynthesisUtterance(text); try { if (v) u.voice = v; } catch { /* keep the default voice */ } u.lang = v?.lang || (lang === "en" ? "en-PH" : "fil-PH"); u.rate = 0.95;
+      const u = new SpeechSynthesisUtterance(text); try { if (v) u.voice = v; } catch { /* keep the default voice */ } u.lang = v?.lang || (lang === "en" ? (uk ? "en-GB" : "en-PH") : "fil-PH"); u.rate = uk ? 0.92 : 0.95; u.pitch = uk ? 0.85 : 1;
       u.onend = u.onerror = () => { voice.speaking = false; speakState(); };
       speechSynthesis.cancel(); speechSynthesis.speak(u); voice.speaking = true; speakState(); return;
     }
     if (voice.tts) { voice.tts.speak(text, lang === "en" ? { language: "en" } : {}).catch(() => {}); voice.speaking = true; speakState(); return; }
     toast(L("Walang boses sa device na ito", "No voice available on this device"));
   }
+  // Reply language: Auto answers in the language the question was asked in; the whole answer card follows it.
+  let replyPref = "auto";
+  try { replyPref = ["auto", "tl", "en"].includes(localStorage.getItem("kw-reply")) ? localStorage.getItem("kw-reply") : "auto"; voice.auto = localStorage.getItem("kw-autospeak") !== "0"; } catch { voice.auto = true; }
+  const TL_W = new Set(["ang", "ng", "mga", "ko", "ba", "paano", "pano", "ano", "sa", "na", "kung", "bakit", "magkano", "ilan", "ako", "po", "yung", "ito", "dapat", "aling", "saan", "kailan", "nang", "naman", "lang", "kong", "mo", "kumita", "benta", "paninda", "utang", "bilhin", "ngayon"]);
+  const EN_W = new Set(["the", "how", "what", "my", "is", "do", "i", "to", "should", "which", "why", "when", "where", "can", "does", "did", "much", "many", "sell", "sales", "sold", "profit", "best", "business", "grow", "and", "of", "for", "are", "this", "week", "month", "today", "buy", "money"]);
+  function detectLang(q) { let tl = 0, en = 0; for (const w of toks(q)) { if (TL_W.has(w)) tl++; if (EN_W.has(w)) en++; } return en > tl ? "en" : tl > en ? "tl" : lang; }
+  const replyLangFor = (q) => (replyPref === "auto" ? detectLang(q) : replyPref);
+  function withLang(l, fn) { const prev = lang; lang = l || prev; try { return fn(); } finally { lang = prev; } }
   const askState = { draft: "", q: "", res: null, qid: null, voted: null };
   // Every business question is saved (names removed) and reaches the Super Admin through the store summary.
   async function logAsk(res, q) {
@@ -1347,20 +1366,23 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (!text && !force) return;
     askState.q = text; askState.draft = text; askState.voted = null;
     if (voice.speaking) { window.speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; }
-    askState.res = answerQuestion(text, force || null);
+    const rl = replyLangFor(text);
+    askState.res = withLang(rl, () => answerQuestion(text, force || null)); if (askState.res) askState.res.lang = rl;
     if (!force) { askState.qid = null; logAsk(askState.res, text).then((id) => { if (id && askState.q === text) { askState.qid = id; if (view === "home") render(); } }); }
     else if (askState.qid) ref("questions/" + askState.qid).update({ kind: askState.res?.kind || "data", intent: askState.res?.intent || null, kb: askState.res?.kbId || null }).catch(() => {});
     render();
+    if (voice.auto && askState.res) speakNow(askState.res);
   }
   async function askVote(up) {
     askState.voted = up ? "up" : "down"; render();
     try { await ref("questions/" + askState.qid).update({ helpful: !!up }); } catch { /* a missed vote is not critical */ }
   }
-  function resultView(r) {
+  function resultView(r) { return withLang(r.lang || lang, () => resultViewIn(r)); }
+  function resultViewIn(r) {
     const c = CONF[r.confidence];
     const body = [
       h("div", { class: "small muted", text: "Tanong: " + askState.q }),
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + L(c[1], c[2]) }) : null),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: (String(r.kind).startsWith("kb") ? "Tugma: " : "Kumpiyansa: ") + L(c[1], c[2]) }) : null),
       r.lines.length ? h("ul", { class: "small", style: "margin:0;padding-left:18px;display:grid;gap:3px" }, r.lines.map((l) => h("li", { text: l }))) : null,
       r.steps?.length ? h("div", { class: "small" }, h("b", { text: "Mga hakbang" }), h("ol", { style: "margin:4px 0 0;padding-left:20px;display:grid;gap:3px" }, r.steps.map((x) => h("li", { text: x })))) : null,
       r.mine ? h("div", { class: "card", style: "padding:10px;display:grid;gap:4px" }, h("div", { class: "small", style: "font-weight:700", text: "📊 Para sa tindahan mo: " + r.mine.title }), r.mine.lines.map((l) => h("div", { class: "small", text: "• " + l })), r.mine.action ? h("div", { class: "small", style: "color:var(--accent);font-weight:600", text: "→ " + r.mine.action }) : null) : null,
@@ -1368,13 +1390,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     ];
     if (r.suggest) body.push(h("div", { class: "cats" }, r.suggest.map((x) => h("button", { onclick: () => askNow(x) }, x))));
     if (r.evidence?.length || r.assumptions?.length || r.confidenceWhy) body.push(h("details", {}, h("summary", { class: "small", style: "cursor:pointer", text: "Paano ko nalaman" }),
-      h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, (r.evidence || []).map((e) => h("div", { text: "• " + e })), (r.assumptions || []).map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: (r.kind === "kb" ? "Tugma: " : "Kumpiyansa: ") + r.confidenceWhy }) : null)));
+      h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, (r.evidence || []).map((e) => h("div", { text: "• " + e })), (r.assumptions || []).map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: (String(r.kind).startsWith("kb") ? "Tugma: " : "Kumpiyansa: ") + r.confidenceWhy }) : null)));
     if (r.alts?.length) body.push(h("div", { class: "pills" }, h("span", { class: "small muted", text: "Ibig mo bang sabihin:" }), r.alts.map((x) => h("button", { onclick: () => askNow(askState.q, x.id) }, x.label))));
     if (askState.qid && r.kind !== "offtopic") body.push(h("div", { class: "pills", style: "align-items:center" }, h("span", { class: "small muted", text: askState.voted ? "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot." : "Nakatulong ba?" }),
       askState.voted ? [] : [h("button", { onclick: () => askVote(true) }, "👍 Oo"), h("button", { onclick: () => askVote(false) }, "👎 Hindi")]));
     body.push(h("div", { class: "pills" },
       h("button", { class: "btn sm primary", id: "aiSpeak", onclick: () => speak(r) }, voice.speaking ? L("⏹ Itigil", "⏹ Stop") : L("🔊 Pakinggan", "🔊 Listen")),
-      r.kind !== "offtopic" ? h("button", { class: "btn sm", onclick: () => deviceAIDialog(r) }, "✨ Itanong pa sa AI ng device mo") : null,
+      r.kind !== "offtopic" ? h("button", { class: "btn sm", onclick: () => withLang(r.lang || lang, () => deviceAIDialog(r)) }, "✨ Itanong pa sa AI ng device mo") : null,
       h("button", { class: "btn sm", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; askState.qid = null; render(); } }, "Ask another")));
     return h("div", { class: "banner", style: "display:grid;gap:8px;color:var(--fg)" }, body);
   }
@@ -1419,6 +1441,17 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
       h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Datos ng tindahan + gabay sa negosyo" })),
+      h("div", { class: "toolbar", style: "gap:6px" },
+        h("span", { class: "small muted", text: L("Sagot sa:", "Reply in:") }),
+        h("div", { class: "pills", role: "radiogroup", "aria-label": L("Wika ng sagot", "Reply language") }, [["auto", L("Auto (wika ng tanong)", "Auto (question's language)")], ["tl", "Tagalog"], ["en", "English"]].map(([k, l2]) =>
+          h("button", { role: "radio", "aria-checked": String(replyPref === k), "aria-pressed": String(replyPref === k), onclick: () => { replyPref = k; try { localStorage.setItem("kw-reply", k); } catch { /* ignore */ }
+            if (askState.res && askState.q) { const rl = replyLangFor(askState.q); askState.res = withLang(rl, () => answerQuestion(askState.q, null)); if (askState.res) askState.res.lang = rl; }
+            render(); if (voice.auto && askState.res) speakNow(askState.res); } }, l2))),
+        h("label", { class: "small muted", style: "display:inline-flex;gap:6px;align-items:center;margin-left:auto" }, L("Boses sa English:", "English voice:"),
+          h("select", { id: "aiVoiceStyle", style: "width:auto;min-height:34px;padding:4px 8px", onchange: (e) => { voice.style = e.target.value; try { localStorage.setItem("kw-voice-style", voice.style); } catch { /* ignore */ } } },
+            h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" }))),
+        h("button", { class: "btn sm", id: "aiAuto", "aria-pressed": String(voice.auto), onclick: () => { voice.auto = !voice.auto; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ }
+          if (!voice.auto) { window.speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; } render(); } }, voice.auto ? L("🔊 Boses: naka-on", "🔊 Voice on") : L("🔇 Naka-mute", "🔇 Muted"))),
       h("div", { style: "display:flex;gap:6px" }, input,
         h("button", { class: "btn", id: "aiMic", "aria-label": L("Magsalita", "Speak"), title: L("Magsalita", "Speak"), "aria-pressed": String(voice.listening), onclick: listen }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
         h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),

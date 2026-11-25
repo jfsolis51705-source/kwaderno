@@ -635,6 +635,27 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       document.body.append(i); i.click();
     });
   }
+  // ---------- scanner sounds: a short high beep when a code is read, a low double buzz when it isn't ----------
+  let beepCtx = null;
+  const scanSoundOn = () => { try { return localStorage.getItem("kw-scansound") !== "0"; } catch { return true; } };
+  function scanBeep(ok = true) {
+    try { navigator.vibrate?.(ok ? 40 : [90, 60, 90]); } catch { /* no vibration */ }
+    if (!scanSoundOn()) return;
+    try {
+      beepCtx = beepCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (beepCtx.state === "suspended") beepCtx.resume().catch(() => {});
+      const c = beepCtx, now = c.currentTime;
+      const tone = (freq, at, len, type, vol) => {
+        const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = freq;
+        g.gain.setValueAtTime(0, now + at); g.gain.linearRampToValueAtTime(vol, now + at + .005); g.gain.setValueAtTime(vol, now + at + len - .015); g.gain.linearRampToValueAtTime(0, now + at + len);
+        o.connect(g).connect(c.destination); o.start(now + at); o.stop(now + at + len + .02);
+      };
+      if (ok) tone(2400, 0, .11, "square", .08);                      // the familiar supermarket "beep"
+      else { tone(220, 0, .16, "sawtooth", .12); tone(180, .22, .2, "sawtooth", .12); } // "bzzt bzzt"
+    } catch { /* no audio on this device */ }
+  }
+  document.addEventListener("pointerdown", () => { try { if (beepCtx?.state === "suspended") beepCtx.resume(); } catch { /* ignore */ } }, { capture: true });
+
   let zxingP = null;
   const ZXING_URL = () => (window.__OCR_CDN || "https://cdn.jsdelivr.net/npm") + "/@zxing/library@0.21.3/umd/index.min.js";
   const loadZxing = () => (zxingP ??= new Promise((res, rej) => {
@@ -721,8 +742,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const useTyped = () => {
         const v = typed.value.replace(/\s+/g, "");
         if (!v) return status.textContent = L("I-type ang numero sa ilalim ng barcode.", "Type the number under the barcode.");
-        if (!eanOk(v)) return status.textContent = L("Mukhang mali ang isang numero — pakisuri ulit.", "One digit looks wrong — please check the number again.");
-        dlg.close(); finish(v);
+        if (!eanOk(v)) { scanBeep(false); return status.textContent = L("Mukhang mali ang isang numero — pakisuri ulit.", "One digit looks wrong — please check the number again."); }
+        scanBeep(true); dlg.close(); finish(v);
       };
       const tryFile = async (file) => {
         if (!file) return;
@@ -730,8 +751,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         status.style.color = ""; status.textContent = L("Binabasa ang barcode…", "Reading the barcode…");
         try {
           const code = await decodeBarcode(file, (st) => { status.textContent = st === "reader" ? L("Kinukuha ang barcode reader…", "Loading the barcode reader…") : L("Binabasa ang barcode…", "Reading the barcode…"); });
-          toast(L(`Barcode ${code}`, `Barcode ${code}`)); if (dlg.open && dlg.contains(status)) dlg.close(); finish(code);
+          scanBeep(true); toast(L(`Barcode ${code}`, `Barcode ${code}`)); if (dlg.open && dlg.contains(status)) dlg.close(); finish(code);
         } catch (e) {
+          scanBeep(false);
           status.style.color = "var(--bad)";
           status.textContent = e?.message === "load" ? L("Hindi ma-load ang barcode reader — tingnan ang internet, o i-type ang numero.", "The barcode reader couldn't load — check the internet, or type the number.")
             : e?.message === "open" ? L("Hindi mabuksan ang litratong iyon. Subukan ulit.", "That photo couldn't be opened. Try again.")
@@ -758,6 +780,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   const byBarcode = (code) => S.products.find((p) => !p.archived && (p.barcodes || []).includes(code));
   function unknownBarcode(code) {
+    setTimeout(() => scanBeep(false), 180);
     openDialog("New barcode", h("div", { class: "grid" },
       h("p", { text: `Barcode ${code} is not in your products yet.` }),
       h("button", { class: "btn primary big", onclick: () => { pendingBarcode = code; dlg.close(); go("products", "new"); } }, "Add as a new product"),
@@ -2442,14 +2465,18 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     checkStock("demo");
   }
   function alertSettingsCard() {
-    return h("div", { class: "card grid" }, h("h2", { text: L("🔔 Alerto sa paubos na stock", "🔔 Low-stock alert") }),
+    return h("div", { class: "grid" }, h("div", { class: "card grid" }, h("h2", { text: L("🔊 Tunog ng scanner", "🔊 Scanner sound") }),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "scanSound", checked: scanSoundOn(), onchange: (e) => { try { localStorage.setItem("kw-scansound", e.target.checked ? "1" : "0"); } catch { /* ignore */ } if (e.target.checked) scanBeep(true); } }),
+        L("Beep kapag nabasa ang barcode, buzz kapag hindi (may vibrate din sa phone)", "Beep when a barcode is read, buzz when it isn't (phones also vibrate)")),
+      h("div", { class: "row", style: "gap:8px" }, h("button", { class: "btn sm", onclick: () => scanBeep(true) }, L("▶ Beep", "▶ Beep")), h("button", { class: "btn sm", onclick: () => scanBeep(false) }, L("▶ Buzz", "▶ Buzz")))),
+      h("div", { class: "card grid" }, h("h2", { text: L("🔔 Alerto sa paubos na stock", "🔔 Low-stock alert") }),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saOn", checked: alertsOn(), onchange: (e) => { setPref("kw-stockalert", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
         L("Pop-up, tunog at boses kapag umabot sa reorder level ang isang paninda", "Pop-up, sound and voice when an item reaches its reorder level")),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saDemo", checked: demoOn(), onchange: (e) => { setPref("kw-demoalerts", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
         L("Demo: ipakita 5 segundo pagbukas, at may kunwaring benta bawat 1 minuto (hindi naka-save)", "Demo: show it 5 seconds after opening, plus a simulated sale every minute (not saved)")),
       h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, h("button", { class: "btn", onclick: () => { chime(); showStockAlert(lowNow(), "open"); } }, L("Subukan ngayon", "Test now")),
         SA.demoSold.size ? h("button", { class: "btn", onclick: () => { SA.demoSold.clear(); SA.known = null; checkStock("real"); toast(L("Na-reset ang demo", "Demo reset")); render(); } }, L("I-reset ang demo", "Reset demo")) : null),
-      h("div", { class: "muted small", text: L("Nakasunod ang boses sa mute at sa piniling boses sa Ask Kwaderno.", "The voice follows the mute switch and voice choice in Ask Kwaderno.") }));
+      h("div", { class: "muted small", text: L("Nakasunod ang boses sa mute at sa piniling boses sa Ask Kwaderno.", "The voice follows the mute switch and voice choice in Ask Kwaderno.") })));
   }
 
   // ---------- EXPENSES (gastos) ----------
@@ -2824,7 +2851,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
             h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
           h("input", { type: "search", id: "sellSearch", placeholder: "Search product or type barcode", value: search, "aria-label": "Search products",
             oninput: (e) => { search = e.target.value; render(); },
-            onkeydown: (e) => { if (e.key === "Enter") { const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } } }),
+            onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } } }),
           prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
           prods.length ? h("div", { class: "tiles", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id); const q = stockOf(p.id);

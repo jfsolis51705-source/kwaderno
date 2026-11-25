@@ -135,3 +135,77 @@ def test_public_orders_are_rate_limited(monkeypatch, tmp_path):
         c.put(f"/api/stores/{sid}/shop", json={"slug": "rl-shop"})
         codes = [c.post("/api/shop/rl-shop/orders", json=order_body([{"product_id": pid, "qty": 1}])).status_code for _ in range(4)]
         assert codes == [201, 201, 201, 429]
+
+
+def test_store_page_has_its_own_home_screen_manifest(client, anon, store):
+    open_shop(client, store["id"])
+    r = anon.get("/api/shop/aling-nena/manifest.webmanifest")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/manifest+json")
+    m = r.json()
+    assert m["name"] == "Test Store" and m["start_url"] == "/shop/aling-nena" and m["display"] == "standalone"
+    assert any(i.get("purpose") == "maskable" for i in m["icons"])
+    assert anon.get("/api/shop/nope/manifest.webmanifest").status_code == 404
+
+
+def test_portal_online_summary_has_no_customer_details(app, client, anon, ops, store):
+    sid = store["id"]
+    open_shop(client, sid)
+    lm = products(client, sid)["LM-PC-ORIG-60"]
+    for fl in ("pickup", "delivery"):
+        anon.post("/api/shop/aling-nena/orders", json=order_body([{"product_id": lm["id"], "qty": 2}], fulfillment=fl, address="Blk 3 Lot 5 Culiat"))
+    oid = client.get(f"/api/stores/{sid}/customer-orders").json()[-1]["id"]
+    for st in ("accepted", "ready", "completed"):
+        client.post(f"/api/customer-orders/{oid}/status", json={"status": st})
+    assert client.get("/api/portal/online").status_code == 403  # merchants can't open it
+    r = ops.get("/api/portal/online").json()
+    t = r["totals"]
+    assert t["orders"] == 2 and t["completed"] == 1 and t["open_now"] == 1 and t["sales"] == 36 and t["delivery_share"] == 0.5 and t["shops_open"] == 1
+    assert r["stores"][0]["name"] == "Test Store" and r["stores"][0]["orders"] == 2 and r["daily"][0]["orders"] == 2
+    blob = str(r)
+    assert "Juan" not in blob and "0917" not in blob and "Culiat" not in blob.replace("'barangay': 'Culiat'", "")
+    assert ops.get("/api/portal/online", params={"q": "zzz"}).json()["total_rows"] == 0
+
+
+def test_portal_online_scales_to_a_thousand_stores(app, ops):
+    import time
+    from datetime import datetime, timedelta, timezone
+    from db import CustomerOrder, Shop, Store
+    now = datetime.now(timezone.utc)
+    with app.state.db.Session() as s:
+        stores = [Store(name=f"Store {i:04d}", barangay=f"Brgy {i % 40}", city="Quezon City") for i in range(1000)]
+        s.add_all(stores); s.flush()
+        s.add_all(Shop(store_id=st.id, slug=f"store-{st.id}", enabled=True) for st in stores)
+        s.add_all(CustomerOrder(store_id=stores[i % 1000].id, code=f"C{i:05d}"[:8], token_hash="x" * 64, customer_name="x", phone="09170000000",
+                                fulfillment="pickup" if i % 3 else "delivery", status=("completed", "new", "cancelled", "accepted")[i % 4],
+                                subtotal_cents=10000, total_cents=10000, created_at=now - timedelta(hours=i % 600)) for i in range(20000))
+        s.commit()
+    t0 = time.perf_counter()
+    r = ops.get("/api/portal/online", params={"limit": 50, "offset": 50, "sort": "orders"})
+    took = time.perf_counter() - t0
+    assert r.status_code == 200
+    j = r.json()
+    assert j["total_rows"] == 1000 and len(j["stores"]) == 50 and j["totals"]["orders"] == 20000 and j["totals"]["shops"] == 1000
+    assert took < 2.0, took
+
+
+def test_share_links_show_a_preview_and_open_the_store(client, anon, store, monkeypatch):
+    monkeypatch.setenv("PUBLIC_URL", "https://order.example.ph")
+    open_shop(client, store["id"], note='Bukas 6am <script>alert(1)</script>')
+    r = anon.get("/s/aling-nena")
+    assert r.status_code == 200 and "text/html" in r.headers["content-type"]
+    h = r.text
+    assert 'property="og:title" content="Test Store — order online"' in h
+    assert 'og:image" content="https://order.example.ph/api/shop/aling-nena/card.png"' in h
+    assert 'og:url" content="https://order.example.ph/s/aling-nena"' in h and "url=/shop/aling-nena" in h
+    assert "<script>alert" not in h  # store text is escaped
+    pid = products(client, store["id"])["LM-PC-ORIG-60"]["id"]
+    p = anon.get(f"/s/aling-nena/p/{pid}").text
+    assert "Lucky Me Pancit Canton Original 60g — ₱18.00 at Test Store" in p and f"/shop/aling-nena?p={pid}" in p
+    sard = products(client, store["id"])["555-SARD-155"]["id"]
+    assert "sold out" in anon.get(f"/s/aling-nena/p/{sard}").text
+    img = anon.get("/api/shop/aling-nena/card.png")
+    assert img.status_code == 200 and img.headers["content-type"] == "image/png" and img.content[:8] == b"\x89PNG\r\n\x1a\n"
+    from PIL import Image
+    import io
+    assert Image.open(io.BytesIO(img.content)).size == (1200, 630)
+    assert anon.get("/s/nope").status_code == 404

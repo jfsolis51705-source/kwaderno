@@ -4,6 +4,9 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AppProvider } from "./state/AppContext";
 import "./index.css";
+import { registerServiceWorker } from "./lib/install";
+
+registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

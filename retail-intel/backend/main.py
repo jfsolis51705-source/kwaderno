@@ -13,13 +13,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import auth
 import insights
 import services as svc
+import share
 from db import Capture, Database, Product, Store, StoreMember, User, WholesaleOrder
 from schemas import (AdjustIn, ConfirmCapture, CustomerOrderStatusIn, LoginIn, MemberIn, OrderDraftIn, OrderPatch, OrderStatusIn,
                      ProductIn, ProductPatch, PublicOrderIn, RegisterIn, ShopIn, StoreIn, SyncIn)
@@ -358,6 +359,23 @@ def create_app(database_url: str | None = None, upload_dir: str | None = None, v
     def shop_page(slug: str, s: Session = Depends(session)):
         return svc.public_catalog(s, slug)
 
+    # ---------- sharing on social media: preview card + link pages ----------
+    @app.get("/api/shop/{slug}/card.png")
+    def shop_card(slug: str, s: Session = Depends(session)):
+        return Response(share.store_card_png(s, slug), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+
+    @app.get("/s/{slug}", response_class=HTMLResponse)
+    def share_store(slug: str, request: Request, s: Session = Depends(session)):
+        return HTMLResponse(share.share_page(s, slug, share.public_base(request)))
+
+    @app.get("/s/{slug}/p/{pid}", response_class=HTMLResponse)
+    def share_product(slug: str, pid: int, request: Request, s: Session = Depends(session)):
+        return HTMLResponse(share.share_page(s, slug, share.public_base(request), pid))
+
+    @app.get("/api/shop/{slug}/manifest.webmanifest")
+    def shop_manifest(slug: str, s: Session = Depends(session)):
+        return JSONResponse(svc.shop_manifest(s, slug), media_type="application/manifest+json")
+
     @app.post("/api/shop/{slug}/orders", status_code=201)
     def shop_order(slug: str, body: PublicOrderIn, request: Request, s: Session = Depends(session)):
         order_limiter.check(f"order:{request.client.host if request.client else '-'}")
@@ -412,6 +430,12 @@ def create_app(database_url: str | None = None, upload_dir: str | None = None, v
     def overview(u: User = Depends(current_user), s: Session = Depends(session)):
         auth.require_ops(u)
         return svc.portal_overview(s)
+
+    @app.get("/api/portal/online")
+    def portal_online(days: int = Query(30, ge=1, le=365), q: str | None = Query(None, max_length=80), sort: str = "sales",
+                      limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), u: User = Depends(current_user), s: Session = Depends(session)):
+        auth.require_ops(u)
+        return svc.portal_online(s, days, q, sort, limit, offset)
 
     @app.get("/api/portal/audit")
     def audit_log(store_id: int | None = None, limit: int = Query(200, le=1000), u: User = Depends(current_user), s: Session = Depends(session)):

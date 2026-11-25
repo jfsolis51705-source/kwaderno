@@ -4,6 +4,8 @@ import { peso, when } from "../../lib/format";
 import type { CustomerOrder, ShopSettings } from "../../lib/types";
 import { useApp } from "../../state/AppContext";
 import { Empty } from "../../components/ui";
+import SharePanel from "../../components/SharePanel";
+import { storeShareUrl } from "../../lib/share";
 
 const NEXT: Record<string, { to: "accepted" | "ready" | "completed"; label: string } | undefined> = {
   new: { to: "accepted", label: "Tanggapin / Accept" }, accepted: { to: "ready", label: "Handa na / Ready" }, ready: { to: "completed", label: "Tapos / Complete" },
@@ -23,7 +25,9 @@ export default function Online() {
   useEffect(() => { if (storeId) api.shopSettings(storeId).then(setCfg).catch(() => undefined); }, [storeId]);
   useEffect(() => { load(); const t = window.setInterval(load, 20000); return () => window.clearInterval(t); }, [load]);
 
-  const link = cfg?.slug ? `${window.location.origin}/shop/${cfg.slug}` : "";
+  const link = cfg?.slug ? storeShareUrl(cfg.slug) : "";
+  const { stores } = useApp();
+  const storeName = stores.find((x) => x.id === storeId)?.name ?? "";
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!storeId || !cfg) return;
@@ -47,6 +51,7 @@ export default function Online() {
           <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">Store link</h2>
             <span className={`chip ${cfg.enabled && cfg.path ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{cfg.enabled && cfg.path ? "Open" : "Closed"}</span></div>
           {cfg.path && cfg.enabled ? <div className="flex flex-wrap items-center gap-2"><a className="min-w-0 flex-1 truncate font-mono text-sm text-brand-700 underline" href={link} target="_blank" rel="noreferrer" data-testid="shop-link">{link}</a><button type="button" className="btn btn-sm" onClick={copy}>Copy</button></div> : null}
+          {cfg.path && cfg.enabled ? <details className="rounded-xl border border-slate-200 p-3" open><summary className="cursor-pointer font-semibold">📣 I-share sa social media · Share on social media</summary><div className="mt-3"><SharePanel url={link} storeName={storeName} cardUrl={`/api/shop/${cfg.slug}/card.png?v=${encodeURIComponent(cfg.note ?? "")}${cfg.delivery ? 1 : 0}`} ways={[cfg.pickup ? "Pickup" : "", cfg.delivery ? "delivery" : ""].filter(Boolean).join(" o ")} /></div></details> : null}
           {owner ? (
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1 text-sm">Link name<input className="input font-mono" value={cfg.slug} pattern="[a-z0-9][a-z0-9-]{1,38}[a-z0-9]" title="lowercase letters, numbers and dashes" onChange={(e) => setCfg({ ...cfg, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} /></label>

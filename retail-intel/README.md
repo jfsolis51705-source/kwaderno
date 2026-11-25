@@ -59,8 +59,14 @@ New merchants register at `/register`; that creates their store with them as own
 - Order flow: new → accepted → ready → completed (or cancelled at any step before completion). The customer's status link uses a private token stored only as a hash; the public status page doesn't repeat the name, phone or address.
 - Abuse limits: per-device rate limit (`ORDER_RATE_LIMIT`, default 10 per 10 min), a hidden honeypot field, PH mobile number check, 50 lines × 99 qty max.
 - Payment is cash or the store's own QR Ph on pickup/delivery — nothing here claims a payment was verified.
+- **Sharing on social media** (like a Lazada or Shopee link): the Online tab gives a share link `/s/<link-name>` with Share, Facebook, Messenger, Viber, WhatsApp, Telegram, X, Copy link and Copy post buttons. Social apps show a preview card (store name, place, pickup/delivery and a few items with prices, drawn by the server as a 1200×630 picture). Every product has its own share link `/s/<link-name>/p/<id>` that opens the store with that item highlighted, and says so if it has sold out. Set `PUBLIC_URL` (for example `https://order.kwaderno.ph`) in production so previews use the right address.
+
+### Web app (install on the home screen)
+- The app is installable (manifest, icons, service worker): Chrome/Android shows **Install**, iPhone uses Share → Add to Home Screen. It opens full-screen and loads with a weak signal; API calls and photos always go to the network.
+- Each store's order page has its own home-screen entry under the store's name (`/api/shop/<link-name>/manifest.webmanifest`), so customers can reorder in one tap.
 
 ### Operations portal (`/portal/...`)
+- **Online orders** (`/portal/online`): every store's order link, orders, completed/cancelled, waiting now, online sales, average order, delivery share and orders per day for 7/30/90 days, with search, sorting and 50 stores per page. Aggregated in SQL; a test covers 1,000 stores and 20,000 orders in under 2 seconds. Customer names, phone numbers and addresses stay with each store and never reach the portal.
 - **Overview:** each store's **units sold per day** (supply-chain velocity), **check-in streak** and **cash-flow score**; totals, share of shelf by brand (from each store's latest verified shelf photo), SKU stock health per store, a store table, and out-of-stock and low-stock alerts.
 - **Wholesale orders:** the queue across all stores, with totals per distributor. Fulfil or cancel orders here.
 - **Verification log:** flagged or pending captures with their hash and sharpness, verify or reject actions, and the full audit log.
@@ -144,6 +150,8 @@ The full interactive reference is at http://localhost:8100/docs.
 ### Online ordering
 - `GET|PUT /api/stores/{id}/shop` — link settings (PUT: owner only)
 - `GET /api/stores/{id}/customer-orders?status=open|new|…`, `POST /api/customer-orders/{id}/status` `{status}`
+- `GET /api/portal/online?days=&q=&sort=sales|orders|open|last|name&limit=&offset=` (operations only)
+- Sharing: `GET /s/{slug}`, `GET /s/{slug}/p/{product_id}` (preview pages for social apps, then redirect), `GET /api/shop/{slug}/card.png`, `GET /api/shop/{slug}/manifest.webmanifest`
 - Public, no login: `GET /api/shop/{slug}`, `POST /api/shop/{slug}/orders`, `GET /api/shop/{slug}/orders/{code}?t=<token>`
 
 ## Tests
@@ -199,6 +207,8 @@ make e2e    # builds the web app, starts the real API on a fresh seeded DB, driv
 - If the installed `playwright` package doesn't match your browsers, set `CHROMIUM_PATH`.
 
 ## Limits (honest list)
+- The portal **Overview** page still computes each store's cash-flow score on every load: about 2 s with 1,000 stores in a test, and slower as history grows. Caching those scores is the next step before going past ~1,000 stores. (The Online orders page is already aggregated and paged.)
+- Link previews need the app on a public `https://` address with `PUBLIC_URL` set; Facebook caches a preview for a while after the first share.
 
 - **Camera barcode scanning** uses the browser's `BarcodeDetector`. That covers Chrome, Edge and Android; on iPhone Safari the merchant types the code or uses a scanner.
 - **Mock vision** produces plausible but made-up lines. It shows the workflow, not accuracy. Use a real provider for real photos.

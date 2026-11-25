@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../../lib/api";
 import { peso, when } from "../../lib/format";
 import type { CustomerOrder, ShopCatalog } from "../../lib/types";
+import { InstallButton } from "../../components/ui";
+import { productShareUrl, shareOrCopy, storeShareUrl } from "../../lib/share";
 
 /** Public store page: no login. Customers browse in-stock items, build a cart and order for pickup or delivery. */
 type Cart = Record<number, number>;
@@ -15,6 +17,10 @@ const STEPS: Record<string, string> = { new: "Natanggap — hinihintay ang tinda
 
 export default function Shop() {
   const { slug = "" } = useParams();
+  const [params] = useSearchParams();
+  const focusId = Number(params.get("p")) || null;
+  const [note2, setNote2] = useState<string | null>(null);
+  const shared = (r: string) => { setNote2(r === "copied" ? "Na-copy ang link · Link copied" : r === "shared" ? null : "I-hold ang link para ma-copy"); if (r !== "shared") window.setTimeout(() => setNote2(null), 2500); };
   const [cat, setCat] = useState<ShopCatalog | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [cart, setCart] = useState<Cart>(() => ls.get(`shop-cart:${slug}`, {}));
@@ -31,6 +37,16 @@ export default function Shop() {
 
   useEffect(() => { api.shop(slug).then((c) => { setCat(c); if (!c.shop.pickup) setFul("delivery"); }).catch((e) => setErr(e instanceof ApiError && e.status === 404 ? "Walang online order ang tindahang ito ngayon. / This store isn't taking online orders." : "Hindi ma-load. Subukan ulit. / Couldn't load — try again.")); }, [slug]);
   useEffect(() => ls.set(`shop-cart:${slug}`, cart), [cart, slug]);
+  // this store's own home-screen app: its name, opening straight to its menu
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>('link[rel="manifest"]'), prev = link?.getAttribute("href");
+    link?.setAttribute("href", `/api/shop/${encodeURIComponent(slug)}/manifest.webmanifest`);
+    const title = document.title;
+    return () => { if (prev) link?.setAttribute("href", prev); document.title = title; };
+  }, [slug]);
+  useEffect(() => { if (cat) document.title = cat.store.name; }, [cat]);
+  // opened from a shared product link: bring that item into view
+  useEffect(() => { if (cat && focusId) document.getElementById(`item-${focusId}`)?.scrollIntoView({ block: "center" }); }, [cat, focusId]);
   useEffect(() => {
     if (!placed) return;
     let stop = false;
@@ -72,13 +88,15 @@ export default function Shop() {
     <div className="min-h-screen bg-slate-50 pb-28">
       <header className="bg-brand-600 px-4 pb-4 pt-5 text-white">
         <div className="mx-auto max-w-5xl">
-          <h1 className="text-2xl font-bold" data-testid="shop-name">{cat.store.name}</h1>
+          <div className="flex items-start gap-2"><h1 className="flex-1 text-2xl font-bold" data-testid="shop-name">{cat.store.name}</h1><InstallButton label="I-save sa phone" className="btn btn-sm border-white/40 bg-white/15 text-white hover:bg-white/25" /><button className="btn btn-sm border-white/40 bg-white/15 text-white hover:bg-white/25" onClick={async () => shared(await shareOrCopy(storeShareUrl(slug), cat.store.name, `Order online sa ${cat.store.name}`))}>📤 Share</button></div>
           <p className="text-sm opacity-90">{[cat.store.barangay, cat.store.city].filter(Boolean).join(", ")}</p>
           <p className="mt-1 text-sm opacity-90">{cat.shop.pickup ? "🛍️ Pickup" : ""}{cat.shop.pickup && cat.shop.delivery ? " · " : ""}{cat.shop.delivery ? `🛵 Delivery ${cat.shop.delivery_fee ? peso(cat.shop.delivery_fee) : "libre / free"}` : ""}{cat.shop.min_order ? ` · Min ${peso(cat.shop.min_order)}` : ""}</p>
           {cat.shop.note ? <p className="mt-2 rounded-lg bg-white/15 px-3 py-2 text-sm">{cat.shop.note}</p> : null}
         </div>
       </header>
       <main className="mx-auto grid max-w-5xl gap-4 px-4 py-4">
+        {note2 ? <div className="fixed left-1/2 top-4 z-30 -translate-x-1/2 rounded-lg bg-slate-900 px-4 py-2 text-sm text-white" role="status">{note2}</div> : null}
+        {focusId && cat.products.every((p) => p.id !== focusId) ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Ubos na ang item na iyon — narito ang iba pang paninda. · That item is sold out; here's what else is in stock.</p> : null}
         {placed && status ? (
           <div className="card border-brand-500" data-testid="order-status">
             <div className="flex items-center gap-2"><div className="text-sm text-slate-500">Order code</div><div className="font-mono text-xl font-bold tracking-widest">{status.code}</div>
@@ -96,7 +114,8 @@ export default function Shop() {
                 {shown.map((p) => {
                   const n = cart[p.id] ?? 0;
                   return (
-                    <div key={p.id} className="card flex flex-col gap-2 p-3" data-testid="shop-item">
+                    <div key={p.id} id={`item-${p.id}`} className={`card relative flex flex-col gap-2 p-3 ${focusId === p.id ? "ring-2 ring-brand-500" : ""}`} data-testid="shop-item">
+                      <button className="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-sm shadow" aria-label={`Share ${p.name}`} onClick={async () => shared(await shareOrCopy(productShareUrl(slug, p.id), p.name, `${p.name} — ${peso(p.price)} sa ${cat.store.name}`))}>📤</button>
                       <div className="grid aspect-square place-items-center overflow-hidden rounded-lg bg-slate-100">{p.thumbnail_url ? <img src={p.thumbnail_url} alt="" className="h-full w-full object-cover" loading="lazy" /> : <span className="text-3xl" aria-hidden>🛒</span>}</div>
                       <div className="flex-1 text-sm font-semibold leading-tight">{p.name}{p.variant ? <span className="block text-xs font-normal text-slate-500">{p.variant}</span> : null}</div>
                       <div className="font-bold text-brand-700">{peso(p.price)}</div>

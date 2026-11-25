@@ -1,4 +1,4 @@
-import type { AuditEntry, Cashflow, Checkins, Capture, CaptureItem, CaptureKind, CustomerOrder, CustomerOrderStatus, Order, Overview, Product, Rewards, ShopCatalog, ShopSettings, Store } from "./types";
+import type { AuditEntry, Cashflow, Checkins, Capture, CaptureItem, CaptureKind, CustomerOrder, CustomerOrderStatus, Order, Overview, Product, PortalOnline, Rewards, ShopCatalog, ShopSettings, Store } from "./types";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -74,6 +74,8 @@ export const api = {
   saveShop: (storeId: number, b: Omit<ShopSettings, "store_id" | "path">) => call<ShopSettings>(`/api/stores/${storeId}/shop`, json("PUT", b)),
   customerOrders: (storeId: number, status?: string) => call<CustomerOrder[]>(`/api/stores/${storeId}/customer-orders${status ? `?status=${status}` : ""}`),
   customerOrderStatus: (id: number, status: Exclude<CustomerOrderStatus, "new">) => call<CustomerOrder>(`/api/customer-orders/${id}/status`, json("POST", { status })),
+  portalOnline: (q: { days?: number; q?: string; sort?: string; limit?: number; offset?: number }) =>
+    call<PortalOnline>(`/api/portal/online?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)]))}`),
   // public (no login)
   shop: (slug: string) => call<ShopCatalog>(`/api/shop/${encodeURIComponent(slug)}`),
   placeOrder: (slug: string, b: { name: string; phone: string; fulfillment: "pickup" | "delivery"; address?: string; note?: string; items: { product_id: number; qty: number }[]; website?: string }) =>

@@ -64,3 +64,12 @@ export interface CustomerOrder {
   lines: { product_id: number | null; name: string; qty: number; price: number }[];
   customer_name?: string; phone?: string; address?: string | null; note?: string | null; token?: string; store?: string;
 }
+
+export interface PortalOnline {
+  days: number;
+  totals: { stores: number; shops: number; shops_open: number; active_stores: number; orders: number; completed: number; cancelled: number; open_now: number; sales: number; avg_order: number; delivery_share: number; completion_rate: number };
+  daily: { day: string; orders: number; sales: number }[];
+  stores: { id: number; name: string; barangay: string | null; city: string | null; slug: string; enabled: boolean; offers_delivery: boolean; orders: number; completed: number; cancelled: number; open_now: number; sales: number; last_order_at: string | null }[];
+  total_rows: number; limit: number; offset: number;
+  recent: { code: string; status: string; fulfillment: string; total: number; created_at: string; store: string }[];
+}

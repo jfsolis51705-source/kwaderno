@@ -172,13 +172,22 @@ try {
   await m.getByLabel("Delivery fee (₱)").fill("25");
   await m.getByRole("button", { name: "Save" }).click();
   const shopUrl = await m.getByTestId("shop-link").innerText();
-  check(shopUrl.endsWith("/shop/e2e-tindahan"), `store gets a shareable link (${shopUrl})`);
+  check(shopUrl.endsWith("/s/e2e-tindahan"), `store gets a shareable link (${shopUrl})`);
+  await m.getByTestId("share-panel").waitFor();
+  const cardImg = m.getByTestId("share-panel").locator("img");
+  await m.waitForFunction((el) => el.complete && el.naturalWidth > 0, await cardImg.elementHandle());
+  check((await cardImg.evaluate((el) => el.naturalWidth)) === 1200, "share panel shows the 1200×630 preview card");
+  check((await m.getByTestId("share-panel").getByRole("link", { name: "Facebook" }).getAttribute("href")).includes("facebook.com/sharer"), "Facebook / Messenger / Viber share buttons");
+  const og = await (await fetch(shopUrl)).text();
+  check(og.includes('property="og:title"') && og.includes("og:image") && og.includes("/api/shop/e2e-tindahan/card.png"), "share link carries a link preview for social apps");
   const cctx = await browser.newContext({ ...devices["Pixel 7 landscape"] });
   const c = await cctx.newPage();
   c.on("pageerror", (e) => errors.push(e.message));
   globalThis.__page = c;
   await c.goto(shopUrl);
+  await c.waitForURL(/\/shop\/e2e-tindahan/);
   await c.getByTestId("shop-item").first().waitFor();
+  check(c.url().endsWith("/shop/e2e-tindahan"), "share link opens the store's order page");
   check((await c.getByTestId("shop-item").count()) > 0, "customer sees the store menu without logging in (phone landscape)");
   await c.screenshot({ path: join(shots, "shop-landscape.png") });
   const first = c.getByTestId("shop-item").first();
@@ -204,6 +213,14 @@ try {
   await c.reload();
   await c.getByText(/Completed/).waitFor();
   check(true, "customer status page shows Completed");
+  // a shared product link opens the store with that item highlighted
+  const pid = await c.evaluate(() => document.querySelector("[data-testid=shop-item]")?.id.replace("item-", ""));
+  await c.goto(`${BASE}/s/e2e-tindahan/p/${pid}`);
+  await c.waitForURL(new RegExp(`/shop/e2e-tindahan\\?p=${pid}`));
+  await c.locator(`#item-${pid}.ring-2`).waitFor();
+  check(true, "product share link opens the store with that item highlighted");
+  const man = await (await fetch(`${BASE}/api/shop/e2e-tindahan/manifest.webmanifest`)).json();
+  check(man.start_url === "/shop/e2e-tindahan" && man.display === "standalone", "store page can be saved to the home screen under the store's name");
   globalThis.__page = m;
   await cctx.close();
 
@@ -224,6 +241,20 @@ try {
   check((await d.locator("section:has(#stores-h) th", { hasText: "Cash-flow score" }).count()) === 1, "portal shows cash-flow scores per store");
   check((await d.locator("section:has(#oos-h) tbody tr").count()) > 0, "out-of-stock alerts listed");
   await d.screenshot({ path: join(shots, "portal-overview.png"), fullPage: true });
+  // installable web app (manifest + service worker)
+  await d.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.ready.then(() => true), null, { timeout: 10000 }).catch(() => undefined);
+  const cdp = await d.context().newCDPSession(d);
+  // the test browser is a private (incognito) window, which never allows installing; every other requirement must pass
+  const inst = (await cdp.send("Page.getInstallabilityErrors")).installabilityErrors.filter((e) => e.errorId !== "in-incognito");
+  const mf = await cdp.send("Page.getAppManifest");
+  check(inst.length === 0 && !mf.errors.length && mf.url.endsWith("/manifest.webmanifest"), `portal is installable as a web app ${JSON.stringify(inst)}`);
+  await d.getByRole("link", { name: "Online orders" }).click();
+  await d.getByTestId("online-kpis").waitFor();
+  const onlineRow = d.getByTestId("online-stores").locator("tr", { hasText: "e2e-tindahan" });
+  await onlineRow.waitFor();
+  check((await onlineRow.innerText()).includes("₱"), "portal lists every store's online orders and sales");
+  check(!(await d.locator("main").innerText()).includes("Maria Santos"), "portal never shows the customer's name");
+  await d.screenshot({ path: join(shots, "portal-online.png"), fullPage: true });
   await d.getByRole("link", { name: "Wholesale orders" }).click();
   const sub = d.locator("[data-testid^=order-]").first();
   await sub.waitFor();

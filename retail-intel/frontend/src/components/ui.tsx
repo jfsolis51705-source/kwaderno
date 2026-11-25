@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useInstall } from "../lib/install";
 import { useApp } from "../state/AppContext";
 import type { StockStatus } from "../lib/types";
 
@@ -37,6 +38,20 @@ export function Kpi({ label, value, hint, tone }: { label: string; value: ReactN
       <div className={`mt-1 text-2xl font-bold tabular-nums ${tone === "bad" ? "text-red-700" : tone === "warn" ? "text-amber-700" : ""}`}>{value}</div>
       {hint ? <div className="mt-0.5 text-xs text-slate-500">{hint}</div> : null}
     </div>
+  );
+}
+
+/** Shows "Install app" when the browser offers it, or the iPhone steps. Hidden once installed. */
+export function InstallButton({ label = "Install app", className = "btn btn-sm" }: { label?: string; className?: string }) {
+  const ins = useInstall();
+  const [tip, setTip] = useState(false);
+  if (ins.installed || (!ins.canPrompt && !ins.iosHint)) return null;
+  if (ins.canPrompt) return <button className={className} onClick={() => ins.install()} data-testid="install-app">📲 {label}</button>;
+  return (
+    <span className="relative">
+      <button className={className} onClick={() => setTip((x) => !x)} aria-expanded={tip}>📲 {label}</button>
+      {tip ? <span role="note" className="absolute right-0 top-full z-30 mt-1 w-60 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow">On iPhone: tap <b>Share</b> (the square with an arrow), then <b>Add to Home Screen</b>.</span> : null}
+    </span>
   );
 }
 

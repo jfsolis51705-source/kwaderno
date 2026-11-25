@@ -6,9 +6,9 @@ import os
 import re
 import secrets
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 import image_checks
@@ -476,6 +476,16 @@ def public_catalog(s: Session, slug: str) -> dict:
             "products": items}
 
 
+def shop_manifest(s: Session, slug: str) -> dict:
+    """Web-app manifest for one store's order page, so customers can add it to their home screen under the store's name."""
+    sh, store = open_shop(s, slug)
+    return {"name": store.name, "short_name": store.name[:24], "description": f"Order from {store.name} for pickup or delivery.",
+            "id": f"/shop/{sh.slug}", "start_url": f"/shop/{sh.slug}", "scope": f"/shop/{sh.slug}", "display": "standalone",
+            "background_color": "#f8fafc", "theme_color": "#0e7c86",
+            "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+                      {"src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]}
+
+
 def _token_hash(t: str) -> str:
     return hashlib.sha256(t.encode()).hexdigest()
 
@@ -567,3 +577,53 @@ def set_customer_order_status(s: Session, o: CustomerOrder, to: str) -> dict:
     audit(s, "online_order." + to, "customer_order", o.id, o.store_id, code=o.code)
     s.commit()
     return customer_order_out(o)
+
+
+# ---------- operations portal: online ordering across all stores ----------
+# Built for hundreds to thousands of stores: everything is aggregated in SQL and the store table is paged.
+# Customers' names, phones and addresses stay with their store; the portal sees counts, money and status only.
+ONLINE_SORTS = {"sales": "sales", "orders": "orders", "open": "open_now", "name": "name", "last": "last_order_at"}
+
+
+def portal_online(s: Session, days: int = 30, q: str | None = None, sort: str = "sales", limit: int = 50, offset: int = 0) -> dict:
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    O = CustomerOrder
+    done = O.status == "completed"
+    is_open = O.status.in_(["new", "accepted", "ready"])
+    agg = (select(O.store_id.label("store_id"), func.count(O.id).label("orders"), func.sum(case((done, 1), else_=0)).label("completed"),
+                  func.sum(case((O.status == "cancelled", 1), else_=0)).label("cancelled"), func.sum(case((is_open, 1), else_=0)).label("open_now"),
+                  func.coalesce(func.sum(case((done, O.total_cents), else_=0)), 0).label("sales_cents"),
+                  func.sum(case((O.fulfillment == "delivery", 1), else_=0)).label("delivery"), func.max(O.created_at).label("last_order_at"))
+           .where(O.created_at >= since).group_by(O.store_id).subquery())
+    base = (select(Store.id, Store.name, Store.barangay, Store.city, Shop.slug, Shop.enabled, Shop.delivery.label("offers_delivery"),
+                   func.coalesce(agg.c.orders, 0).label("orders"), func.coalesce(agg.c.completed, 0).label("completed"), func.coalesce(agg.c.cancelled, 0).label("cancelled"),
+                   func.coalesce(agg.c.open_now, 0).label("open_now"), func.coalesce(agg.c.sales_cents, 0).label("sales"), agg.c.last_order_at)
+            .join(Shop, Shop.store_id == Store.id).outerjoin(agg, agg.c.store_id == Store.id))
+    if q:
+        like = f"%{q.strip().lower()}%"
+        base = base.where(or_(func.lower(Store.name).like(like), func.lower(Store.barangay).like(like), func.lower(Store.city).like(like), func.lower(Shop.slug).like(like)))
+    sub = base.subquery()
+    total_rows = s.scalar(select(func.count()).select_from(sub)) or 0
+    col = getattr(sub.c, ONLINE_SORTS.get(sort, "sales"))
+    order = col.asc() if sort == "name" else col.desc().nulls_last() if sort == "last" else col.desc()
+    rows = s.execute(select(sub).order_by(order, sub.c.name).limit(limit).offset(offset)).mappings().all()
+    stores = [{"id": r["id"], "name": r["name"], "barangay": r["barangay"], "city": r["city"], "slug": r["slug"], "enabled": bool(r["enabled"]),
+               "offers_delivery": bool(r["offers_delivery"]), "orders": int(r["orders"]), "completed": int(r["completed"]), "cancelled": int(r["cancelled"]),
+               "open_now": int(r["open_now"]), "sales": int(r["sales"]) / 100, "last_order_at": r["last_order_at"].isoformat() if r["last_order_at"] else None} for r in rows]
+    t = s.execute(select(func.count(O.id), func.sum(case((done, 1), else_=0)), func.sum(case((O.status == "cancelled", 1), else_=0)),
+                         func.coalesce(func.sum(case((done, O.total_cents), else_=0)), 0), func.sum(case((O.fulfillment == "delivery", 1), else_=0)),
+                         func.count(func.distinct(O.store_id))).where(O.created_at >= since)).one()
+    orders, completed, cancelled, sales, delivery, active = (int(x or 0) for x in t)
+    open_now = s.scalar(select(func.count(O.id)).where(is_open)) or 0
+    day = func.date(O.created_at)
+    daily = [{"day": str(d), "orders": int(n), "sales": int(c or 0) / 100}
+             for d, n, c in s.execute(select(day, func.count(O.id), func.sum(case((done, O.total_cents), else_=0))).where(O.created_at >= since).group_by(day).order_by(day)).all()]
+    recent = s.execute(select(O.code, O.status, O.fulfillment, O.total_cents, O.created_at, Store.name).join(Store, Store.id == O.store_id)
+                       .order_by(O.created_at.desc()).limit(20)).all()
+    return {"days": days, "totals": {"stores": s.scalar(select(func.count(Store.id))) or 0, "shops": s.scalar(select(func.count()).select_from(Shop)) or 0,
+                                     "shops_open": s.scalar(select(func.count()).select_from(Shop).where(Shop.enabled.is_(True))) or 0, "active_stores": active,
+                                     "orders": orders, "completed": completed, "cancelled": cancelled, "open_now": open_now, "sales": sales / 100,
+                                     "avg_order": round(sales / 100 / completed, 2) if completed else 0, "delivery_share": round(delivery / orders, 3) if orders else 0,
+                                     "completion_rate": round(completed / orders, 3) if orders else 0},
+            "daily": daily, "stores": stores, "total_rows": total_rows, "limit": limit, "offset": offset,
+            "recent": [{"code": c, "status": st, "fulfillment": f, "total": tc / 100, "created_at": at.isoformat(), "store": n} for c, st, f, tc, at, n in recent]}

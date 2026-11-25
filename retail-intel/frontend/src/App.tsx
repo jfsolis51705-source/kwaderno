@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation } from "rea
 import AuthPage from "./pages/Auth";
 import Account from "./pages/store/Account";
 import Score from "./pages/store/Score";
-import { OnlineBadge, Toast } from "./components/ui";
+import { InstallButton, OnlineBadge, Toast } from "./components/ui";
 import { useApp } from "./state/AppContext";
 import CaptureHub from "./pages/store/Capture";
 import Catalog from "./pages/store/Catalog";
@@ -15,6 +15,7 @@ import PortalOrders from "./pages/portal/Orders";
 import AuditLog from "./pages/portal/Audit";
 import Online from "./pages/store/Online";
 import Shop from "./pages/shop/Shop";
+import PortalOnlinePage from "./pages/portal/Online";
 
 const Logo = () => (
   <Link to="/" className="flex items-center gap-2 font-bold tracking-wide text-slate-900">
@@ -49,7 +50,7 @@ function StoreLayout() {
   return (
     <div className="min-h-screen pb-20 md:pb-6">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5"><Logo /><div className="ml-auto flex min-w-0 items-center gap-2"><StorePicker /><OnlineBadge /></div></div>
+        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-2.5"><Logo /><div className="ml-auto flex min-w-0 items-center gap-2"><InstallButton label="Install" /><StorePicker /><OnlineBadge /></div></div>
         <nav className="mx-auto hidden max-w-5xl gap-1 px-4 pb-2 md:flex" aria-label="Store">
           {STORE_TABS.map(([to, label]) => <NavLink key={to} to={`/store/${to}`} className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>{label}</NavLink>)}
           <NavLink to="/store/account" className={({ isActive }) => `ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>Account</NavLink>
@@ -65,14 +66,14 @@ function StoreLayout() {
   );
 }
 
-const PORTAL_TABS = [["overview", "Overview"], ["orders", "Wholesale orders"], ["audit", "Verification log"]] as const;
+const PORTAL_TABS = [["overview", "Overview"], ["online", "Online orders"], ["orders", "Wholesale orders"], ["audit", "Verification log"]] as const;
 
 function PortalLayout() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-3"><Logo /><span className="chip bg-slate-900 text-white">Brand & operations portal</span>
-          <div className="ml-auto flex items-center gap-2"><Link to="/store/capture" className="btn btn-sm">Merchant app</Link><OnlineBadge /></div></div>
+          <div className="ml-auto flex items-center gap-2"><InstallButton /><Link to="/store/capture" className="btn btn-sm">Merchant app</Link><OnlineBadge /></div></div>
         <nav className="mx-auto flex max-w-7xl gap-1 px-6 pb-2" aria-label="Portal">
           {PORTAL_TABS.map(([to, label]) => <NavLink key={to} to={`/portal/${to}`} className={({ isActive }) => `rounded-lg px-3 py-1.5 text-sm font-semibold ${isActive ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"}`}>{label}</NavLink>)}
         </nav>
@@ -118,6 +119,7 @@ export default function App() {
       <Route path="/portal" element={<RequireAuth ops><PortalLayout /></RequireAuth>}>
         <Route index element={<Navigate to="overview" replace />} />
         <Route path="overview" element={<Overview />} />
+        <Route path="online" element={<PortalOnlinePage />} />
         <Route path="orders" element={<PortalOrders />} />
         <Route path="audit" element={<AuditLog />} />
       </Route>

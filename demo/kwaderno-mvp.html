@@ -122,14 +122,21 @@ nav.bottom { display: none; }
 :root[data-layout="tablet"] .sd-tab { padding: 16px 8px 16px 10px; }
 .view.tab-drawer .sell { grid-template-columns: minmax(0, 1fr) !important; }
 .view.tab-drawer { padding-bottom: 84px; }
-.view.tab-drawer .mobile-cart { display: flex; position: fixed; left: calc(110px + env(safe-area-inset-left, 0px)); right: calc(56px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 25;
+.view.tab-drawer .mobile-cart { display: flex; position: fixed; left: calc(var(--rail, 96px) + 14px + env(safe-area-inset-left, 0px)); right: calc(56px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 25;
   background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 14px; padding: 16px 18px; justify-content: space-between; font-weight: 700; font-size: 1.05rem; box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
 :root[data-layout="tablet"] .sd-panel { width: min(420px, 45vw); }
 :root[data-layout="phone"].framed .sd-wrap { position: absolute; }
 @media (prefers-reduced-motion: reduce) { .sd-panel, .sd-back { transition: none; } }
 /* tablet side bar shortcuts (bottom) */
-.rail-spacer, .rail-x { display: none; }
-:root[data-layout="tablet"] nav.bottom .rail-spacer { display: block; flex: 1 1 8px; min-height: 8px; border-bottom: 1px solid var(--line); margin: 4px 10px; }
+.rail-spacer, .rail-x, .rail-grid { display: none; }
+:root[data-layout="tablet"] nav.bottom .rail-grid { display: flex; flex-direction: column; gap: 2px; }
+:root[data-layout="tablet"].landscape nav.bottom .rail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; }
+:root[data-layout="tablet"].landscape nav#bottom > a { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 0 14px; min-height: 44px; font-size: .86rem; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom > a { min-height: 56px; }
+:root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 44px; font-size: .64rem; padding: 2px; }
+:root[data-layout="tablet"].landscape nav#bottom a.rail-x { min-height: 46px; }
+:root[data-layout="tablet"] .rail-x .rx-l { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-layout="tablet"] nav.bottom .rail-spacer { display: block; flex: 0 0 auto; height: 1px; background: var(--line); margin: 6px 10px; }
 :root[data-layout="tablet"] nav.bottom a.rail-x { display: flex; min-height: 52px; font-size: .7rem; text-align: center; line-height: 1.15; }
 :root[data-layout="tablet"] nav.bottom a.rail-x svg { width: 20px; height: 20px; }
 .rail-x .rx-ic { position: relative; display: grid; place-items: center; }
@@ -324,12 +331,15 @@ dialog .db * { min-width: 0; }
 .daygrp { display: flex; justify-content: space-between; gap: 8px; padding: 10px 0 4px; font-weight: 700; font-size: .85rem; color: var(--muted); border-bottom: 1px solid var(--line); }
 /* Tablet layout (data-layout="tablet"): a slim icon rail on the left, wider grids, till beside the products. */
 :root[data-layout="tablet"] nav.tabs, :root[data-layout="tablet"] .wrap:has(> nav.tabs) { display: none; }
-:root[data-layout="tablet"] nav.bottom { display: flex; flex-direction: column; gap: 4px; position: fixed; left: 0; top: 0; bottom: 0; width: 96px; z-index: 20; padding: calc(16px + env(safe-area-inset-top, 0px)) 8px 16px; background: var(--surface); border-right: 1px solid var(--line); }
+:root[data-layout="tablet"] nav.bottom { display: flex; flex-direction: column; gap: 4px; position: fixed; left: 0; top: 0; bottom: 0; width: var(--rail, 96px); z-index: 20; padding: calc(16px + env(safe-area-inset-top, 0px)) 8px 16px; background: var(--surface); border-right: 1px solid var(--line); }
 :root[data-layout="tablet"] nav.bottom a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 64px; border-radius: 14px; text-decoration: none; color: var(--muted); font-size: .8rem; font-weight: 600; }
 :root[data-layout="tablet"] nav.bottom a:hover { background: var(--surface-2); }
 :root[data-layout="tablet"] nav.bottom a[aria-current="page"] { color: var(--accent); background: var(--accent-soft); }
 :root[data-layout="tablet"] nav.bottom svg { width: 24px; height: 24px; }
-:root[data-layout="tablet"] #phone { margin-left: 96px; min-height: 100dvh; }
+:root[data-layout="tablet"] #phone { margin-left: var(--rail, 96px); min-height: 100dvh; }
+:root[data-layout="tablet"].landscape { --rail: 184px; }
+:root[data-layout="tablet"] .home > .apps-block { display: none !important; } /* on tablets the tools live in the side bar */
+:root[data-layout="tablet"].landscape:not(.admin-mode) .home > .hero { grid-column: 1 / -1; }
 :root[data-layout="tablet"] header.top { padding-top: env(safe-area-inset-top, 0px); }
 :root[data-layout="tablet"] main.wrap { max-width: 1040px; padding-top: 16px; padding-bottom: 32px; }
 :root[data-layout="tablet"] .apps { grid-template-columns: repeat(6, minmax(0, 1fr)); }
@@ -390,7 +400,7 @@ dialog .db * { min-width: 0; }
     /* a real tablet's size (iPad-like), scaled as a whole to fit the window, so the layout inside is never squeezed */
     flex: none; width: 820px; height: 1100px; position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%) scale(var(--tabk, 1)); transform-origin: center; }
   :root.framed-tab.framed-tab-land #phone { width: 1180px; height: 820px; }
-  :root.framed-tab #screen { height: 100%; margin-left: 96px; overflow-y: auto; overscroll-behavior: contain; }
+  :root.framed-tab #screen { height: 100%; margin-left: var(--rail, 96px); overflow-y: auto; overscroll-behavior: contain; }
   /* the frame's transform makes the rail, + button, pop-ups and lock screen (all position: fixed) sit inside the tablet */
   :root.framed-tab .layout-toggle { right: 16px; bottom: 16px; }
 }
@@ -794,15 +804,28 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     }));
     // tablet side bar: quick shortcuts in the empty space at the bottom
     if (withIcons && document.documentElement.dataset.layout === "tablet" && view !== "admin" && S.ready) {
-      let tips = 0, low = 0, toBuy = 0; try { tips = computeTips()?.count || 0; } catch { /* no tips yet */ } try { low = lowCount(); watchRestock(); toBuy = restockItems().filter((x) => !x.done).length; } catch { /* not loaded */ }
+      let tips = 0, low = 0, toBuy = 0, exp = 0, bills = 0;
+      try { tips = computeTips()?.count || 0; } catch { /* no tips yet */ }
+      try { low = lowCount(); watchRestock(); toBuy = restockItems().filter((x) => !x.done).length; } catch { /* not loaded */ }
+      try { exp = activeExpiries().filter((e) => daysLeft(e.date) <= 7).length; bills = billsDue().length; } catch { /* not loaded */ }
       const x = (key, label, icon, badge, isCur, onclick) => h("a", { href: "#" + key, class: "rail-x", "aria-current": isCur ? "page" : null, onclick: (e) => { e.preventDefault(); onclick(); } },
-        h("span", { class: "rx-ic" }, svgIcon(icon), badge ? h("b", { class: "num", text: badge > 99 ? "99+" : String(badge) }) : null), label);
-      container.append(h("div", { class: "rail-spacer", "aria-hidden": "true" }),
+        h("span", { class: "rx-ic" }, svgIcon(icon), badge ? h("b", { class: "num", text: badge > 99 ? "99+" : String(badge) }) : null), h("span", { class: "rx-l", text: label }));
+      const at = (v, sb) => view === v && (sub || null) === (sb || null);
+      container.append(h("div", { class: "rail-spacer", "aria-hidden": "true" }), h("div", { class: "rail-grid" },
         x("home", L("Itanong", "Ask Kwaderno"), "M4 5h16v11H9l-5 4zM8 9h8M8 12h5", 0, false, () => { go("home"); setTimeout(() => { const q = document.getElementById("aiQ"); q?.scrollIntoView({ block: "center", behavior: "smooth" }); q?.focus({ preventScroll: true }); }, 60); }),
-        x("home-tips", L("Smart tips", "Smart tips"), IC.tips, tips, view === "home" && sub === "tips", () => go("home", "tips")),
-        x("home-history", L("Huling benta", "Recent sales"), IC.history, 0, view === "home" && sub === "history", () => go("home", "history")),
-        x("products", L("Paubos", "Low stock"), IC.low, low, view === "products" && !sub && productFilter === "low", () => { productFilter = "low"; go("products"); }),
-        x("products-checklist", L("Bibilhin", "Restock list"), "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 12l2 2 4-4M8.5 17h7", toBuy, view === "products" && sub === "checklist", () => go("products", "checklist")));
+        x("products-stockin", "Stock in", IC.stockin, 0, at("products", "stockin"), () => go("products", "stockin")),
+        x("products-new", L("Bagong produkto", "Add product"), IC.add, 0, at("products", "new"), () => go("products", "new")),
+        x("products", L("Paubos", "Low stock"), IC.low, low, at("products") && productFilter === "low", () => { productFilter = "low"; go("products"); }),
+        x("products-checklist", L("Bibilhin", "Restock list"), "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 12l2 2 4-4M8.5 17h7", toBuy, at("products", "checklist"), () => go("products", "checklist")),
+        x("products-expiry", "Expiry", IC.expiry, exp, at("products", "expiry"), () => go("products", "expiry")),
+        x("home-history", L("Huling benta", "Recent sales"), IC.history, 0, at("home", "history"), () => go("home", "history")),
+        x("home-cash", L("Kaha", "Cash ledger"), IC.cash, 0, at("home", "cash"), () => go("home", "cash")),
+        x("home-expenses", L("Gastos", "Expenses"), IC.expense, 0, at("home", "expenses"), () => go("home", "expenses")),
+        x("home-bills", L("Bayarin", "Bills"), IC.bill, bills, at("home", "bills"), () => go("home", "bills")),
+        x("home-attendance", "Attendance", "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0M17 3l1.5 1.5L21 2", 0, at("home", "attendance"), () => go("home", "attendance")),
+        x("home-tips", "Smart tips", IC.tips, tips, at("home", "tips"), () => go("home", "tips")),
+        !S.owner ? x("home-shelf", "Shelf photo", IC.photo, 0, at("home", "shelf"), () => go("home", "shelf")) : null,
+        x("home-settings", L("Setting", "Settings"), "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12h2M3 12h2M12 3v2M12 19v2M17 7l1.4-1.4M5.6 18.4L7 17M17 17l1.4 1.4M5.6 5.6L7 7", 0, at("home", "settings"), () => go("home", "settings"))));
     }
   }
   function svgIcon(d) {

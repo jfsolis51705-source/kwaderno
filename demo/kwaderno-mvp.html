@@ -181,7 +181,8 @@ dialog .db * { min-width: 0; }
 .cats::-webkit-scrollbar { display: none; }
 .cats button { flex: none; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 7px 14px; font-size: .85rem; font-weight: 600; white-space: nowrap; }
 .cats button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
-.pos-acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pos-acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+:root[data-layout="phone"] .pos-acts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .pos-acts .btn { min-height: 44px; padding: 8px 6px; font-size: .84rem; }
 .pos-acts .btn { white-space: nowrap; }
 .pwrap { position: relative; }
@@ -378,8 +379,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
-  const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], rules: null, kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "", disc: { type: "none" }, tabId: "", tabLabel: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
   try { hideMoney = localStorage.getItem("kw-hide-money") === "1"; } catch { /* private mode */ }
@@ -430,6 +431,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    db.doc("network/rules").onSnapshot((d) => { S.rules = d.exists ? d.data() : null; render(); }, () => {});
     db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
     ref("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
     db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
@@ -439,9 +441,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     const timer = setTimeout(() => { if (!S.ready) { S.error = "slow"; render(); } }, 10000);
-    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions"]);
+    let pending = new Set(["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs"]);
     const done = (k) => { pending.delete(k); if (!pending.size) { S.ready = true; clearTimeout(timer); if (S.error === "slow") S.error = null; } };
-    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions"]) {
+    for (const k of ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs"]) {
       col(k).onSnapshot((snap) => {
         S[k] = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         D = derived();
@@ -1553,6 +1555,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "history") return viewHistory();
     if (sub === "cash") return viewCash();
     if (sub === "logbook") return viewLogbook();
+    if (sub === "settings") return viewStoreSettings();
     if (sub === "bills") return viewBills();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
@@ -1600,7 +1603,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Expiry", IC.expiry, "var(--warn)", () => go("products", "expiry"), expired + soon),
         appTile("Smart tips", IC.tips, "var(--accent)", () => go("home", "tips"), T?.count || 0),
         !S.owner ? appTile("Shelf photo", IC.photo, "var(--s2)", () => go("home", "shelf")) : null,
-        appTile("Add product", IC.add, "var(--s3)", () => go("products", "new")))),
+        appTile("Add product", IC.add, "var(--s3)", () => go("products", "new")),
+        appTile(L("Setting ng tindahan", "Store settings"), "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z", "var(--muted)", () => go("home", "settings")))),
       aiCard(), tipsCard(), shelfCard(),
       h("div", { class: "grid two" },
         h("div", { class: "card" }, h("div", { style: "display:flex;justify-content:space-between;align-items:baseline;gap:8px" }, h("h2", { text: "Recent sales" }), h("button", { class: "btn sm", onclick: () => go("home", "history") }, "All ›")),
@@ -1856,6 +1860,35 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("ul", { style: "margin:6px 0 0;padding-left:18px" }, [L("Isang item bawat linya: dami, pangalan, halaga — hal. 2 Coke 30", "One item per line: qty, name, amount — e.g. 2 Coke 30"), L("Malalaking letra, malinaw na numero", "Large letters, clear numbers"), L("Maliwanag, diretso sa itaas ng pahina, walang anino", "Good light, straight above the page, no shadows")].map((t) => h("li", { text: t }))))));
   }
 
+
+  // ---------- STORE SETTINGS: business type, VAT registration, which categories get Senior/PWD discounts ----------
+  function viewStoreSettings() {
+    const st = S.store || {}, C = storeCfg(), R = rules();
+    const cats = [...new Set(activeProducts().map((p) => p.category || "Other"))].sort();
+    const bnSel = new Set(Array.isArray(st.bnCats) ? st.bnCats : cats.filter((c) => BN_RE.test(c))), medSel = new Set(Array.isArray(st.medCats) ? st.medCats : cats.filter((c) => MED_RE.test(c)));
+    let biz = C.biz, vat = C.vatReg;
+    const save = async (btn) => { btn.disabled = true;
+      try { await write("store/profile", { ...S.store, bizType: biz, vatReg: vat, bnCats: [...bnSel], medCats: [...medSel], updatedAt: new Date().toISOString() }); toast(L("Na-save ang setting", "Settings saved")); go("home"); }
+      catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } };
+    const checks = (set, list) => h("div", { style: "display:flex;flex-wrap:wrap;gap:6px 14px" }, list.map((c) => h("label", { class: "small", style: "display:flex;gap:6px;align-items:center" },
+      h("input", { type: "checkbox", checked: set.has(c), onchange: (e) => { e.target.checked ? set.add(c) : set.delete(c); } }), c)));
+    const bizBox = h("div", { class: "methods", style: "grid-template-columns:repeat(auto-fit,minmax(150px,1fr))", role: "radiogroup" });
+    const drawBiz = () => bizBox.replaceChildren(...[["retail", L("Tingi / sari-sari", "Retail / sari-sari")], ["food-pay", L("Kainan: bayad agad", "Food: pay as you order")], ["food-tab", L("Kainan: open bill", "Food: open billing")]].map(([k, l]) =>
+      h("button", { role: "radio", "aria-checked": String(biz === k), onclick: () => { biz = k; drawBiz(); } }, l)));
+    drawBiz();
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: L("Setting ng tindahan", "Store settings"), style: "margin-top:8px" }))),
+      h("div", { class: "card grid" }, h("h2", { text: L("Uri ng negosyo", "Business type") }), bizBox,
+        h("div", { class: "muted small", text: L("Kainan: may order number sa resibo at 20% Senior/PWD sa pagkain. Open bill: puwedeng magdagdag ng order bago magbayad.", "Food: receipts get an order number and the 20% Senior/PWD discount applies to meals. Open billing: add orders before paying.") }),
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "vatReg", checked: vat, onchange: (e) => { vat = e.target.checked; } }), L("VAT-registered ang tindahan (kadalasan hindi ang maliliit na tindahan)", "This store is VAT-registered (most small stores are not)"))),
+      h("div", { class: "card grid" }, h("h2", { text: L("Basic necessities at prime commodities", "Basic necessities and prime commodities") }),
+        h("div", { class: "muted small", text: L(`${R.bnpcRate}% Senior/PWD discount sa mga kategoryang ito (hanggang ₱${R.bnpcWeeklyPurchase} na bili at ₱${R.bnpcWeeklyDiscount} na discount bawat linggo).`, `${R.bnpcRate}% Senior/PWD discount on these categories (up to ₱${R.bnpcWeeklyPurchase} of purchases and ₱${R.bnpcWeeklyDiscount} of discount a week).`) }),
+        cats.length ? checks(bnSel, cats) : h("div", { class: "muted small", text: L("Wala pang produkto.", "No products yet.") })),
+      h("div", { class: "card grid" }, h("h2", { text: L("Gamot", "Medicines") }), h("div", { class: "muted small", text: L(`${R.rate20}% + VAT exemption para sa Senior/PWD.`, `${R.rate20}% + VAT exemption for Senior/PWD.`) }), cats.length ? checks(medSel, cats) : null),
+      h("div", { class: "banner small" }, h("b", { text: L(`Batas na sinusunod (ayon sa KELSON, as of ${R.asOf}): `, `Rules followed (kept by KELSON, as of ${R.asOf}): `) }), R.basis),
+      h("button", { class: "btn primary big", onclick: (e) => save(e.currentTarget) }, L("I-save", "Save")));
+  }
+
   // ---------- EXPENSES (gastos) ----------
   const EXP_CATS = [["stock", "Paninda (stock)"], ["power", "Kuryente"], ["water", "Tubig"], ["rent", "Upa · Rent"], ["transport", "Pamasahe"], ["load", "Load / Internet"], ["supplies", "Supplies"], ["salary", "Sahod"], ["other", "Other"]];
   const expCat = (k) => tx(EXP_CATS.find(([c]) => c === k)?.[1] || "Other");
@@ -2032,6 +2065,110 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return h("span", { class: "chip num " + (q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "ok"), text: `${qtyFmt(q)} ${p.unit || "pc"}` });
   }
 
+
+  // ---------- DISCOUNT RULES (Philippine law) — KELSON keeps them current for every store in network/rules ----------
+  // Basis: RA 9994 (seniors) and RA 10754 (PWD): 20% + VAT exemption on covered goods and services (meals, medicines);
+  // BIR RMC 38-2012: computed on the VAT-exclusive price; in group meals only the senior/PWD's own share;
+  // DTI-DA-DOE Joint Administrative Order (March 2024): 5% special discount on basic necessities and prime commodities,
+  // up to ₱2,500 of purchases and ₱125 of discount per week. One ID per purchase; no combining with other discounts or promos.
+  const RULES_DEFAULT = { asOf: "2024-03-25", rate20: 20, vat: 12, bnpcRate: 5, bnpcWeeklyPurchase: 2500, bnpcWeeklyDiscount: 125,
+    basis: "RA 9994 (Expanded Senior Citizens Act), RA 10754 (PWD), BIR RMC 38-2012 (computation, group meals), DTI-DA-DOE Joint Administrative Order of March 2024 (5% on basic necessities and prime commodities, ₱2,500 purchases / ₱125 discount per week)" };
+  const rules = () => ({ ...RULES_DEFAULT, ...(S.rules || {}) });
+  // Basic necessities and prime commodities (Price Act list) and medicines, matched on product categories; the store can adjust.
+  const BN_RE = /rice|bigas|corn|mais|bread|tinapay|pandesal|fish|isda|sardin|tuna|mackerel|canned|de ?lata|pork|baboy|beef|baka|chicken|manok|poultry|meat|corned|egg|itlog|milk|gatas|dairy|vegetable|gulay|root crop|coffee|kape|creamer|sugar|asukal|oil|mantika|salt|asin|laundry|detergent|soap|sabon|charcoal|uling|firewood|candle|kandila|flour|harina|onion|sibuyas|garlic|bawang|vinegar|suka|patis|fish sauce|soy|toyo|school|paper|battery|baterya|bulb|bumbilya/i;
+  const MED_RE = /medicine|gamot|pharma|drug/i;
+  function storeCfg() {
+    const st = S.store || {}, biz = st.bizType || "retail";
+    const bn = Array.isArray(st.bnCats) ? new Set(st.bnCats) : null, med = Array.isArray(st.medCats) ? new Set(st.medCats) : null;
+    return { biz, food: biz.startsWith("food"), tabs: biz === "food-tab", vatReg: !!st.vatReg,
+      isMed: (p) => (med ? med.has(p.category || "Other") : MED_RE.test(p.category || "")), isBN: (p) => (bn ? bn.has(p.category || "Other") : BN_RE.test(p.category || "")) };
+  }
+  const weekStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+  // How much of the weekly 5% allowance this ID already used (purchase amount and discount), from this store's sales.
+  function bnpcUsed(idNo) {
+    const k = String(idNo || "").trim().toLowerCase(), from = weekStart(); let base = 0, disc = 0;
+    if (!k) return { base, disc };
+    for (const x of S.sales) if (!x.voided && x.discountInfo?.mode === "retail" && String(x.discountInfo.idNo || "").trim().toLowerCase() === k && new Date(x.at).getTime() >= from) { base += x.discountInfo.bnBase || 0; disc += x.discountInfo.bnDisc || 0; }
+    return { base, disc };
+  }
+  function discountCalc(lines, subtotal) {
+    const d = cart.disc || {}, R = rules(), C = storeCfg();
+    if (d.type === "custom") {
+      const a = d.pct ? Math.round((subtotal * Math.min(100, Math.max(0, Number(d.pct) || 0))) / 100) : toCentavos(d.amt || "0") ?? 0;
+      return { amount: Math.min(a, subtotal), info: a ? { type: "custom", pct: d.pct ? Number(d.pct) : null } : null };
+    }
+    if (d.type !== "senior" && d.type !== "pwd") return { amount: 0, info: null };
+    const vatOut = (x) => (C.vatReg ? x / (1 + R.vat / 100) : x), amt = (l) => Math.round(l.q * l.p.price);
+    const who = { type: d.type, name: (d.name || "").trim(), idNo: (d.idNo || "").trim() };
+    if (!who.name || !who.idNo) return { amount: 0, info: null, err: L("Ilagay ang pangalan at ID number ng Senior/PWD.", "Enter the Senior/PWD's name and ID number.") };
+    if (C.food) {
+      const pax = Math.max(1, parseInt(d.pax || "1", 10) || 1), qual = Math.min(pax, Math.max(1, parseInt(d.qual || "1", 10) || 1));
+      const share = Math.round((subtotal * qual) / pax), base = vatOut(share), disc = Math.round((base * R.rate20) / 100), vatEx = Math.round(share - base);
+      return { amount: Math.min(subtotal, disc + vatEx), info: { ...who, mode: "food", pax, qual, share, base: Math.round(base), rate: R.rate20, disc, vatExempt: vatEx } };
+    }
+    const med = lines.filter((l) => !l.custom && C.isMed(l.p)), bn = lines.filter((l) => !l.custom && !C.isMed(l.p) && C.isBN(l.p));
+    const medAmt = med.reduce((a, l) => a + amt(l), 0), medBase = vatOut(medAmt), medDisc = Math.round((medBase * R.rate20) / 100), medVat = Math.round(medAmt - medBase);
+    const used = bnpcUsed(who.idNo), purchaseLeft = Math.max(0, R.bnpcWeeklyPurchase * 100 - used.base), discLeft = Math.max(0, R.bnpcWeeklyDiscount * 100 - used.disc);
+    const bnAmt = bn.reduce((a, l) => a + amt(l), 0), bnBase = d.booklet ? Math.min(bnAmt, purchaseLeft) : 0, bnDisc = Math.min(Math.round((bnBase * R.bnpcRate) / 100), discLeft);
+    const err = !medAmt && !bnAmt ? L("Walang gamot o basic necessity sa benta na ito, kaya walang Senior/PWD discount.", "No medicines or basic necessities in this sale, so no Senior/PWD discount applies.") : null;
+    return { amount: Math.min(subtotal, medDisc + medVat + bnDisc), err, info: { ...who, mode: "retail", booklet: !!d.booklet, medAmt, medDisc, medVat, bnAmt, bnBase, bnDisc, purchaseLeft, discLeft, rate20: R.rate20, bnpcRate: R.bnpcRate } };
+  }
+
+
+  // Discount picker: Senior / PWD (law-based, name and ID recorded) or another discount; never both.
+  function discountBox(c) {
+    const d = cart.disc, C = storeCfg(), R = rules(), set = (k, v, rr = true) => { cart.disc[k] = v; if (rr) render(); };
+    const inp = (id, key, ph, mode = "text") => h("input", { type: "text", inputmode: mode, id, value: d[key] || "", placeholder: ph, oninput: (e) => { set(key, e.target.value); } });
+    const box = h("div", { class: "grid", style: "gap:8px;border:1px solid var(--line);border-radius:12px;padding:10px" },
+      h("div", { class: "cats", role: "radiogroup", "aria-label": L("Discount", "Discount"), style: "flex-wrap:wrap" }, [["none", L("Walang discount", "No discount")], ["senior", "Senior"], ["pwd", "PWD"], ["custom", L("Iba pa", "Other")]].map(([k, l]) =>
+        h("button", { role: "radio", "aria-checked": String(d.type === k), "aria-pressed": String(d.type === k), onclick: () => { cart.disc = { ...cart.disc, type: k }; render(); } }, l))));
+    if (d.type === "custom") box.append(h("div", { class: "form" }, h("label", { class: "f" }, L("Halaga ₱", "Amount ₱"), inp("discAmt", "amt", "0.00", "decimal")), h("label", { class: "f" }, L("o porsyento %", "or percent %"), inp("discPct", "pct", "0", "decimal"))));
+    if (d.type === "senior" || d.type === "pwd") {
+      box.append(h("div", { class: "form" }, h("label", { class: "f" }, L("Pangalan (ayon sa ID)", "Name (as on ID)"), inp("discName", "name", "Juan Dela Cruz")), h("label", { class: "f" }, L("ID number", "ID number"), inp("discId", "idNo", "OSCA / PWD ID no."))));
+      if (C.food) box.append(h("div", { class: "form" }, h("label", { class: "f" }, L("Ilan kayong kakain (pax)", "Diners in the group (pax)"), inp("discPax", "pax", "1", "numeric")), h("label", { class: "f" }, L("Ilan ang Senior/PWD", "How many are Senior/PWD"), inp("discQual", "qual", "1", "numeric"))),
+        h("div", { class: "muted small", text: L(`Sa grupo, ang bahagi lang ng Senior/PWD ang may ${R.rate20}% discount${C.vatReg ? " at VAT exemption" : ""}.`, `In a group, only the Senior/PWD's share gets the ${R.rate20}% discount${C.vatReg ? " and VAT exemption" : ""}.`) }));
+      else box.append(h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "discBooklet", checked: !!d.booklet, onchange: (e) => set("booklet", e.target.checked) }),
+        L(`May dalang purchase booklet (para sa ${R.bnpcRate}% sa basic necessities)`, `Purchase booklet shown (for the ${R.bnpcRate}% on basic necessities)`)));
+      const i = c.discInfo;
+      if (i?.mode === "food") box.append(h("div", { class: "small" }, L(`${i.rate}% sa bahagi ng ${i.qual} sa ${i.pax}: −${peso(i.disc)}`, `${i.rate}% on the share of ${i.qual} of ${i.pax}: −${peso(i.disc)}`), i.vatExempt ? h("div", { text: L(`VAT exemption: −${peso(i.vatExempt)}`, `VAT exemption: −${peso(i.vatExempt)}`) }) : null));
+      if (i?.mode === "retail") box.append(h("div", { class: "small", style: "display:grid;gap:2px" },
+        i.medAmt ? h("div", { text: L(`Gamot ${peso(i.medAmt)}: ${i.rate20}% −${peso(i.medDisc)}`, `Medicines ${peso(i.medAmt)}: ${i.rate20}% −${peso(i.medDisc)}`) + (i.medVat ? ` · VAT −${peso(i.medVat)}` : "") }) : null,
+        i.bnAmt ? h("div", { text: i.booklet ? L(`Basic necessities ${peso(i.bnAmt)}: ${i.bnpcRate}% sa ${peso(i.bnBase)} −${peso(i.bnDisc)}`, `Basic necessities ${peso(i.bnAmt)}: ${i.bnpcRate}% on ${peso(i.bnBase)} −${peso(i.bnDisc)}`) : L("Basic necessities: kailangan ang purchase booklet para sa 5%.", "Basic necessities: the purchase booklet is needed for the 5%.") }) : null,
+        i.bnAmt && i.booklet ? h("div", { class: "muted", text: L(`Natitira ngayong linggo para sa ID na ito: ${peso(i.purchaseLeft)} na bili, ${peso(i.discLeft)} na discount`, `Left this week for this ID: ${peso(i.purchaseLeft)} of purchases, ${peso(i.discLeft)} of discount`) }) : null));
+      if (c.discErr) box.append(h("div", { class: "note", text: c.discErr }));
+      box.append(h("div", { class: "muted small", text: L("Isang ID lang bawat bili, at hindi puwedeng isabay sa ibang promo o discount.", "One ID per purchase, and it can't be combined with another promo or discount.") }));
+    }
+    return box;
+  }
+  // ---------- OPEN BILLS (tabs): order now, add more, pay at the end; stock is deducted only when paid ----------
+  function saveTab() {
+    const lines = cart.lines.map((l) => ({ productId: l.productId, qty: String(l.qty), ...(l.custom ? { custom: l.custom } : {}) }));
+    const doSave = async (label) => {
+      const id = cart.tabId || uid(), now = new Date().toISOString();
+      try { await write("tabs/" + id, { label, lines, disc: cart.disc || { type: "none" }, status: "open", openedAt: S.tabs.find((t) => t.id === id)?.openedAt || now, updatedAt: now, by: S.me || null });
+        Object.assign(cart, { lines: [], tabId: "", tabLabel: "", disc: { type: "none" }, tendered: "", ref: "" }); if (dlg.open) dlg.close(); toast(L(`Naka-save ang bill: ${label}`, `Bill saved: ${label}`)); render(); }
+      catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); }
+    };
+    if (cart.tabId) return doSave(cart.tabLabel);
+    const name = h("input", { type: "text", id: "tabLabel", maxlength: 40, placeholder: L("hal. Table 3, Kuya Ben", "e.g. Table 3, Kuya Ben") });
+    openDialog(L("Open bill", "Open bill"), h("div", { class: "grid" }, h("label", { class: "f" }, L("Pangalan o mesa", "Name or table"), name),
+      h("button", { class: "btn primary big", onclick: () => { const v = name.value.trim(); if (!v) return toast(L("Ilagay ang pangalan o mesa", "Enter a name or table")); doSave(v); } }, L("I-save — bayaran mamaya", "Save — pay later"))));
+    setTimeout(() => name.focus(), 50);
+  }
+  const openTabs = () => S.tabs.filter((t) => t.status === "open").sort((a, b) => String(a.openedAt).localeCompare(String(b.openedAt)));
+  const tabTotal = (t) => (t.lines || []).reduce((a, l) => a + Math.round((Number(l.qty) || 0) * (l.custom ? l.custom.price : productById(l.productId)?.price || 0)), 0);
+  function tabsDialog() {
+    const list = openTabs();
+    openDialog(L(`Mga open bill (${list.length})`, `Open bills (${list.length})`), h("div", { class: "grid" },
+      list.length ? h("ul", { class: "list" }, list.map((t) => h("li", {},
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: "🧾 " + t.label }), h("div", { class: "muted small", text: `${(t.lines || []).length} item · ${relTime(t.openedAt)}` })),
+        h("span", { class: "num", style: "font-weight:700", text: peso(tabTotal(t)) }),
+        h("button", { class: "btn sm primary", onclick: () => {
+          if (cart.lines.length && cart.tabId !== t.id) return toast(L("May laman pa ang kasalukuyang benta — i-save o tapusin muna.", "The current sale still has items — save or finish it first."));
+          Object.assign(cart, { lines: (t.lines || []).map((l) => ({ ...l })), tabId: t.id, tabLabel: t.label, disc: t.disc || { type: "none" } }); dlg.close(); go("sell"); } }, L("Buksan", "Open")),
+        h("button", { class: "btn sm", "aria-label": L("Kanselahin ang bill", "Cancel bill"), onclick: async () => { if (!confirm(L(`Kanselahin ang bill ni ${t.label}?`, `Cancel ${t.label}'s bill?`))) return; await ref("tabs/" + t.id).update({ status: "cancelled", closedAt: new Date().toISOString() }).catch(() => {}); tabsDialog(); } }, "×"))))
+        : h("div", { class: "empty", text: L("Walang open bill.", "No open bills.") })));
+  }
   // ---------- SELL ----------
   function addToCart(p) {
     const i = cart.lines.findIndex((l) => l.productId === p.id);
@@ -2042,11 +2179,11 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function cartCalc() {
     const lines = cart.lines.map((l) => ({ ...l, p: l.custom ? { id: l.productId, name: l.custom.name, price: l.custom.price, cost: 0, custom: true } : productById(l.productId), q: Number(l.qty) || 0 })).filter((l) => l.p);
     const subtotal = lines.reduce((a, l) => a + Math.round(l.q * l.p.price), 0);
-    const disc = toCentavos(cart.discount || "0") ?? 0;
+    const dc = discountCalc(lines, subtotal), disc = dc.amount;
     const total = Math.max(0, subtotal - disc);
     const tendered = cart.tendered ? toCentavos(cart.tendered) : null;
     const short = lines.filter((l) => !l.custom && l.q > stockOf(l.productId));
-    return { lines, subtotal, disc, total, tendered, change: tendered != null ? tendered - total : null, short };
+    return { lines, subtotal, disc, discInfo: dc.info, discErr: dc.err || null, total, tendered, change: tendered != null ? tendered - total : null, short };
   }
   function viewSell() {
     const prods = activeProducts();
@@ -2076,6 +2213,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const checkout = () => {
       currentCheckout = checkout;
       const box = h("div", { class: "grid", style: "gap:12px" });
+      if (cart.tabId) box.append(h("div", { class: "note", style: "display:flex;justify-content:space-between;gap:8px;align-items:center;background:var(--accent-soft);color:var(--fg)" }, h("b", { text: "🧾 " + cart.tabLabel }),
+        h("button", { class: "btn sm", onclick: () => { Object.assign(cart, { lines: [], tabId: "", tabLabel: "", disc: { type: "none" } }); render(); } }, L("Isara muna (naka-save)", "Put away (saved)"))));
       if (!c.lines.length) { box.append(h("div", { class: "empty", text: "Tap products to add them here." })); return box; }
       box.append(h("ul", { class: "list" }, c.lines.map((l) => h("li", {},
         h("div", { class: "grow" }, h("div", { class: "trunc", style: "font-weight:600", text: l.p.name }), l.custom ? h("div", { class: "small muted", text: `${peso(l.p.price)} · not tracked in stock` }) : h("div", { class: "small " + (l.q > stockOf(l.productId) ? "" : "muted"), style: l.q > stockOf(l.productId) ? "color:var(--bad)" : null, text: `${peso(l.p.price)} · ${qtyFmt(stockOf(l.productId))} left` })),
@@ -2084,7 +2223,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("input", { type: "text", inputmode: "decimal", value: l.qty, "aria-label": "Quantity", id: "q-" + l.productId, oninput: (e) => { cart.lines.find((x) => x.productId === l.productId).qty = e.target.value; render(); } }),
           h("button", { "aria-label": "More", onclick: () => { cart.lines.find((x) => x.productId === l.productId).qty = String((Number(l.qty) || 0) + 1); render(); } }, "+")),
         h("span", { class: "num", style: "width:76px;text-align:right;font-weight:600", text: peso(Math.round(l.q * l.p.price)) })))));
-      box.append(h("label", { class: "f" }, "Discount (optional)", h("input", { type: "text", inputmode: "decimal", id: "disc", value: cart.discount, placeholder: "0.00", oninput: (e) => { cart.discount = e.target.value; render(); } })));
+      box.append(discountBox(c));
       box.append(h("div", { class: "total" }, h("span", { class: "muted", text: "Total" }), h("span", { class: "v num", text: peso(c.total) })));
       box.append(h("div", { class: "methods", role: "radiogroup", "aria-label": "Payment method" }, [["cash", "Cash"], ["gcash", "GCash"], ["credit", "Utang"]].map(([m, label]) =>
         h("button", { role: "radio", "aria-checked": String(cart.method === m), onclick: () => { cart.method = m; render(); } }, label))));
@@ -2106,8 +2245,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       if (c.short.length) box.append(h("div", { class: "note err", text: `Not enough stock: ${c.short.map((l) => `${l.p.name} (${qtyFmt(stockOf(l.productId))} left)`).join(", ")}. Do a stock-in or correct the count first.` }));
       const cust = S.customers.find((x) => x.id === cart.customerId);
       const overLimit = cart.method === "credit" && cust?.limit && (D.balance.get(cust.id) || 0) + c.total > cust.limit;
-      const can = c.lines.length && !c.short.length && c.lines.every((l) => l.q > 0) && c.disc <= c.subtotal && (cart.method !== "credit" || (cart.customerId && !overLimit)) && (cart.method !== "cash" || c.change == null || c.change >= 0);
+      const can = c.lines.length && !c.short.length && c.lines.every((l) => l.q > 0) && c.disc <= c.subtotal && !((cart.disc.type === "senior" || cart.disc.type === "pwd") && !c.discInfo) && (cart.method !== "credit" || (cart.customerId && !overLimit)) && (cart.method !== "cash" || c.change == null || c.change >= 0);
       box.append(h("button", { class: "btn primary big", disabled: !can, onclick: charge }, cart.method === "credit" ? `Record utang ${peso(c.total)}` : `Charge ${peso(c.total)}`));
+      box.append(h("button", { class: "btn", onclick: saveTab }, cart.tabId ? L(`I-save ang bill: ${cart.tabLabel}`, `Save bill: ${cart.tabLabel}`) : L("Open bill — bayaran mamaya", "Open bill — pay later")));
       return box;
     };
     return h("div", { class: "view" },
@@ -2117,6 +2257,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("div", { class: "pos-acts" },
             h("button", { class: "btn primary", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); } else unknownBarcode(code); } }, svgIcon(IC.scan), "Scan"),
             h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
+            h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
             h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
           h("input", { type: "search", id: "sellSearch", placeholder: "Search product or type barcode", value: search, "aria-label": "Search products",
             oninput: (e) => { search = e.target.value; render(); },
@@ -2155,7 +2296,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (charging) return;
     const c = cartCalc();
     const sale = {
-      at: new Date().toISOString(), by: S.me || null, method: cart.method, subtotal: c.subtotal, discount: c.disc, total: c.total,
+      at: new Date().toISOString(), by: S.me || null, method: cart.method, subtotal: c.subtotal, discount: c.disc, discountInfo: c.disc ? c.discInfo : null, total: c.total,
+      orderNo: storeCfg().food ? S.sales.filter((x) => dayKey(x.at) === todayKey()).length + 1 : null, tabLabel: cart.tabId ? cart.tabLabel : null,
       tendered: cart.method === "cash" ? c.tendered ?? c.total : null, ref: cart.method === "gcash" ? cart.ref.trim() || null : null,
       customerId: cart.method === "credit" ? cart.customerId : null, voided: false,
       lines: c.lines.map((l) => ({ productId: l.custom ? null : l.productId, name: l.p.name, qty: l.q, price: l.p.price, cost: l.p.cost || 0, ...(l.custom ? { custom: true } : {}) })),
@@ -2164,21 +2306,32 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const id = uid(); // client id: a retried save can never create two sales
     try {
       await write("sales/" + id, sale);
-      Object.assign(cart, { lines: [], tendered: "", ref: "", discount: "", customerId: "", method: "cash" });
+      if (cart.tabId) await ref("tabs/" + cart.tabId).update({ status: "closed", saleId: id, closedAt: new Date().toISOString() }).catch(() => {});
+      Object.assign(cart, { lines: [], tendered: "", ref: "", discount: "", customerId: "", method: "cash", disc: { type: "none" }, tabId: "", tabLabel: "" });
       if (dlg.open) dlg.close();
       showReceipt({ id, ...sale }, c.change);
     } catch (e) { toast("Could not save the sale: " + (e?.message || e?.code || "try again")); }
     finally { charging = false; }
+  }
+  function receiptDiscount(s) {
+    const i = s.discountInfo, row = (a, b) => h("div", { class: "row" }, h("span", { text: a }), h("span", { class: "num", text: "−" + peso(b) }));
+    if (!s.discount) return [];
+    if (!i || i.type === "custom") return [row(L("Discount", "Discount") + (i?.pct ? ` (${i.pct}%)` : ""), s.discount)];
+    const who = h("div", { class: "small", text: `${i.type === "pwd" ? "PWD" : "Senior Citizen"}: ${i.name} · ID ${i.idNo}` });
+    if (i.mode === "food") return [who, row(`${i.rate}% (${i.qual}/${i.pax} pax)`, i.disc), i.vatExempt ? row("VAT exempt", i.vatExempt) : null];
+    return [who, i.medDisc ? row(`${i.rate20}% ${L("gamot", "medicines")}`, i.medDisc) : null, i.medVat ? row("VAT exempt", i.medVat) : null, i.bnDisc ? row(`${i.bnpcRate}% BNPC`, i.bnDisc) : null];
   }
   function showReceipt(s, change) {
     const body = h("div", { class: "grid" },
       h("div", { class: "receipt" },
         h("div", { style: "text-align:center;font-weight:700", text: S.store.name }),
         h("div", { class: "muted small", style: "text-align:center", text: when(s.at) + (s.voided ? " · VOIDED" : "") }),
+        s.orderNo ? h("div", { style: "text-align:center;font-size:1.6rem;font-weight:800", text: "ORDER #" + String(s.orderNo).padStart(3, "0") }) : null,
+        s.tabLabel ? h("div", { style: "text-align:center;font-weight:600", text: "Bill: " + s.tabLabel }) : null,
         h("hr", { style: "border:0;border-top:1px dashed var(--line);width:100%" }),
         (s.lines || []).map((l) => h("div", { class: "row" }, h("span", { class: "trunc", text: `${qtyFmt(l.qty)} × ${l.name}` }), h("span", { class: "num", text: peso(Math.round(l.qty * l.price)) }))),
         h("hr", { style: "border:0;border-top:1px dashed var(--line);width:100%" }),
-        s.discount ? h("div", { class: "row" }, h("span", { text: "Discount" }), h("span", { class: "num", text: "−" + peso(s.discount) })) : null,
+        ...receiptDiscount(s),
         h("div", { class: "row", style: "font-weight:700;font-size:1.05rem" }, h("span", { text: "TOTAL" }), h("span", { class: "num", text: peso(s.total) })),
         h("div", { class: "row" }, h("span", { text: s.method === "credit" ? "Utang — " + custName(s.customerId) : s.method === "gcash" ? "GCash" + (s.ref ? " ref " + s.ref : "") : "Cash" }), h("span", { class: "num", text: peso(s.method === "cash" ? s.tendered ?? s.total : s.total) })),
         change != null && change > 0 ? h("div", { class: "row", style: "font-weight:700" }, h("span", { text: "Sukli" }), h("span", { class: "num", text: peso(change) })) : null,
@@ -2619,6 +2772,18 @@ ${catalog}`;
         row("Total expenses", -opex), row("Net profit", np, { bold: true, color: np < 0 ? "--bad" : "--good" })))),
       h("div", { class: "muted small", style: "margin-top:6px", text: `From ${from}. Cost of goods uses each product's cost at the time of sale. Utang sales count as sales when made.` }));
   }
+  // Senior/PWD discount log: who, ID, and how much — the record stores keep for these discounts.
+  function seniorPwdCard(since) {
+    const rows = S.sales.filter((x) => !x.voided && new Date(x.at) >= since && (x.discountInfo?.type === "senior" || x.discountInfo?.type === "pwd")).sort((a, b) => b.at.localeCompare(a.at));
+    if (!rows.length) return null;
+    const vatOf = (i) => (i.vatExempt || 0) + (i.medVat || 0), discOf = (x) => x.discount - vatOf(x.discountInfo);
+    const csv = () => { const esc = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+      return "﻿" + [["Date", "Type", "Name", "ID no.", "Sale total", "Discount", "VAT exempt"].join(","), ...rows.map((x) => [x.at.slice(0, 16).replace("T", " "), x.discountInfo.type.toUpperCase(), x.discountInfo.name, x.discountInfo.idNo, (x.subtotal / 100).toFixed(2), (discOf(x) / 100).toFixed(2), (vatOf(x.discountInfo) / 100).toFixed(2)].map(esc).join(","))].join("\r\n"); };
+    return h("div", { class: "card" }, h("div", { class: "toolbar", style: "margin-bottom:6px" }, h("h2", { text: L("Senior/PWD discounts", "Senior/PWD discounts"), style: "margin-right:auto" }), h("button", { class: "btn sm", onclick: () => exportCsv(csv(), "kwaderno-senior-pwd") }, "CSV")),
+      h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Date", "Type", "Name", "ID", "Discount", "VAT"].map((t) => h("th", { text: t })))),
+        h("tbody", {}, rows.slice(0, 200).map((x) => h("tr", {}, h("td", { text: when(x.at) }), h("td", { text: x.discountInfo.type === "pwd" ? "PWD" : "Senior" }), h("td", { text: x.discountInfo.name }), h("td", { text: x.discountInfo.idNo }), h("td", { class: "r num", text: peso(discOf(x)) }), h("td", { class: "r num", text: peso(vatOf(x.discountInfo)) })))),
+        h("tfoot", {}, h("tr", {}, h("td", { text: L("Kabuuan", "Total"), colspan: 4 }), h("td", { class: "r num", text: peso(rows.reduce((a, x) => a + discOf(x), 0)) }), h("td", { class: "r num", text: peso(rows.reduce((a, x) => a + vatOf(x.discountInfo), 0)) }))))));
+  }
   function viewReports() {
     const since = new Date(); since.setHours(0, 0, 0, 0); since.setDate(since.getDate() - (range - 1));
     const sales = S.sales.filter((s) => !s.voided && new Date(s.at) >= since);
@@ -2659,6 +2824,7 @@ ${catalog}`;
         h("thead", {}, h("tr", {}, ["Date", "Sales", "Cash", "GCash", "Utang", "Total", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
         h("tbody", {}, dayRows.map(([d, r]) => h("tr", {}, h("td", { text: new Date(d + "T00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" }) }), h("td", { class: "r num", text: r.n }), [r.cash, r.gcash, r.credit, r.total, r.profit].map((v) => h("td", { class: "r num", text: peso(v) }))))),
         h("tfoot", {}, h("tr", {}, h("td", { text: "Total" }), h("td", { class: "r num", text: tot.n }), [tot.cash, tot.gcash, tot.credit, tot.total, tot.profit].map((v) => h("td", { class: "r num", text: peso(v) }))))))),
+      seniorPwdCard(since),
       h("div", { class: "card" }, h("h2", { text: "Sales by product", style: "margin-bottom:6px" }),
         prodRows.length ? h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Product", "Qty", "Revenue", "Profit"].map((x, i) => h("th", { class: i ? "r" : "", text: x })))),
           h("tbody", {}, prodRows.map((r) => h("tr", {}, h("td", { text: r.name }), h("td", { class: "r num", text: qtyFmt(r.qty) }), h("td", { class: "r num", text: peso(r.revenue) }), h("td", { class: "r num", text: peso(r.profit) }))))))
@@ -2763,6 +2929,7 @@ ${catalog}`;
     if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
     if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
+    if (sub === "rules") return adminPage("rules", "Discount rules — all stores", viewRules());
     if (sub === "dict") return adminPage("dict", "Logbook dictionary — reading handwriting", viewOcrDict());
     if (sub && sub.startsWith("audit")) return adminPage("audit", "Shelf audit", viewAudit());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
@@ -3806,10 +3973,27 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
           h("span", { class: "chip", text: e.src }),
           e.src === "KELSON" ? h("button", { class: "btn sm", onclick: () => saveOcrDict((S.ocrDict.entries || []).filter((x) => fold(x.from) !== e.from)) }, "Remove") : null)))));
   }
+  // ---------- SUPER ADMIN · RULES: one place to keep discount law current for every store ----------
+  function viewRules() {
+    const R = rules(), f = (id, label, v, w) => h("label", { class: "f", style: w ? `max-width:${w}` : null }, label, h("input", { type: "text", id, value: String(v) }));
+    const basis = h("textarea", { id: "ruBasis", rows: 4, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); basis.value = R.basis;
+    return h("div", { class: "grid", style: "gap:16px" },
+      h("div", { class: "banner small", text: "These rules drive the Senior/PWD discounts in every store. When the law or a DTI/BIR order changes, update them here once; stores use the new values immediately. Defaults follow RA 9994, RA 10754, BIR RMC 38-2012 and the DTI-DA-DOE order of March 2024 (no later amendment found as of this build; pending House bills are not law)." }),
+      h("div", { class: S.rules?.checkedAt ? "card" : "note", text: S.rules?.checkedAt ? `Last monthly check: ${fmtDate(S.rules.checkedAt.slice(0, 10))}${S.rules.lastChange ? " · " + S.rules.lastChange : " · no change found"}` : "Not checked yet by the monthly review. Values below are the built-in defaults." }),
+      h("div", { class: "card grid" },
+        h("div", { class: "form" }, f("ruAsOf", "Rules as of (date)", R.asOf), f("ruRate20", "Senior/PWD discount on meals and medicines (%)", R.rate20), f("ruVat", "VAT (%)", R.vat)),
+        h("div", { class: "form" }, f("ruBnpc", "Special discount on basic necessities (%)", R.bnpcRate), f("ruCapP", "Weekly purchase cap per ID (₱)", R.bnpcWeeklyPurchase), f("ruCapD", "Weekly discount cap per ID (₱)", R.bnpcWeeklyDiscount)),
+        h("label", { class: "f" }, "Legal basis shown to stores", basis),
+        h("button", { class: "btn primary", style: "justify-self:start", onclick: async () => {
+          const n = (id) => Number(document.getElementById(id).value), r = { asOf: document.getElementById("ruAsOf").value.trim(), rate20: n("ruRate20"), vat: n("ruVat"), bnpcRate: n("ruBnpc"), bnpcWeeklyPurchase: n("ruCapP"), bnpcWeeklyDiscount: n("ruCapD"), basis: basis.value.trim().slice(0, 600) };
+          if (Object.values(r).some((v) => v === "" || Number.isNaN(v))) return toast("Fill in every field with a number");
+          try { await S.db.doc("network/rules").set({ ...r, updatedAt: new Date().toISOString(), by: S.me || null }); toast("Rules saved for all stores"); } catch (e) { toast("Could not save: " + (e?.code || "try again")); }
+        } }, "Save for all stores")));
+  }
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("dict", "Logbook dictionary", "dict"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("dict", "Logbook dictionary", "dict"), t("rules", "Discount rules", "rules"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

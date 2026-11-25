@@ -1288,7 +1288,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // Listening turns speech into text only (Claude page dictation, or the browser's own speech recognition);
   // the answer still comes from the rule-based analyst. Reading aloud uses the phone's own voices first (free, offline).
   const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null, auto: true, style: "uk" };
-  try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; } catch { /* default British */ }
+  try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; voice.tlStyle = localStorage.getItem("kw-voice-tl") === "std" ? "std" : "friendly";
+    voice.tlGender = localStorage.getItem("kw-voice-tl-g") === "male" ? "male" : "female"; voice.enGender = localStorage.getItem("kw-voice-en-g") === "female" ? "female" : "male"; } catch { voice.tlStyle = "friendly"; voice.tlGender = "female"; voice.enGender = "male"; }
   // Some browsers load their voice list late; ask once so the British voice is ready for the first answer.
   try { window.speechSynthesis?.getVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", () => {}); } catch { /* no speech here */ }
   function voiceInit() {
@@ -1325,6 +1326,19 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return parts.filter(Boolean).join(". ").replace(/[−-]?₱\s?([\d,]+)(\.(\d{2}))?/g, (m, a, _d, c) => `${a}${c && c !== "00" ? ` ${L("at", "and")} ${c} ${L("sentimo", "centavos")}` : ""} ${L("piso", "pesos")}`)
       .replace(/×/g, L(" beses ", " times ")).replace(/~/g, L("mga ", "about ")).replace(/[→•📊📝🔥📦🏷️🐢⭐✨🧠]/gu, " ").replace(/\.\s*\./g, ".").replace(/\s+/g, " ").slice(0, 1900);
   }
+  const FEMALE_V = /female|woman|samantha|karen|moira|tessa|fiona|victoria|serena|zira|hazel|susan|libby|kate|blessica|aria|jenny|sonia|maisie|natasha|-x-fie|-x-gba|-x-gbc|-x-sfg/i;
+  const MALE_V = /(?<!fe)male|\bman\b|daniel|alex\b|fred|arthur|oliver|thomas|david|mark|george|ryan|angelo|guy|william|-x-rjs|-x-gbd|-x-gbb|-x-fid/i;
+  function pickVoice(voices, want, gender, uk) {
+    let best = null;
+    for (const x of voices) {
+      if (!want.test(x.lang)) continue;
+      const id = x.name + " " + (x.voiceURI || ""), isF = FEMALE_V.test(id), isM = !isF && MALE_V.test(id);
+      const g = gender === "female" ? (isF ? 3 : isM ? -3 : 0) : (isM ? 3 : isF ? -3 : 0);
+      const score = g + (uk && /^en[-_]GB/i.test(x.lang) ? 2 : 0) + (!uk && /PH/i.test(x.lang) ? 1 : 0) + (x.localService ? 0.5 : 0);
+      if (!best || score > best.score) best = { voice: x, score, genderMatched: g > 0 };
+    }
+    return best || { voice: null, genderMatched: false };
+  }
   function speak(r) {
     if (voice.speaking) { speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; speakState(); return; }
     speakNow(r);
@@ -1332,13 +1346,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function speakNow(r) { withLang(r.lang || lang, () => speakIn(r)); }
   function speakIn(r) {
     window.speechSynthesis?.cancel(); voice.tts?.stop?.();
-    const text = speechText(r), want = lang === "en" ? /^en/i : /^(fil|tl)/i, uk = lang === "en" && voice.style === "uk";
-    const voices = window.speechSynthesis?.getVoices?.() || [];
-    const UK_MALE = /daniel|uk english male|george|ryan|arthur|oliver|malcolm|thomas|en-gb-x-rjs|en-gb-x-gbd|en-gb-x-gbb/i;
-    const v = (uk && (voices.find((x) => /^en[-_]GB/i.test(x.lang) && UK_MALE.test(x.name + " " + (x.voiceURI || ""))) || voices.find((x) => /^en[-_]GB/i.test(x.lang))))
-      || voices.find((x) => want.test(x.lang) && /PH/i.test(x.lang)) || voices.find((x) => want.test(x.lang));
-    if (window.speechSynthesis && (v || !voice.tts)) {
-      const u = new SpeechSynthesisUtterance(text); try { if (v) u.voice = v; } catch { /* keep the default voice */ } u.lang = v?.lang || (lang === "en" ? (uk ? "en-GB" : "en-PH") : "fil-PH"); u.rate = uk ? 0.92 : 0.95; u.pitch = uk ? 0.85 : 1;
+    const text = speechText(r), en = lang === "en", want = en ? /^en/i : /^(fil|tl)/i, uk = en && voice.style === "uk", friendly = !en && voice.tlStyle !== "std";
+    const gender = en ? voice.enGender : voice.tlGender;
+    const v = pickVoice(window.speechSynthesis?.getVoices?.() || [], want, gender, uk);
+    if (window.speechSynthesis && (v.voice || !voice.tts)) {
+      const u = new SpeechSynthesisUtterance(text); try { if (v.voice) u.voice = v.voice; } catch { /* keep the default voice */ }
+      u.lang = v.voice?.lang || (en ? (uk ? "en-GB" : "en-PH") : "fil-PH");
+      let pitch = uk ? 0.85 : friendly ? 1.12 : 1;
+      if (!v.genderMatched) pitch = gender === "male" ? Math.min(pitch, 0.8) : Math.max(pitch, 1.18); // no voice of that gender on this device: shift the pitch instead
+      u.rate = uk ? 0.92 : friendly ? 1.02 : 0.95; u.pitch = pitch;
       u.onend = u.onerror = () => { voice.speaking = false; speakState(); };
       speechSynthesis.cancel(); speechSynthesis.speak(u); voice.speaking = true; speakState(); return;
     }
@@ -1346,12 +1362,12 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     toast(L("Walang boses sa device na ito", "No voice available on this device"));
   }
   // Reply language: Auto answers in the language the question was asked in; the whole answer card follows it.
-  let replyPref = "auto";
-  try { replyPref = ["auto", "tl", "en"].includes(localStorage.getItem("kw-reply")) ? localStorage.getItem("kw-reply") : "auto"; voice.auto = localStorage.getItem("kw-autospeak") !== "0"; } catch { voice.auto = true; }
+  let replyPref = "app"; // follow the app's language (Tagalog by default); Auto, Tagalog and English are in settings
+  try { replyPref = ["app", "auto", "tl", "en"].includes(localStorage.getItem("kw-reply")) ? localStorage.getItem("kw-reply") : "app"; voice.auto = localStorage.getItem("kw-autospeak") !== "0"; } catch { voice.auto = true; }
   const TL_W = new Set(["ang", "ng", "mga", "ko", "ba", "paano", "pano", "ano", "sa", "na", "kung", "bakit", "magkano", "ilan", "ako", "po", "yung", "ito", "dapat", "aling", "saan", "kailan", "nang", "naman", "lang", "kong", "mo", "kumita", "benta", "paninda", "utang", "bilhin", "ngayon"]);
   const EN_W = new Set(["the", "how", "what", "my", "is", "do", "i", "to", "should", "which", "why", "when", "where", "can", "does", "did", "much", "many", "sell", "sales", "sold", "profit", "best", "business", "grow", "and", "of", "for", "are", "this", "week", "month", "today", "buy", "money"]);
   function detectLang(q) { let tl = 0, en = 0; for (const w of toks(q)) { if (TL_W.has(w)) tl++; if (EN_W.has(w)) en++; } return en > tl ? "en" : tl > en ? "tl" : lang; }
-  const replyLangFor = (q) => (replyPref === "auto" ? detectLang(q) : replyPref);
+  const replyLangFor = (q) => (replyPref === "app" ? lang : replyPref === "auto" ? detectLang(q) : replyPref);
   function withLang(l, fn) { const prev = lang; lang = l || prev; try { return fn(); } finally { lang = prev; } }
   const askState = { draft: "", q: "", res: null, qid: null, voted: null };
   // Every business question is saved (names removed) and reaches the Super Admin through the store summary.
@@ -1441,13 +1457,21 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const body = h("div", { class: "grid" });
     const draw = () => body.replaceChildren(
       h("div", { class: "f" }, h("span", { class: "small", style: "font-weight:600", text: L("Wika ng sagot", "Reply language") }),
-        h("div", { class: "pills", role: "radiogroup", "aria-label": L("Wika ng sagot", "Reply language") }, [["auto", L("Auto (wika ng tanong)", "Auto (question's language)")], ["tl", "Tagalog"], ["en", "English"]].map(([k, l2]) =>
+        h("div", { class: "pills", role: "radiogroup", "aria-label": L("Wika ng sagot", "Reply language") }, [["app", L("Ayon sa app", "Same as the app")], ["auto", L("Wika ng tanong", "Question's language")], ["tl", "Tagalog"], ["en", "English"]].map(([k, l2]) =>
           h("button", { role: "radio", "aria-checked": String(replyPref === k), "aria-pressed": String(replyPref === k), onclick: () => { replyPref = k; try { localStorage.setItem("kw-reply", k); } catch { /* ignore */ }
             if (askState.res && askState.q) { const rl = replyLangFor(askState.q); askState.res = withLang(rl, () => answerQuestion(askState.q, null)); if (askState.res) askState.res.lang = rl; }
             render(); draw(); } }, l2)))),
+      h("label", { class: "f" }, L("Boses sa Tagalog", "Tagalog voice"),
+        h("select", { id: "aiVoiceTl", onchange: (e) => { voice.tlStyle = e.target.value; try { localStorage.setItem("kw-voice-tl", voice.tlStyle); } catch { /* ignore */ } } },
+          h("option", { value: "friendly", text: L("Masigla (friendly)", "Friendly"), selected: voice.tlStyle !== "std" }), h("option", { value: "std", text: "Standard", selected: voice.tlStyle === "std" })),
+        h("select", { id: "aiVoiceTlG", "aria-label": L("Babae o lalaki", "Female or male"), style: "margin-top:6px", onchange: (e) => { voice.tlGender = e.target.value; try { localStorage.setItem("kw-voice-tl-g", e.target.value); } catch { /* ignore */ } } },
+          h("option", { value: "female", text: L("Babae", "Female"), selected: voice.tlGender === "female" }), h("option", { value: "male", text: L("Lalaki", "Male"), selected: voice.tlGender === "male" })),),
       h("label", { class: "f" }, L("Boses sa English", "English voice"),
         h("select", { id: "aiVoiceStyle", onchange: (e) => { voice.style = e.target.value; try { localStorage.setItem("kw-voice-style", voice.style); } catch { /* ignore */ } } },
-          h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" }))),
+          h("option", { value: "uk", text: L("British (kalmado)", "British (calm)"), selected: voice.style === "uk" }), h("option", { value: "std", text: "Standard", selected: voice.style === "std" })),
+        h("select", { id: "aiVoiceEnG", "aria-label": L("Babae o lalaki", "Female or male"), style: "margin-top:6px", onchange: (e) => { voice.enGender = e.target.value; try { localStorage.setItem("kw-voice-en-g", e.target.value); } catch { /* ignore */ } } },
+          h("option", { value: "female", text: L("Babae", "Female"), selected: voice.enGender === "female" }), h("option", { value: "male", text: L("Lalaki", "Male"), selected: voice.enGender === "male" })),),
+      h("p", { class: "muted small", style: "margin:0", text: L("Nakadepende ang boses sa mga boses na naka-install sa phone mo. Kung walang boses na babae o lalaki, iniiba na lang ang tono.", "Voices depend on what is installed on your phone. If there is no female or male voice, the pitch is adjusted instead.") }),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "aiAutoChk", checked: voice.auto, onchange: (e) => { voice.auto = e.target.checked; try { localStorage.setItem("kw-autospeak", voice.auto ? "1" : "0"); } catch { /* ignore */ } if (!voice.auto) { window.speechSynthesis?.cancel(); voice.speaking = false; } render(); } }),
         L("Basahin nang malakas ang bawat sagot", "Read every answer aloud")),
       h("button", { class: "btn primary big", onclick: () => dlg.close() }, L("Tapos", "Done")));

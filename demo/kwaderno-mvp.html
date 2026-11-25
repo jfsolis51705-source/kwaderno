@@ -61,6 +61,34 @@ nav.bottom { display: none; }
 .photo-pick img { display: block; width: 100%; max-height: 46vh; object-fit: contain; background: #000; }
 .photo-pick .box { position: absolute; border: 3px solid #ffcc00; border-radius: 6px; box-shadow: 0 0 0 2px rgba(0,0,0,.5); pointer-events: none; }
 .photo-pick .box.ok { border-color: #34c759; }
+/* Sell: price + "in sale" counter on each card; phone bottom dock (search + big actions); list view */
+.tile .r2 { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.tile .inq { min-width: 24px; height: 22px; padding: 0 6px; border-radius: 99px; display: inline-grid; place-items: center; font-size: .74rem; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.tile.in .inq { background: var(--accent); color: var(--accent-fg); }
+.tiles .minus { position: absolute; z-index: 2; right: 6px; top: 6px; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; font-size: 1.2rem; line-height: 1; display: grid; place-items: center; }
+.tile .pwrap { position: relative; }
+.sell-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sell-head h1 { margin: 0; margin-right: auto; }
+.cartchip { position: relative; }
+.cartchip b { position: absolute; top: -6px; right: -6px; min-width: 20px; height: 20px; border-radius: 99px; background: var(--bad); color: #fff; font-size: .7rem; display: grid; place-items: center; padding: 0 5px; }
+.pos-dock { display: none; }
+:root[data-layout="phone"]:not(.landscape) .pos-dock { display: grid; gap: 8px; position: fixed; left: 0; right: 0; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 19; padding: 10px max(12px, env(safe-area-inset-left, 0px)) 36px max(12px, env(safe-area-inset-right, 0px)); /* room for the raised Kwaderno button below */ background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -6px 18px rgba(0,0,0,.08); border-radius: 18px 18px 0 0; }
+:root[data-layout="phone"].framed:not(.landscape) .pos-dock { position: absolute; }
+.pos-dock .acts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.pos-dock .acts .btn { flex-direction: column; gap: 3px; min-height: 58px; padding: 6px 4px; font-size: .74rem; border-radius: 14px; }
+.pos-dock .acts .btn svg { width: 22px; height: 22px; }
+.pos-dock input[type=search] { border-radius: 99px; padding-left: 16px; }
+.pos-dock .paybar { display: flex; justify-content: space-between; align-items: center; min-height: 48px; border-radius: 14px; font-size: 1rem; }
+:root[data-layout="phone"]:not(.landscape) .view.selling { padding-bottom: 236px; }
+:root[data-layout="phone"]:not(.landscape) .view.selling.has-cart { padding-bottom: 292px; }
+:root[data-layout="phone"]:not(.landscape) .view.selling .mobile-cart { display: none; }
+.plist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.plist li { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 6px 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.plist li.in { border-color: var(--accent); }
+.plist .thumbw { width: 46px; height: 46px; border-radius: 8px; overflow: hidden; display: grid; }
+.plist .thumbw .pimg, .plist .thumbw .ph { width: 46px; height: 46px; font-size: .9rem; }
+.plist .nm { font-weight: 600; font-size: .9rem; line-height: 1.2; }
+.plist .sub { font-size: .75rem; color: var(--muted); }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -683,7 +711,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (view === "admin") setAdminLayout(adminLayout === "phone" ? "desktop" : "phone"); else setLayout(NEXT_LAYOUT[layoutChoice]);
     render();
   });
-  window.addEventListener("resize", () => applyLayout());
+  let lastDock = null;
+  window.addEventListener("resize", () => { applyLayout(); const d = document.documentElement.dataset.layout === "phone" && !document.documentElement.classList.contains("landscape"); if (view === "sell" && lastDock !== null && d !== lastDock) render(); lastDock = d; });
 
   // ---------- dialog ----------
   const dlg = $("#dlg");
@@ -3161,6 +3190,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const short = lines.filter((l) => !l.custom && l.q > stockOf(l.productId));
     return { lines, subtotal, disc, discInfo: dc.info, discErr: dc.err || null, total, tendered, change: tendered != null ? tendered - total : null, short };
   }
+  let sellViewMode = (() => { try { return localStorage.getItem("kw-sellview") === "list" ? "list" : "grid"; } catch { return "grid"; } })();
+  const phoneDock = () => document.documentElement.dataset.layout === "phone" && !document.documentElement.classList.contains("landscape");
+  function minusOne(p) { const l = cart.lines.find((x) => x.productId === p.id); if (!l) return; const n = (Number(l.qty) || 0) - 1; if (n <= 0) cart.lines = cart.lines.filter((x) => x.productId !== p.id); else l.qty = String(n); render(); }
   function viewSell() {
     const prods = activeProducts();
     const best = [...prods].sort((a, b) => (D.sold.get(b.id) || 0) - (D.sold.get(a.id) || 0) || a.name.localeCompare(b.name));
@@ -3226,30 +3258,56 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       box.append(h("button", { class: "btn", onclick: saveTab }, cart.tabId ? L(`I-save ang bill: ${cart.tabLabel}`, `Save bill: ${cart.tabLabel}`) : L("Open bill — bayaran mamaya", "Open bill — pay later")));
       return box;
     };
-    return h("div", { class: "view" },
-      h("div", { class: "head" }, h("h1", { text: "Sell" }), h("span", { class: "muted small", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." })),
+    const dock = phoneDock();
+    const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); };
+    const openCart = () => openDialog("Current sale", checkoutDialog());
+    const searchBox = () => h("input", { type: "search", id: "sellSearch", placeholder: L("Hanapin o i-type ang barcode", "Search product or type barcode"), value: search, "aria-label": "Search products",
+      oninput: (e) => { search = e.target.value; render(); }, onkeydown: sellSearchKey });
+    function sellSearchKey(e) { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } }
+    const items = c.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0);
+    return h("div", { class: "view selling" + (c.lines.length ? " has-cart" : "") },
+      h("div", { class: "sell-head" }, h("h1", { text: "Sell" }),
+        dock ? h("button", { class: "btn sm" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + openTabs().length) : null,
+        h("button", { class: "btn sm", "aria-label": sellViewMode === "grid" ? L("Ipakita bilang listahan", "Show as a list") : L("Ipakita bilang grid", "Show as a grid"), title: sellViewMode === "grid" ? "List" : "Grid",
+          onclick: () => { sellViewMode = sellViewMode === "grid" ? "list" : "grid"; try { localStorage.setItem("kw-sellview", sellViewMode); } catch { /* ignore */ } render(); } }, sellViewMode === "grid" ? "☰" : "▦"),
+        dock ? h("button", { class: "btn sm cartchip", "aria-label": L(`Benta: ${items} piraso`, `Sale: ${items} items`), onclick: openCart }, "🛒", items ? h("b", { class: "num", text: qtyFmt(items) }) : null) : null),
+      dock ? null : h("div", { class: "muted small", style: "margin:-6px 0 4px", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
+      dock ? h("div", { class: "pos-dock", role: "region", "aria-label": L("Mga aksyon sa benta", "Sale actions") },
+        c.lines.length ? h("button", { class: "btn primary paybar", onclick: openCart }, h("span", { text: L(`🛒 ${qtyFmt(items)} piraso`, `🛒 ${qtyFmt(items)} item(s)`) }), h("b", { class: "num", text: L(`Bayaran ${peso(c.total)} ›`, `Charge ${peso(c.total)} ›`) })) : null,
+        searchBox(),
+        h("div", { class: "acts" },
+          scanButton("btn primary", [svgIcon(IC.scan), L("I-scan", "Scan")], onScan, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+          h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), L("Walang stock", "Custom item")),
+          h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), L("Bagong produkto", "Add product")))) : null,
       h("div", { class: "sell" },
         h("div", { class: "grid", style: "gap:10px" },
-          h("div", { class: "pos-acts" },
+          dock ? null : h("div", { class: "pos-acts" },
             scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
             h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
             h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
             h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
-          h("input", { type: "search", id: "sellSearch", placeholder: "Search product or type barcode", value: search, "aria-label": "Search products",
-            oninput: (e) => { search = e.target.value; render(); },
-            onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } } }),
+          dock ? null : searchBox(),
           prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
-          prods.length ? h("div", { class: "tiles", role: "list" }, shown.map((p) => {
+          !prods.length ? h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))
+          : sellViewMode === "list" ? h("ul", { class: "plist", role: "list" }, shown.map((p) => {
+            const inCart = cart.lines.find((l) => l.productId === p.id), q = stockOf(p.id), st = q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "";
+            return h("li", { class: inCart ? "in" : "" },
+              h("button", { class: "thumbw", style: "border:0;padding:0;background:none", "aria-label": `Add ${p.name}`, onclick: () => addToCart(p) }, productImage(p)),
+              h("button", { style: "all:unset;cursor:pointer;min-width:0", onclick: () => addToCart(p) }, h("div", { class: "nm trunc", text: p.name }), h("div", { class: "sub num" }, h("span", { class: st ? "stockb " + st : "", style: st ? "position:static" : "", text: q <= 0 ? "Out" : `Stock ${qtyFmt(q)}` }), " · ", h("b", { style: "color:var(--accent)", text: peso(p.price) }))),
+              inCart ? h("button", { class: "btn sm", "aria-label": `One less ${p.name}`, onclick: () => minusOne(p) }, "−") : h("span"),
+              h("button", { class: "btn sm" + (inCart ? " primary" : ""), "aria-label": `Add ${p.name}`, onclick: () => addToCart(p) }, inCart ? inCart.qty : "+"));
+          }))
+          : h("div", { class: "tiles", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id); const q = stockOf(p.id);
             const st = q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "";
-            return h("button", { class: "tile" + (inCart ? " in" : "") + (q <= 0 ? " oos" : ""), role: "listitem", "aria-label": `${p.name}, ${peso(p.price)}, ${q <= 0 ? "out of stock" : qtyFmt(q) + " in stock"}${inCart ? `, ${inCart.qty} in sale` : ""}`, onclick: () => addToCart(p) },
+            return h("div", { style: "position:relative", role: "listitem" }, h("button", { class: "tile" + (inCart ? " in" : "") + (q <= 0 ? " oos" : ""), style: "width:100%;height:100%", "aria-label": `${p.name}, ${peso(p.price)}, ${q <= 0 ? "out of stock" : qtyFmt(q) + " in stock"}${inCart ? `, ${inCart.qty} in sale` : ""}`, onclick: () => addToCart(p) },
               h("span", { class: "pwrap" }, productImage(p),
-                h("span", { class: "stockb num " + st, text: q <= 0 ? "Out" : `Stock ${qtyFmt(q)}` }),
-                inCart ? h("span", { class: "qtyb num", text: inCart.qty }) : null),
+                h("span", { class: "stockb num " + st, text: q <= 0 ? "Out" : `Stock ${qtyFmt(q)}` })),
               h("span", { class: "body" },
-                h("span", { class: "price num", text: peso(p.price) }),
-                h("span", { class: "n", text: p.name })));
-          })) : h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))),
+                h("span", { class: "n", text: p.name }),
+                h("span", { class: "r2" }, h("span", { class: "price num", text: peso(p.price) }), h("span", { class: "inq num", title: L("Nasa benta", "In this sale"), text: inCart ? inCart.qty : "0" })))),
+              inCart ? h("button", { class: "minus", "aria-label": `One less ${p.name}`, onclick: () => minusOne(p) }, "−") : null);
+          }))),
         h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
       c.lines.length ? h("button", { class: "mobile-cart", onclick: () => openDialog("Current sale", checkoutDialog()) }, h("span", { text: `${c.lines.length} item(s)` }), h("span", { class: "num", text: `${peso(c.total)} ›` })) : null);
     function checkoutDialog() { const wrap = h("div", { id: "mcart" }); wrap.replaceChildren(checkout()); return wrap; }

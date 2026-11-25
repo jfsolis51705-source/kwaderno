@@ -127,6 +127,19 @@ nav.bottom { display: none; }
 :root[data-layout="tablet"] .sd-panel { width: min(420px, 45vw); }
 :root[data-layout="phone"].framed .sd-wrap { position: absolute; }
 @media (prefers-reduced-motion: reduce) { .sd-panel, .sd-back { transition: none; } }
+/* tablet side bar shortcuts (bottom) */
+.rail-spacer, .rail-x { display: none; }
+:root[data-layout="tablet"] nav.bottom .rail-spacer { display: block; flex: 1 1 8px; min-height: 8px; border-bottom: 1px solid var(--line); margin: 4px 10px; }
+:root[data-layout="tablet"] nav.bottom a.rail-x { display: flex; min-height: 52px; font-size: .7rem; text-align: center; line-height: 1.15; }
+:root[data-layout="tablet"] nav.bottom a.rail-x svg { width: 20px; height: 20px; }
+.rail-x .rx-ic { position: relative; display: grid; place-items: center; }
+.rail-x .rx-ic b { position: absolute; top: -7px; right: -12px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 99px; background: var(--bad); color: #fff; font-size: .62rem; display: grid; place-items: center; }
+:root[data-layout="tablet"] nav.bottom { overflow-y: auto; }
+@media (max-height: 860px) {
+  :root[data-layout="tablet"] nav.bottom { gap: 2px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 10px; }
+  :root[data-layout="tablet"] nav.bottom a { min-height: 54px; gap: 2px; }
+  :root[data-layout="tablet"] nav.bottom a.rail-x { min-height: 46px; }
+}
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -773,6 +786,17 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const subKey = k.startsWith("home-") ? k.slice(5) : null, cur = subKey ? navSub === subKey : view === k && !(k === "home" && navSub);
       return h("a", { href: "#" + k, class: cls || null, "aria-current": cur ? "page" : null, onclick: (e) => { e.preventDefault(); subKey ? go("home", subKey) : go(k); } }, withIcons ? svgIcon(d) : null, label);
     }));
+    // tablet side bar: quick shortcuts in the empty space at the bottom
+    if (withIcons && document.documentElement.dataset.layout === "tablet" && view !== "admin" && S.ready) {
+      let tips = 0, low = 0; try { tips = computeTips()?.count || 0; } catch { /* no tips yet */ } try { low = lowCount(); } catch { /* not loaded */ }
+      const x = (key, label, icon, badge, isCur, onclick) => h("a", { href: "#" + key, class: "rail-x", "aria-current": isCur ? "page" : null, onclick: (e) => { e.preventDefault(); onclick(); } },
+        h("span", { class: "rx-ic" }, svgIcon(icon), badge ? h("b", { class: "num", text: badge > 99 ? "99+" : String(badge) }) : null), label);
+      container.append(h("div", { class: "rail-spacer", "aria-hidden": "true" }),
+        x("home", L("Itanong", "Ask Kwaderno"), "M4 5h16v11H9l-5 4zM8 9h8M8 12h5", 0, false, () => { go("home"); setTimeout(() => { const q = document.getElementById("aiQ"); q?.scrollIntoView({ block: "center", behavior: "smooth" }); q?.focus({ preventScroll: true }); }, 60); }),
+        x("home-tips", L("Smart tips", "Smart tips"), IC.tips, tips, view === "home" && sub === "tips", () => go("home", "tips")),
+        x("home-history", L("Huling benta", "Recent sales"), IC.history, 0, view === "home" && sub === "history", () => go("home", "history")),
+        x("products-checklist", L("Paubos", "Low stock"), IC.low, low, view === "products" && sub === "checklist", () => go("products", "checklist")));
+    }
   }
   function svgIcon(d) {
     const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");

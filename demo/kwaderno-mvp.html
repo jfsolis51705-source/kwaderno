@@ -751,6 +751,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
    * ask: start with the choice screen (used for "Add barcode"); otherwise open the camera straight away
    * (Sell / Scan) and show the choice screen only if reading fails.
    */
+  /** A scan button that IS the camera picker (direct tap opens the camera on phones). If the camera can't open here,
+   *  the scan screen opens with the reason and the type-the-number box. onCode gets the code. */
+  function scanButton(cls, kids, onCode, title) {
+    const i = fileInput(true); let stop = () => {};
+    i.addEventListener("change", async () => { stop(); const f = i.files?.[0]; i.value = ""; if (!f) return; const code = await scanBarcode({ file: f, title }); if (code) onCode(code); });
+    i.addEventListener("cancel", () => stop());
+    return h("label", { class: cls, role: "button", tabindex: 0,
+      onclick: () => { stop(); stop = watchPicker(async () => { const code = await scanBarcode({ ask: true, title, note: pickerStuckMsg(true) }); if (code) onCode(code); }); },
+      onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.click(); } } }, i, ...kids);
+  }
   function scanBarcode(opts = {}) {
     return new Promise((resolve) => {
       let done = false;
@@ -802,7 +812,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         typed.addEventListener("keydown", (e) => { if (e.key === "Enter") useTyped(); });
         dlg.addEventListener("close", () => finish(null), { once: true });
       };
-      if (opts.ask) return showChoices();
+      if (opts.file) return tryFile(opts.file);          // a photo already taken with a scan button
+      if (opts.ask) { showChoices(); if (opts.note) { status.style.color = "var(--bad)"; status.textContent = opts.note; } return; }
       pickPhoto(true).then((f) => (f ? tryFile(f) : finish(null)));
     });
   }
@@ -2873,7 +2884,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "sell" },
         h("div", { class: "grid", style: "gap:10px" },
           h("div", { class: "pos-acts" },
-            h("button", { class: "btn primary", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); } else unknownBarcode(code); } }, svgIcon(IC.scan), "Scan"),
+            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode", "Scan a barcode")),
             h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
             h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
             h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")),
@@ -2983,7 +2994,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (productFilter === "out") list = list.filter((p) => stockOf(p.id) <= 0);
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("h1", { text: "Products & stock" }), h("div", { class: "pills" },
-        h("button", { class: "btn", onclick: async () => { const code = await scanBarcode(); if (!code) return; const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); } }, camIcon(), "Scan"),
+        scanButton("btn", [camIcon(), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); }, L("I-scan ang barcode", "Scan a barcode")),
         h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"),
         h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"),
         h("button", { class: "btn", onclick: () => go("products", "photos") }, camIcon(), "Add photos"),

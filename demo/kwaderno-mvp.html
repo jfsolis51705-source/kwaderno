@@ -749,74 +749,290 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       appTile("Utang / payment", IC.utang, "var(--bad)", run(() => go("utang"))),
       S.owner ? appTile("Expiry date", IC.expiry, "var(--warn)", run(() => go("products", "expiry"))) : appTile("Shelf photo", IC.photo, "var(--warn)", run(() => go("home", "shelf")))));
   }
-  // ---------- ASK KWADERNO: AI answers about this store's own numbers ----------
-  const ai = { draft: "", q: "", a: "", busy: false, err: "", ctrl: null, listening: false };
-  function storeFacts() {
-    const now = Date.now(), t = todayKey(), month = t.slice(0, 8) + "01";
-    const win = (days) => S.sales.filter((x) => !x.voided && now - new Date(x.at).getTime() < days * DAYMS);
-    const tot = (arr) => ({ sales: arr.length, revenue: +(arr.reduce((a, x) => a + x.total, 0) / 100).toFixed(2), grossProfit: +(arr.reduce((a, x) => a + x.total - saleCost(x), 0) / 100).toFixed(2) });
-    const by = new Map();
-    for (const x of win(30)) for (const l of x.lines || []) { const k = l.productId || "custom:" + l.name; const r = by.get(k) || { name: l.name, qty30: 0, qty7: 0, revenue30: 0, profit30: 0 }; r.qty30 += l.qty; r.revenue30 += l.qty * l.price / 100; r.profit30 += l.qty * (l.price - (l.cost || 0)) / 100; if (now - new Date(x.at).getTime() < 7 * DAYMS) r.qty7 += l.qty; by.set(k, r); }
-    const top = [...by.entries()].sort((a, b) => b[1].revenue30 - a[1].revenue30).slice(0, 15).map(([k, r]) => ({ ...r, revenue30: +r.revenue30.toFixed(2), profit30: +r.profit30.toFixed(2), stock: productById(k) ? stockOf(k) : null }));
-    const prods = activeProducts();
-    const exp = new Map(); for (const e of expensesOn(month)) exp.set(expCat(e.category), +((exp.get(expCat(e.category)) || 0) + e.amount / 100).toFixed(2));
-    const owed = [...D.balance.values()].filter((v) => v > 0);
-    return {
-      store: S.store.name, barangay: S.store.barangay || null, today: t, currency: "PHP (pesos)",
-      today_: tot(win(1).filter((x) => dayKey(x.at) === t)), last7days: tot(win(7)), last30days: tot(win(30)),
-      expensesThisMonthByCategory: Object.fromEntries(exp),
-      topProducts30d: top,
-      outOfStock: prods.filter((p) => stockOf(p.id) <= 0).map((p) => p.name).slice(0, 25),
-      lowStock: prods.filter((p) => stockOf(p.id) > 0 && stockOf(p.id) <= (p.reorder || 0)).map((p) => ({ name: p.name, stock: stockOf(p.id), reorderAt: p.reorder })).slice(0, 25),
-      noSales30dWithStock: prods.filter((p) => stockOf(p.id) > 0 && !by.has(p.id)).map((p) => p.name).slice(0, 20),
-      utang: { customersOwing: owed.length, totalOwed: +(owed.reduce((a, v) => a + v, 0) / 100).toFixed(2) },
-      billsDueSoon: billsDue(7).map((b) => ({ name: b.name, due: b.due, amount: (b.amount || 0) / 100 })),
-      expiringIn7Days: activeExpiries().filter((e) => daysLeft(e.date) <= 7).map((e) => ({ product: productById(e.productId)?.name, date: e.date })).slice(0, 15),
-      productCount: prods.length,
-    };
+  // ---------- ASK KWADERNO: a rule-based analyst. No AI and no network: it reasons over the store's own records ----------
+  // Steps: (1) read the question: intent, product and period; (2) compute the answer from the records;
+  // (3) judge how much data backs it (confidence); (4) state the assumptions; (5) give one concrete action.
+  // When it cannot tell what is being asked, it says so and offers examples instead of guessing.
+  const LEAD = 3, COVER = 7; // restock: days an order takes to arrive, and days of stock to keep on hand
+  const STOP = new Set(["the", "and", "ng", "sa", "ang", "mga", "for", "per", "pc", "pcs", "piece", "pieces", "pack", "with", "na", "ba", "ko", "mo", "of", "a", "x"]);
+  const CONF = { high: ["ok", "Mataas"], medium: ["low", "Katamtaman"], low: ["out", "Mababa"] };
+  const ASK_EXAMPLES = ["Ano ang dapat kong i-restock?", "Kumita ba ako this month?", "Aling produkto ang hindi nabebenta?", "Magkano ang utang na hindi pa bayad?", "Ano ang due na bills?", "Bumaba ba ang benta ko this week?"];
+  const INTENTS = [
+    { id: "restock", label: "Ano ang i-restock", words: ["restock", "reorder", "i order", "mag order", "bilhin", "dapat bilhin", "kulang", "ubos", "stock up", "what to buy"] },
+    { id: "best", label: "Pinakamabenta", words: ["best seller", "bestseller", "best selling", "top seller", "top product", "pinakamabenta", "pinaka benta", "mabenta"] },
+    { id: "slow", label: "Hindi nabebenta", words: ["slow", "hindi nabebenta", "hindi bumibili", "walang benta", "dead stock", "stop buying", "itigil", "wag na bilhin", "hindi na dapat", "hindi gumagalaw"] },
+    { id: "profit", label: "Kita / tubo", words: ["profit", "kumita", "kita", "tubo", "lugi", "net", "earning", "income"] },
+    { id: "sales", label: "Benta", words: ["benta", "sales", "nabenta", "revenue", "sold"] },
+    { id: "trend", label: "Takbo ng benta", words: ["trend", "bumaba ba", "tumaas ba", "bumaba", "tumaas", "tumataas", "bumababa", "lumalaki", "pababa", "pataas", "compare"] },
+    { id: "utang", label: "Utang", words: ["utang", "owe", "owed", "hindi pa bayad", "nangutang", "singil", "may utang"] },
+    { id: "bills", label: "Bills", words: ["bill", "bills", "bayarin", "due", "babayaran", "kuryente", "meralco", "tubig", "renta", "upa", "maynilad"] },
+    { id: "expiry", label: "Expiry", words: ["expire", "expiry", "expired", "mag expire", "nag expire", "petsa", "sira"] },
+    { id: "cash", label: "Cash sa kaha", words: ["cash", "kaha", "drawer", "pera sa kaha", "sukli"] },
+    { id: "expenses", label: "Gastos", words: ["gastos", "gastusin", "expense", "expenses", "nagastos", "spent"] },
+  ];
+  const NEEDS_SALES = new Set(["sales", "profit", "trend", "restock", "best", "slow"]);
+  const PERIODS = [[1, ["ngayon", "ngayong", "today"]], [7, ["linggo", "week", "7 days", "7 araw"]], [30, ["buwan", "month", "30 days", "30 araw"]], [365, ["taon", "year"]]];
+  const pctTxt = (x) => (x > 0 ? "+" : "") + Math.round(x * 100) + "%";
+  const plabel = (n) => (n === 1 ? "ngayon" : n === 365 ? "ngayong taon" : n === 7 ? "nakaraang 7 araw" : n === 30 ? "nakaraang 30 araw" : `nakaraang ${n} araw`);
+  const pin = (n) => (n === 1 ? "ngayon" : n === 365 ? "ngayong taon" : "sa " + plabel(n));
+  // Lookups of saved records are exact; their only uncertainty is whether everything was recorded.
+  const RECORD_BASIS = { utang: ["high", "Direktang kuwenta mula sa naitalang utang at bayad, hindi tantiya."], bills: ["high", "Direktang listahan ng naitalang bills."], expiry: ["high", "Direktang listahan ng naitalang expiry date."], expenses: ["high", "Direktang kabuuan ng naitalang gastos."], cash: ["medium", "Tama lang ito kung naitala ang panimulang cash at lahat ng cash na galaw."] };
+  const fold = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+  const toks = (t) => fold(t).split(" ").filter(Boolean);
+  function lev(x, y) { // edit distance, to forgive a one-letter typo ("restok" = "restock")
+    if (x === y) return 0; if (!x.length || !y.length) return x.length + y.length;
+    let prev = Array.from({ length: y.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= x.length; i++) { const cur = [i]; for (let j = 1; j <= y.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)); prev = cur; }
+    return prev[y.length];
   }
-  async function askAI(q) {
-    q = String(q || "").trim().slice(0, 300); if (!q || ai.busy) return;
-    const sample = await window.claude?.use?.("sample");
-    if (!sample) { ai.err = "The AI assistant isn't available here."; render(); return; }
-    ai.q = q; ai.draft = ""; ai.a = ""; ai.err = ""; ai.busy = true; ai.ctrl?.abort(); ai.ctrl = new AbortController(); render();
-    const prompt = `You are Kwaderno, a friendly business helper for a Filipino sari-sari store owner.
-Answer the owner's question using ONLY the store data below. Reply in the same language the owner used (Tagalog, Taglish or English). Be short and practical: at most 6 lines or bullets, peso amounts like ₱1,234.00, and end with one concrete action for today when it helps. If the data can't answer it, say so plainly and say what to record in the app. Never invent numbers. Do not give credit, loan, tax or legal advice beyond general tips.
-
-STORE DATA (JSON, amounts in pesos):
-${JSON.stringify(storeFacts())}
-
-OWNER'S QUESTION: ${q}`;
-    try {
-      const r = await sample(prompt, { modelTier: "quick", signal: ai.ctrl.signal, onText: ({ text }) => { ai.a = text; const el = document.getElementById("aiAns"); if (el) el.textContent = text; } });
-      ai.a = r.text;
-    } catch (e) { if (e?.name !== "AbortError") ai.err = claudeError(e); }
-    ai.busy = false; render();
+  // Score a keyword phrase against the question: 1 = exact, 0.8 = a typo in a long word, 0 = absent.
+  function phraseScore(qt, phrase) {
+    const pw = phrase.split(" ");
+    for (let i = 0; i + pw.length <= qt.length; i++) {
+      let s = 1, ok = true;
+      for (let k = 0; k < pw.length && ok; k++) { const t = qt[i + k], w = pw[k]; if (t === w) continue; if (w.length >= 5 && t.length >= 4 && lev(t, w) <= 1) s = Math.min(s, 0.8); else ok = false; }
+      if (ok) return s;
+    }
+    return 0;
   }
-  let dictP = null;
-  async function dictate() {
-    const d = await (dictP ??= window.claude?.use?.("dictation").catch(() => null));
-    if (!d) return toast("Voice input isn't available in this browser — type instead");
-    if (ai.listening) { await d.stop().catch(() => {}); return; }
-    let said = "";
-    d.onPartial(({ text }) => { ai.draft = (said + " " + text).trim(); const i = document.getElementById("aiQ"); if (i) i.value = ai.draft; });
-    d.onFinal(({ text }) => { said = (said + " " + text).trim(); ai.draft = said; const i = document.getElementById("aiQ"); if (i) i.value = said; });
-    d.onState(({ state }) => { ai.listening = state === "listening"; const b = document.getElementById("aiMic"); if (b) b.setAttribute("aria-pressed", String(ai.listening)); if (state === "idle" && said) askAI(said); });
-    d.start().catch((e) => toast(e?.code === "not_granted" ? "Microphone not allowed — type your question" : "Couldn't start voice input"));
+  const periodOf = (qt) => { const s = " " + qt.join(" ") + " "; for (const [n, ws] of PERIODS) if (ws.some((w) => s.includes(" " + w + " "))) return n; return null; };
+  // Sales in a window. days=1 with offset 0 means today's calendar day; otherwise a rolling window.
+  function windowSales(days, offset = 0) {
+    const now = Date.now(), t = todayKey();
+    return S.sales.filter((x) => {
+      if (x.voided) return false;
+      if (days === 1 && offset === 0) return dayKey(x.at) === t;
+      const age = (now - new Date(x.at).getTime()) / DAYMS;
+      return age >= offset && age < offset + days;
+    });
+  }
+  function aggregate(days, offset = 0) { // per product: quantity, revenue, profit
+    const m = new Map();
+    for (const x of windowSales(days, offset)) for (const l of x.lines || []) {
+      const key = l.productId || "custom:" + l.name;
+      const r = m.get(key) || { key, name: l.name, qty: 0, rev: 0, profit: 0, custom: !l.productId };
+      const q = Number(l.qty) || 0; r.qty += q; r.rev += q * (l.price || 0); r.profit += q * ((l.price || 0) - (l.cost || 0)); m.set(key, r);
+    }
+    return m;
+  }
+  const periodFrom = (n) => (n === 1 ? todayKey() : dayKey(new Date(Date.now() - (n - 1) * DAYMS).toISOString()));
+  // How much evidence is there? Judges the confidence of every answer.
+  function dataQuality() {
+    const sales = windowSales(30), days = new Set(sales.map((x) => dayKey(x.at))).size;
+    const real = sales.flatMap((x) => x.lines || []).filter((l) => !l.custom);
+    const costKnown = real.length ? real.filter((l) => (l.cost || 0) > 0).length / real.length : 1;
+    const level = sales.length >= 20 && days >= 14 ? "high" : sales.length >= 5 && days >= 5 ? "medium" : "low";
+    return { sales: sales.length, days, costKnown, level };
+  }
+  // Find the product the question names. Needs 2+ matching words, or a one-word name that matches fully.
+  function findProduct(qt) {
+    let best = null;
+    for (const p of activeProducts()) {
+      const sig = toks(p.name).filter((w) => w.length >= 3 && !STOP.has(w));
+      if (!sig.length) continue;
+      const matched = sig.filter((w) => qt.some((t) => t === w || (w.length >= 5 && t.length >= 4 && lev(t, w) <= 1))).length;
+      const ratio = matched / sig.length;
+      if (!(matched >= 2 || (matched >= 1 && ratio === 1))) continue;
+      if (!best || ratio > best.ratio || (ratio === best.ratio && matched > best.matched)) best = { p, ratio, matched };
+    }
+    return best?.p || null;
+  }
+  const noSales = (title) => ({ title, lines: ["Wala pang naitalang benta sa app, kaya hindi ako makapagbigay ng maaasahang sagot."], evidence: [], assumptions: [], action: "Mag-record muna ng benta sa Sell.", confidence: "low" });
+  const sumTotal = (arr) => arr.reduce((x, y) => x + y.total, 0);
+  // Each answer returns: title, lines (the answer), evidence, assumptions, action, and optionally confidence.
+  const ANSWERS = {
+    sales(c) {
+      const t = windowSales(1), w7 = windowSales(7), w30 = windowSales(30), avg7 = sumTotal(w7) / 7;
+      return { title: "Benta", lines: [`Ngayon: ${peso(sumTotal(t))} (${t.length} benta)`, `Nakaraang 7 araw: ${peso(sumTotal(w7))}, karaniwang ${peso(avg7)} kada araw`, `Nakaraang 30 araw: ${peso(sumTotal(w30))} (${w30.length} benta)`],
+        evidence: [`Galing sa ${w30.length} benta na naitala sa nakaraang 30 araw.`], assumptions: ["Hindi kasama ang mga benta na na-void."],
+        action: sumTotal(t) === 0 && avg7 > 0 ? `Wala pang benta ngayon. Karaniwan ay ${peso(avg7)} kada araw. Tingnan kung nai-record ang mga benta.` : null };
+    },
+    profit(c) {
+      const n = c.period || 30, ws = windowSales(n), rev = sumTotal(ws), cogs = ws.reduce((x, y) => x + saleCost(y), 0);
+      const gross = rev - cogs, exp = expensesOn(periodFrom(n)), spent = exp.reduce((x, e) => x + e.amount, 0), net = gross - spent, margin = rev ? gross / rev : 0;
+      const cats = new Map(); for (const e of exp) cats.set(e.category, (cats.get(e.category) || 0) + e.amount);
+      const top = [...cats.entries()].sort((x, y) => y[1] - x[1])[0];
+      return { title: `Kita ${pin(n)}`,
+        lines: [`Benta: ${peso(rev)}`, `Tubo bago gastos: ${peso(gross)} (${Math.round(margin * 100)}%)`, `Gastos: −${peso(spent)}`, `${net < 0 ? "Lugi" : "Kita"}: ${speso(net)}`],
+        evidence: [`${ws.length} benta at ${exp.length} gastos ang binilang.`], assumptions: ["Ang bayad sa stock ay nasa puhunan ng nabentang paninda, hindi sa gastos.", "Tubo = benta − puhunan ng nabentang paninda."],
+        action: net < 0 ? (top && spent > gross * 0.5 ? `Pinakamalaki ang gastos sa ${expCat(top[0])} (${peso(top[1])}). Unahin itong bawasan.` : "Lugi sa panahong ito. Suriin ang presyo ng pinakamabenta at ang margin nito.")
+          : rev && margin < 0.1 ? `Mababa ang margin (${Math.round(margin * 100)}%). Suriin ang presyo ng mga pinakamabenta.` : null,
+        confidence: c.Q.costKnown < 0.6 ? "low" : undefined };
+    },
+    trend(c) {
+      const cur = windowSales(7), prev = windowSales(7, 7), rc = sumTotal(cur), rp = sumTotal(prev), ch = rp > 0 ? (rc - rp) / rp : null;
+      const a = aggregate(7), b = aggregate(7, 7);
+      const moves = [...new Set([...a.keys(), ...b.keys()])].map((k) => ({ name: (a.get(k) || b.get(k)).name, d: (a.get(k)?.qty || 0) - (b.get(k)?.qty || 0), custom: (a.get(k) || b.get(k)).custom })).filter((x) => !x.custom);
+      const falling = moves.filter((x) => x.d < 0).sort((x, y) => x.d - y.d).slice(0, 3), rising = moves.filter((x) => x.d > 0).sort((x, y) => y.d - x.d).slice(0, 3);
+      const lines = [`Huling 7 araw: ${peso(rc)}`, `Nakaraang 7 araw: ${peso(rp)}`, ch == null ? "Walang benta noong nakaraang linggo, kaya hindi pa makita ang takbo." : `Pagbabago: ${pctTxt(ch)}`];
+      if (falling.length) lines.push(`Bumaba: ${falling.map((x) => `${x.name} (${qtyFmt(x.d)})`).join(", ")}`);
+      if (rising.length) lines.push(`Tumaas: ${rising.map((x) => `${x.name} (+${qtyFmt(x.d)})`).join(", ")}`);
+      const small = Math.max(rc, rp) < 500;
+      return { title: "Takbo ng benta", lines,
+        evidence: [`Ikinumpara ang ${cur.length} benta ngayong linggo sa ${prev.length} benta noong nakaraan.`],
+        assumptions: ["Hindi pa kasama ang seasonal na pagbabago tulad ng payday o Pasko.", small ? "Maliit ang benta, kaya malaki ang galaw kahit kaunting pagbabago." : "Sapat ang benta para paghambingin."],
+        action: ch != null && ch < -0.15 && falling[0] ? `Alamin kung bakit bumaba ang ${falling[0].name}: naubusan ba ng stock, tumaas ba ang presyo, o may bagong kakumpitensya?` : null,
+        confidence: small || ch == null ? "low" : undefined };
+    },
+    restock(c) {
+      const a = aggregate(14);
+      const rows = activeProducts().map((p) => {
+        const q14 = a.get(p.id)?.qty || 0, rate = q14 / 14, stock = stockOf(p.id), days = rate > 0 ? stock / rate : null;
+        const need = rate > 0 ? Math.max(0, Math.ceil(rate * (LEAD + COVER) - stock)) : 0;
+        return { p, q14, rate, stock, days, need, urgent: rate > 0 && (stock <= 0 || days <= LEAD) };
+      }).filter((r) => r.rate > 0);
+      if (!rows.length) return noSales("Ano ang i-restock");
+      const dd = (r) => (r.stock <= 0 ? 0 : r.days ?? 1e9);
+      rows.sort((x, y) => (y.urgent - x.urgent) || dd(x) - dd(y));
+      const items = rows.filter((r) => r.need > 0 && (r.urgent || (r.days ?? 1e9) <= LEAD + COVER)).slice(0, 5);
+      const thin = rows.filter((r) => r.q14 < 3).length;
+      return { title: "Ano ang i-restock",
+        lines: items.length ? items.map((r) => `${r.p.name}: stock ${qtyFmt(r.stock)}, ${r.stock <= 0 ? "ubos na" : `~${Math.floor(r.days)} araw pa`}, bilhin ~${r.need}`) : ["Sapat ang stock ng mga mabibilis na produkto para sa susunod na 10 araw."],
+        evidence: [`Benta ng ${rows.length} produkto sa nakaraang 14 araw.`, thin ? `${thin} sa kanila ay mas mababa sa 3 ang nabenta, kaya maaaring mali ang tantiya.` : null].filter(Boolean),
+        assumptions: [`Lead time ${LEAD} araw bago dumating ang order.`, `Buffer ${COVER} araw.`, "Ang benta ay magpapatuloy sa parehong bilis."],
+        action: items[0] ? `Unahin ang ${items[0].p.name}: bilhin ~${items[0].need}${items[0].urgent ? " ngayon" : ""}.` : null,
+        confidence: thin > rows.length / 2 ? "low" : undefined };
+    },
+    best(c) {
+      const n = c.period || 30, top = [...aggregate(n).values()].filter((r) => !r.custom).sort((x, y) => y.rev - x.rev).slice(0, 5);
+      if (!top.length) return noSales("Pinakamabenta");
+      const first = activeProducts().find((p) => p.id === top[0].key);
+      return { title: `Pinakamabenta ${pin(n)}`, lines: top.map((r, i) => `${i + 1}. ${r.name}: ${qtyFmt(r.qty)} pcs · ${peso(Math.round(r.rev))}`),
+        evidence: [`Ranggo batay sa kita (presyo × dami) sa ${windowSales(n).length} benta.`], assumptions: ["Hindi ito ranggo batay sa dami lang."],
+        action: first && stockOf(first.id) <= 0 ? `Ubos na ang ${top[0].name}, pero ito ang pinakamabenta. Bilhin agad.` : `Siguraduhing laging may stock ang ${top[0].name}.` };
+    },
+    slow(c) {
+      const a = aggregate(30), net = S.insights?.products || [];
+      const rows = activeProducts().filter((p) => stockOf(p.id) > 0 && !(a.get(p.id)?.qty > 0)).map((p) => ({ p, stock: stockOf(p.id), value: stockOf(p.id) * (p.cost || p.price || 0) })).sort((x, y) => y.value - x.value);
+      if (!rows.length) return { title: "Hindi nabebenta", lines: ["Lahat ng may stock ay nabenta sa nakaraang 30 araw."], evidence: [], assumptions: [], action: null };
+      const total = rows.reduce((x, r) => x + r.value, 0), slowNet = rows.filter((r) => net.some((x) => x.k === normName(r.p.name) && x.tag === "slow")).length;
+      return { title: "Hindi nabebenta",
+        lines: [...rows.slice(0, 5).map((r) => `${r.p.name}: ${qtyFmt(r.stock)} pcs, nakatengga ~${peso(r.value)}`), `Kabuuang nakatengga: ${peso(total)} sa ${rows.length} produkto`],
+        evidence: ["Walang benta sa nakaraang 30 araw.", slowNet ? `${slowNet} sa mga ito ay mabagal din sa ibang tindahan.` : null].filter(Boolean),
+        assumptions: ["Ang bagong produkto ay maaaring hindi pa nabebenta dahil bago lang. Tingnan muli pagkalipas ng 30 araw."],
+        action: `Huwag munang i-restock ang mga ito. Ibenta muna, o ibaba ang presyo ng ${rows[0].p.name}.` };
+    },
+    expiry(c) {
+      const all = activeExpiries(), rows = all.map((e) => ({ name: productById(e.productId)?.name || "Produkto", d: daysLeft(e.date) })).filter((r) => r.d <= 7).sort((x, y) => x.d - y.d);
+      if (!rows.length) return { title: "Expiry", lines: ["Walang batch na mag-e-expire sa loob ng 7 araw, at wala ring lampas na."], evidence: [`Tiningnan ang ${all.length} aktibong batch.`], assumptions: ["Batay sa expiry date na naitala sa app."], action: null };
+      const expired = rows.filter((r) => r.d < 0);
+      return { title: "Expiry",
+        lines: rows.slice(0, 6).map((r) => `${r.name}: ${r.d < 0 ? `lampas na ng ${-r.d} araw` : r.d === 0 ? "mag-e-expire ngayon" : `${r.d} araw pa`}`),
+        evidence: [`${all.length} aktibong batch ang tiningnan.`], assumptions: ["Batay sa expiry date na naitala sa app."],
+        action: expired.length ? `Alisin sa shelf ang ${expired[0].name} at huwag nang ibenta.` : `Ibenta muna ang ${rows[0].name}, o ibaba ang presyo.` };
+    },
+    utang(c) {
+      const list = S.customers.map((x) => {
+        const bal = D.balance.get(x.id) || 0, pays = S.payments.filter((p) => p.customerId === x.id), credits = S.sales.filter((s) => !s.voided && s.method === "credit" && s.customerId === x.id);
+        const lastPay = pays.reduce((m, p) => (p.at > m ? p.at : m), ""), firstCredit = credits.reduce((m, s) => (!m || s.at < m ? s.at : m), "");
+        const ref = lastPay || firstCredit;
+        return { name: x.name, bal, days: ref ? Math.floor((Date.now() - new Date(ref).getTime()) / DAYMS) : 0, paid: !!lastPay };
+      }).filter((r) => r.bal > 0).sort((x, y) => y.bal - x.bal);
+      if (!list.length) return { title: "Utang", lines: ["Walang customer na may utang ngayon."], evidence: [], assumptions: [], action: null };
+      const total = list.reduce((x, r) => x + r.bal, 0), old = list.filter((r) => r.days > 30);
+      return { title: "Utang",
+        lines: [...list.slice(0, 5).map((r) => `${r.name}: ${peso(r.bal)}, ${r.days} araw mula ${r.paid ? "sa huling bayad" : "sa unang utang (wala pang bayad)"}`), `Kabuuan: ${peso(total)} sa ${list.length} customer`],
+        evidence: ["Galing sa mga utang at bayad na naitala sa app."], assumptions: ["Ang bilang ng araw ay mula sa huling bayad, o sa unang utang kung wala pang bayad."],
+        action: `Singilin muna si ${list[0].name} (${peso(list[0].bal)}${list[0].days > 30 ? ", matagal na" : ""}).${old.length > 1 ? ` May ${old.length} pang utang na lampas 30 araw.` : ""}` };
+    },
+    bills(c) {
+      const t = todayKey(), list = S.expenses.filter((b) => b.kind === "bill" && !b.deleted && !b.paid).sort((x, y) => x.due.localeCompare(y.due));
+      if (!list.length) return { title: "Bills", lines: ["Walang nakabinbing bill."], evidence: ["Batay sa bills na naitala sa app."], assumptions: ["Hindi kasama ang bills na hindi pa nailalagay sa app."], action: null };
+      const over = list.filter((b) => b.due < t), soon = list.filter((b) => b.due >= t && daysLeft(b.due) <= 7);
+      return { title: "Bills",
+        lines: [...list.slice(0, 6).map((b) => `${b.name}: ${b.amount ? peso(b.amount) : "walang halaga"}, due ${b.due}${b.due < t ? " (lampas na)" : ""}`), `Kabuuang nakabinbin: ${peso(list.reduce((x, b) => x + (b.amount || 0), 0))}`],
+        evidence: [`${list.length} bill ang nakabinbin.`], assumptions: ["Bills lang ang nakalagay sa app. Maaaring may hindi pa naitala."],
+        action: over.length ? `Bayaran agad ang ${over[0].name}, lampas na sa due date.` : soon.length ? `Maghanda ng pera para sa ${soon.length} bill sa loob ng 7 araw.` : null };
+    },
+    cash(c) {
+      const all = cashEntries(), t = todayKey(), today = all.filter((r) => r.day === t);
+      const inn = today.filter((r) => r.amt > 0).reduce((x, r) => x + r.amt, 0), out = today.filter((r) => r.amt < 0).reduce((x, r) => x - r.amt, 0), expected = all.reduce((x, r) => x + r.amt, 0);
+      return { title: "Cash sa kaha",
+        lines: [`Ngayon: pumasok ${peso(inn)}, lumabas ${peso(out)}`, `Inaasahang laman ng kaha: ${speso(expected)}`],
+        evidence: [`${all.length} cash na galaw ang naitala (benta, utang na binayaran, gastos, at cash in/out).`],
+        assumptions: ["Hindi kasama ang GCash.", "Ang panimulang cash ay dapat naitala bilang Cash in."],
+        action: expected < 0 ? "Negatibo ang kuwenta, kaya malamang walang naitalang panimulang cash. Mag-record ng Cash in." : "Bilangin ang aktuwal na pera sa kaha. Kung hindi tugma, mag-record ng cash in o out na may note." };
+    },
+    expenses(c) {
+      const n = c.period || 30, exp = expensesOn(periodFrom(n)), total = exp.reduce((x, e) => x + e.amount, 0);
+      if (!exp.length) return { title: "Gastos", lines: [`Walang gastos na naitala ${pin(n)}.`], evidence: [], assumptions: [], action: "Kung may gastos, i-record sa Expenses para makita ang tunay na kita." };
+      const cats = new Map(); for (const e of exp) cats.set(e.category, (cats.get(e.category) || 0) + e.amount);
+      const sorted = [...cats.entries()].sort((x, y) => y[1] - x[1]);
+      return { title: `Gastos ${pin(n)}`, lines: [...sorted.slice(0, 5).map(([k, v]) => `${expCat(k)}: ${peso(v)} (${Math.round((v / total) * 100)}%)`), `Kabuuan: ${peso(total)}`],
+        evidence: [`${exp.length} gastos ang binilang.`], assumptions: ["Hindi kasama ang bayad sa stock, na nasa puhunan."],
+        action: sorted[0][1] / total >= 0.4 ? `Pinakamalaki ang ${expCat(sorted[0][0])}. Tingnan kung may pwedeng bawasan o ilipat sa mas murang supplier.` : null };
+    },
+    product(c) {
+      const p = c.prod, q7 = aggregate(7).get(p.id)?.qty || 0, q30 = aggregate(30).get(p.id)?.qty || 0, q14 = aggregate(14).get(p.id)?.qty || 0;
+      const stock = stockOf(p.id), rate = q14 / 14, days = rate > 0 ? stock / rate : null, need = rate > 0 ? Math.max(0, Math.ceil(rate * (LEAD + COVER) - stock)) : 0;
+      const n = (S.insights?.products || []).find((x) => x.k === normName(p.name));
+      const exps = activeExpiries().filter((e) => e.productId === p.id).map((e) => daysLeft(e.date)).sort((x, y) => x - y);
+      const lines = [`Benta: ${qtyFmt(q7)} pcs sa 7 araw, ${qtyFmt(q30)} pcs sa 30 araw`, `Stock: ${qtyFmt(stock)} ${p.unit || "pc"} (reorder sa ${qtyFmt(p.reorder || 0)})`, `Presyo: ${peso(p.price)}${p.cost ? `, tubo ${peso(p.price - p.cost)} kada piraso` : ""}`];
+      if (n) lines.push(`Karaniwang presyo sa ibang tindahan: ${peso(n.med)} (${peso(n.min)}–${peso(n.max)})`);
+      if (n && p.price > n.med * 1.15) lines.push("Pansin: mas mataas ka sa karaniwan. Baka lumipat ang mamimili.");
+      if (n && p.price < n.med * 0.85) lines.push("Pansin: mas mura ka sa karaniwan. Puwede pang itaas nang kaunti.");
+      if (exps.length) lines.push(`Pinakamalapit na expiry: ${exps[0] < 0 ? `lampas na ng ${-exps[0]} araw` : `${exps[0]} araw pa`}`);
+      const action = q30 === 0 && stock > 0 ? "Hindi nabebenta sa 30 araw. Huwag munang bilhin. Ibaba ang presyo o ilagay sa mas nakikitang lugar."
+        : stock <= 0 && q30 > 0 ? `Ubos na. Bilhin ~${need} ngayon.`
+        : days != null && days <= LEAD ? `Malapit nang maubos (~${Math.floor(days)} araw). Mag-order ng ~${need} ngayon.`
+        : days != null ? `Sapat ang stock hanggang ~${Math.floor(days)} araw.` : null;
+      return { title: p.name, lines, evidence: [`Benta at stock ng ${p.name} mula sa mga naitalang records.`],
+        assumptions: [rate > 0 ? "Ang bilis ng benta sa nakaraang 14 araw ang ginamit." : "Walang benta sa nakaraang 14 araw, kaya walang bilis na magamit.", p.cost ? null : "Walang puhunan na naitala, kaya hindi makita ang tunay na tubo."].filter(Boolean),
+        action, confidence: q30 < 3 ? "low" : undefined };
+    },
+  };
+  function answerQuestion(raw, force) {
+    const q = String(raw || "").trim().slice(0, 300), qt = toks(q), Q = dataQuality();
+    if (!qt.length && !force) return null;
+    const prod = qt.length ? findProduct(qt) : null;
+    let intent = force || (prod ? "product" : null), alts = [];
+    if (!intent) {
+      const scored = INTENTS.map((it) => ({ it, score: it.words.reduce((x, w) => x + phraseScore(qt, toks(w).join(" ")) * (toks(w).length > 1 ? 2 : 1), 0) })).sort((x, y) => y.score - x.score);
+      if (scored[0].score > 0) {
+        intent = scored[0].it.id;
+        alts = scored.slice(1).filter((x) => x.score > 0 && x.score >= scored[0].score * 0.6).slice(0, 2).map((x) => ({ id: x.it.id, label: x.it.label }));
+      }
+    }
+    if (!intent) return { title: "Hindi ko pa matukoy ang tanong", lines: ["Hindi ako manghuhula. Subukan ang isa sa mga tanong sa ibaba, o banggitin ang pangalan ng produkto."], evidence: [], assumptions: [], action: null, suggest: ASK_EXAMPLES };
+    const label = INTENTS.find((i) => i.id === intent)?.label || "Sagot";
+    if (Q.sales === 0 && NEEDS_SALES.has(intent) && intent !== "product") return noSales(label);
+    const res = ANSWERS[intent]({ q, qt, Q, period: periodOf(qt), prod });
+    const rb = RECORD_BASIS[intent];
+    res.confidence = res.confidence || (rb ? rb[0] : Q.level);
+    res.alts = alts.filter((x) => x.id !== intent);
+    res.confidenceWhy = rb ? rb[1] : `${Q.sales} benta sa nakaraang 30 araw, sa ${Q.days} araw.` + (Q.costKnown < 0.6 ? " Maraming produkto na walang puhunan, kaya tantiya lang ang tubo." : "");
+    return res;
+  }
+  const askState = { draft: "", q: "", res: null };
+  function askNow(q, force) {
+    const text = String(q ?? askState.draft ?? "").trim().slice(0, 300);
+    if (!text && !force) return;
+    askState.q = text; askState.draft = text;
+    askState.res = answerQuestion(text, force || null);
+    render();
+  }
+  function resultView(r) {
+    const c = CONF[r.confidence];
+    const body = [
+      h("div", { class: "small muted", text: "Tanong: " + askState.q }),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" }, h("h3", { text: r.title }), c ? h("span", { class: "chip " + c[0], text: "Kumpiyansa: " + c[1] }) : null),
+      r.lines.length ? h("ul", { class: "small", style: "margin:0;padding-left:18px;display:grid;gap:3px" }, r.lines.map((l) => h("li", { text: l }))) : null,
+      r.action ? h("div", { class: "note", style: "background:var(--accent-soft);color:var(--accent)", text: "→ " + r.action }) : null,
+    ];
+    if (r.suggest) body.push(h("div", { class: "cats" }, r.suggest.map((x) => h("button", { onclick: () => askNow(x) }, x))));
+    if (r.evidence) body.push(h("details", {}, h("summary", { class: "small", style: "cursor:pointer", text: "Paano ko nalaman" }),
+      h("div", { class: "small muted", style: "display:grid;gap:4px;margin-top:6px" }, r.evidence.map((e) => h("div", { text: "• " + e })), r.assumptions.map((x) => h("div", { text: "Assumption: " + x })), r.confidenceWhy ? h("div", { text: "Kumpiyansa: " + r.confidenceWhy }) : null)));
+    if (r.alts?.length) body.push(h("div", { class: "pills" }, h("span", { class: "small muted", text: "Ibig mo bang sabihin:" }), r.alts.map((x) => h("button", { onclick: () => askNow(askState.q, x.id) }, x.label))));
+    body.push(h("button", { class: "btn sm", style: "justify-self:start", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; render(); } }, "Ask another"));
+    return h("div", { class: "banner", style: "display:grid;gap:8px;color:var(--fg)" }, body);
   }
   function aiCard() {
-    const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno AI", value: ai.draft, oninput: (e) => { ai.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askAI(e.target.value); } });
-    const chips = ["Ano ang dapat kong i-restock ngayon?", "Kumita ba ako this month?", "Which products should I stop buying?", "Magkano ang utang na hindi pa bayad?"];
-    return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno AI" },
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { text: "✨ Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "AI · reads only your store's data" })),
-      h("div", { style: "display:flex;gap:6px" }, input,
-        h("button", { class: "btn", id: "aiMic", "aria-label": "Speak your question", "aria-pressed": String(ai.listening), onclick: dictate }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
-        h("button", { class: "btn primary", disabled: ai.busy, onclick: () => askAI(input.value) }, ai.busy ? "…" : "Ask")),
-      !ai.q ? h("div", { class: "cats" }, chips.map((c) => h("button", { onclick: () => askAI(c) }, c))) : null,
-      ai.q ? h("div", { class: "banner", style: "display:grid;gap:6px;color:var(--fg)" }, h("div", { class: "small muted", text: "You asked: " + ai.q }),
-        h("div", { id: "aiAns", style: "white-space:pre-wrap", text: ai.a || (ai.busy ? "Thinking…" : "") }),
-        ai.err ? h("div", { class: "small", style: "color:var(--bad)", text: ai.err }) : null,
-        !ai.busy ? h("button", { class: "btn sm", style: "justify-self:start", onclick: () => { Object.assign(ai, { q: "", a: "", err: "" }); render(); } }, "Ask another") : null) : null);
+    const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
+    return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Batay sa datos ng tindahan · offline" })),
+      h("div", { style: "display:flex;gap:6px" }, input, h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
+      !askState.res ? h("div", { class: "cats" }, ASK_EXAMPLES.slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
+      askState.res ? resultView(askState.res) : null);
   }
   function viewHome() {
     if (sub === "tips") return viewTips();

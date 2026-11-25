@@ -1687,7 +1687,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // Clean the photo: grayscale, then local-contrast black & white (Bradley threshold) so pen strokes stand out from shadows and ruled lines.
   async function prepImage(file, bw = true) {
     const bmp = await createImageBitmap(file);
-    const k = Math.min(2, 1800 / Math.max(bmp.width, bmp.height)), W = Math.round(bmp.width * k), H = Math.round(bmp.height * k);
+    const k = Math.min(2, 1600 / Math.max(bmp.width, bmp.height)), W = Math.round(bmp.width * k), H = Math.round(bmp.height * k);
     const c = document.createElement("canvas"); c.width = W; c.height = H;
     const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(bmp, 0, 0, W, H);
     const im = x.getImageData(0, 0, W, H), d = im.data, g = new Float32Array(W * H), I = new Float64Array((W + 1) * (H + 1));
@@ -1709,40 +1709,64 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return c;
   }
   let ocrP = null, ocrLog = null;
-  const OCR_BASE = () => window.__OCR_CDN || "https://cdn.jsdelivr.net/npm";
+  // The reader's files are published with this app (same site, so the Claude page allows them); the CDN is the backup.
+  const OCR_CDN = () => window.__OCR_CDN || "https://cdn.jsdelivr.net/npm";
+  const ocrSources = () => { const here = new URL("ocr/", location.href).href;
+    return [{ script: here + "tesseract.min.js", worker: here + "worker.min.js", core: here + "core", lang: here + "lang" },
+      { script: OCR_CDN() + "/tesseract.js@5.1.1/dist/tesseract.min.js", worker: OCR_CDN() + "/tesseract.js@5.1.1/dist/worker.min.js", core: OCR_CDN() + "/tesseract.js-core@5.1.1", lang: OCR_CDN() + "/@tesseract.js-data/eng@1.0.0/4.0.0_best_int" }]; };
+  const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms))]);
+  const loadScript = (src) => new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = src; sc.onload = res; sc.onerror = () => { sc.remove(); rej(new Error("load")); }; document.head.append(sc); });
   function loadOcr() {
+    const T = window.__OCR_TIMEOUT || 90000; // first download is ~7 MB; after that the browser keeps it
     return (ocrP ??= (async () => {
-      if (!window.Tesseract) await new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = OCR_BASE() + "/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload = res; sc.onerror = () => rej(new Error("load")); document.head.append(sc); });
-      const w = await window.Tesseract.createWorker("eng", 1, { workerPath: OCR_BASE() + "/tesseract.js@5.1.1/dist/worker.min.js", corePath: OCR_BASE() + "/tesseract.js-core@5.1.1", langPath: OCR_BASE() + "/@tesseract.js-data/eng@1.0.0/4.0.0_best_int", logger: (m) => ocrLog?.(m) });
-      await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
-      return w;
+      let last = null;
+      for (const src of ocrSources()) {
+        try {
+          if (!window.Tesseract) await withTimeout(loadScript(src.script), Math.min(T, 30000));
+          const w = await withTimeout(window.Tesseract.createWorker("eng", 1, { workerPath: src.worker, corePath: src.core, langPath: src.lang, logger: (m) => ocrLog?.(m) }), T);
+          await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+          ocrReady = true; return w;
+        } catch (e) { last = e; }
+      }
+      throw last || new Error("load");
     })().catch((e) => { ocrP = null; throw e; }));
   }
+  let ocrReady = false;
   const lb = { mode: "sale", date: "", stage: "start", progress: 0, status: "", preview: "", rows: [], err: "" };
   async function readLogbook(file) {
     if (!file) return;
-    Object.assign(lb, { stage: "reading", progress: 0, status: "", err: "", rows: [] }); render();
+    Object.assign(lb, { stage: "reading", progress: 0, status: "", err: "", errDetail: "", rows: [] }); render();
     try {
       const canvas = await prepImage(file, true), gray = await prepImage(file, false);
+      if (lb.stage !== "reading") return; // cancelled
       const small = document.createElement("canvas"), k = Math.min(1, 900 / canvas.width); small.width = Math.round(canvas.width * k); small.height = Math.round(canvas.height * k);
       small.getContext("2d").drawImage(await createImageBitmap(file), 0, 0, small.width, small.height); lb.preview = small.toDataURL("image/jpeg", 0.7);
-      ocrLog = (m) => { lb.status = m.status; lb.progress = Math.round((m.progress || 0) * 100); const el = document.getElementById("lbProg"); if (el) el.textContent = `${tx(m.status === "recognizing text" ? "Reading the writing" : "Loading the reader (first time only)")} · ${lb.progress}%`; };
+      const prog = (t) => { const el = document.getElementById("lbProg"); if (el) el.textContent = t; };
+      ocrLog = (m) => { lb.progress = Math.round((m.progress || 0) * 100);
+        prog(m.status === "recognizing text" ? `${L("Binabasa ang sulat", "Reading the writing")}${lb.pass > 1 ? L(" (ikalawang basa)", " (second pass)") : ""} · ${lb.progress}%` : `${L("Nilo-load ang pambasa (unang beses lang)", "Loading the reader (first time only)")} · ${lb.progress}%`); };
+      if (!ocrReady) prog(L("Nilo-load ang pambasa (unang beses lang)…", "Loading the reader (first time only)…"));
       const w = await loadOcr();
       // read the page twice (black & white, and grayscale) and keep the reading that matches more of the store's products
       const readAs = async (cv) => {
-        const { data } = await w.recognize(cv, {}, { text: true, blocks: true });
+        const { data } = await withTimeout(w.recognize(cv, {}, { text: true, blocks: true }), window.__OCR_TIMEOUT || 60000);
         let lines = (data.blocks || []).flatMap((b) => (b.paragraphs || []).flatMap((pg) => pg.lines || [])).map((l) => ({ text: l.text, conf: l.confidence }));
         if (!lines.length) lines = String(data.text || "").split("\n").map((t) => ({ text: t, conf: data.confidence }));
         const rows = lines.filter((l) => String(l.text).trim()).map((l) => parseLogLine(l.text, l.conf));
         return { rows, score: rows.filter((r) => r.pid).length + rows.reduce((a, r) => a + (r.pid ? r.conf : 0), 0) / 1000 };
       };
-      const A = await readAs(canvas), B = await readAs(gray);
-      lb.rows = (B.score > A.score ? B : A).rows;
+      // second reading (grayscale) only when the first one matched less than 60% of the item lines
+      lb.pass = 1; const A = await readAs(canvas), items = A.rows.filter((r) => !r.header).length;
+      let best = A;
+      if (!items || A.rows.filter((r) => r.pid).length / items < 0.6) { lb.pass = 2; const B = await readAs(gray); if (B.score > A.score) best = B; }
+      lb.rows = best.rows;
       lb.stage = "review";
       if (!lb.rows.length) lb.err = L("Walang nabasang sulat. Subukang kunan muli nang malapit, maliwanag at diretso.", "No writing was read. Try again closer, in good light, straight on.");
     } catch (e) {
-      lb.stage = "review"; lb.rows = lb.rows || [];
-      lb.err = L("Hindi ma-load ang pambasa ng sulat dito. I-type na lang ang mga linya habang tinitingnan ang litrato.", "The writing reader couldn't load here. Type the lines while looking at the photo.");
+      if (lb.stage !== "reading") return;
+      lb.stage = "review"; lb.rows = lb.rows?.length ? lb.rows : [{ raw: "", name: "", conf: 0, qty: 1, amount: null, auto: "", pid: "", score: 0 }];
+      lb.err = e?.message === "timeout" ? L("Masyadong matagal ang pagbasa dito. I-type na lang ang mga linya habang tinitingnan ang litrato — o subukan muli mamaya.", "Reading is taking too long here. Type the lines while looking at the photo, or try again later.")
+        : L("Hindi ma-load ang pambasa ng sulat dito. I-type na lang ang mga linya habang tinitingnan ang litrato.", "The writing reader couldn't load here. Type the lines while looking at the photo.");
+      lb.errDetail = String(e?.message || e || "").slice(0, 120);
     }
     render();
   }
@@ -1763,17 +1787,19 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const fixes = rows.filter((r) => r.name && r.pid !== r.auto).map((r) => ({ raw: fold(r.name).slice(0, 60), to: productById(r.pid).name, at: new Date().toISOString() }));
       if (fixes.length) await ref("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
       toast(lb.mode === "sale" ? L(`Na-save: ${rows.length} item bilang benta`, `Saved ${rows.length} item(s) as sales`) : L(`Na-save: ${rows.length} item bilang stock-in`, `Saved ${rows.length} item(s) as stock-in`));
-      Object.assign(lb, { stage: "start", rows: [], preview: "", err: "" }); go("home");
+      Object.assign(lb, { stage: "start", rows: [], preview: "", err: "", errDetail: "" }); go("home");
     } catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
   }
   function viewLogbook() {
     const prods = activeProducts();
+    if (lb.stage === "start" && !ocrReady) loadOcr().then(() => { if (view === "home" && sub === "logbook" && lb.stage === "start") render(); }).catch(() => {}); // warm up the reader before the photo
     const head = h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: L("Litrato ng kwaderno", "Logbook photo"), style: "margin-top:8px" })));
     const pick = (camera) => h("button", { class: "btn " + (camera ? "primary big" : "big"), onclick: async () => readLogbook(await pickPhoto(camera)) }, camera ? camIcon() : null, camera ? L("Kunan ng litrato ang pahina", "Take a photo of the page") : L("Pumili ng litrato", "Choose a photo"));
     if (lb.stage === "reading") return h("div", { class: "view" }, head, h("div", { class: "card grid", style: "text-align:center" },
       lb.preview ? h("img", { src: lb.preview, alt: "", style: "width:100%;max-height:260px;object-fit:contain;border-radius:12px" }) : null,
       h("div", { id: "lbProg", style: "font-weight:700", text: L("Inihahanda ang litrato…", "Preparing the photo…") }),
-      h("p", { class: "muted small", text: L("Binabasa sa phone mo mismo — walang ipinapadala sa internet.", "Read on your phone itself — nothing is sent online.") })));
+      h("p", { class: "muted small", text: L("Binabasa sa phone mo mismo — walang ipinapadala sa internet.", "Read on your phone itself — nothing is sent online.") }),
+      h("button", { class: "btn", onclick: () => { Object.assign(lb, { stage: "review", err: L("Kinansela. I-type ang mga linya habang tinitingnan ang litrato.", "Cancelled. Type the lines while looking at the photo."), rows: [{ raw: "", name: "", conf: 0, qty: 1, amount: null, auto: "", pid: "", score: 0 }] }); render(); } }, L("Kanselahin — i-type na lang", "Cancel — type it instead"))));
     if (lb.stage === "review") {
       const inc = lb.rows.filter((r) => r.pid && !r.skip && Number(r.qty) > 0);
       const total = inc.reduce((a, r) => a + Math.round(Number(r.qty) * (productById(r.pid)?.price || 0)), 0);
@@ -1794,7 +1820,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("span", { class: "num", style: "width:90px;text-align:right;font-weight:600;padding-bottom:10px", text: p ? peso(Math.round(Number(r.qty || 0) * p.price)) : "—" }));
       };
       return h("div", { class: "view" }, head,
-        lb.err ? h("div", { class: "note", text: lb.err }) : null,
+        lb.err ? h("div", { class: "note" }, lb.err, lb.errDetail ? h("div", { class: "small", style: "opacity:.75;margin-top:4px", text: L("Detalye: ", "Detail: ") + lb.errDetail }) : null) : null,
         lb.preview ? h("details", { class: "card", open: true }, h("summary", { style: "cursor:pointer;font-weight:600", text: L("Litrato", "Photo") }), h("img", { src: lb.preview, alt: L("Litrato ng kwaderno", "Logbook photo"), style: "width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line)" })) : null,
         h("div", { class: "card grid" },
           h("div", { class: "toolbar" }, h("h2", { text: L("Suriin ang bawat linya", "Check every line"), style: "margin-right:auto" }), h("span", { class: "muted small", text: L(`${inc.length} isasama · ${peso(total)}`, `${inc.length} included · ${peso(total)}`) })),
@@ -1810,6 +1836,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "methods", style: "grid-template-columns:1fr 1fr", role: "radiogroup", "aria-label": L("Uri ng pahina", "Page type") },
           [["sale", L("Benta", "Sales")], ["stockin", "Stock-in"]].map(([k, l]) => h("button", { role: "radio", "aria-checked": String(lb.mode === k), onclick: () => { lb.mode = k; render(); } }, l))),
         h("label", { class: "f" }, L("Petsa sa pahina", "Date on the page"), h("input", { type: "date", id: "lbDate", max: todayKey(), value: lb.date || todayKey(), oninput: (e) => { lb.date = e.target.value; } })),
+        h("div", { class: "small muted", text: ocrReady ? L("✅ Handa na ang pambasa", "✅ Reader ready") : L("⏳ Inihahanda ang pambasa (unang beses lang, ~7 MB). Puwede nang kumuha ng litrato.", "⏳ Getting the reader ready (first time only, ~7 MB). You can take the photo now.") }),
         pick(true), pick(false),
         h("div", { class: "banner small" }, h("b", { text: L("Para mas tama ang basa:", "For better reading:") }),
           h("ul", { style: "margin:6px 0 0;padding-left:18px" }, [L("Isang item bawat linya: dami, pangalan, halaga — hal. 2 Coke 30", "One item per line: qty, name, amount — e.g. 2 Coke 30"), L("Malalaking letra, malinaw na numero", "Large letters, clear numbers"), L("Maliwanag, diretso sa itaas ng pahina, walang anino", "Good light, straight above the page, no shadows")].map((t) => h("li", { text: t }))))));

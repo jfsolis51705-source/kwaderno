@@ -119,8 +119,11 @@ nav.bottom { display: none; }
   padding: 12px 6px 12px 8px; display: grid; gap: 4px; justify-items: center; box-shadow: -4px 4px 14px rgba(0,0,0,.2); font-weight: 700; }
 .sd-tab svg { width: 20px; height: 20px; }
 .sd-wrap.open .sd-tab { opacity: 0; pointer-events: none; }
-:root[data-layout="tablet"] .sd-tab { display: none; } /* tablets use the button at the end of the category row */
-.sd-open { flex: none; white-space: nowrap; }
+:root[data-layout="tablet"] .sd-tab { padding: 16px 8px 16px 10px; }
+.view.tab-drawer .sell { grid-template-columns: minmax(0, 1fr) !important; }
+.view.tab-drawer { padding-bottom: 84px; }
+.view.tab-drawer .mobile-cart { display: flex; position: fixed; left: calc(110px + env(safe-area-inset-left, 0px)); right: calc(56px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); z-index: 25;
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 14px; padding: 16px 18px; justify-content: space-between; font-weight: 700; font-size: 1.05rem; box-shadow: 0 8px 24px rgb(0 0 0 / .2); }
 :root[data-layout="tablet"] .sd-panel { width: min(420px, 45vw); }
 :root[data-layout="phone"].framed .sd-wrap { position: absolute; }
 @media (prefers-reduced-motion: reduce) { .sd-panel, .sd-back { transition: none; } }
@@ -3343,7 +3346,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("p", { class: "muted small", style: "margin:0", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
           h("p", { class: "muted small", style: "margin:0", text: L("Mag-swipe pakanan para isara.", "Swipe right to close.") })));
     }
-    return h("div", { class: "view selling" + (c.lines.length ? " has-cart" : "") },
+    const tabDrawer = drawerMode && document.documentElement.dataset.layout === "tablet";
+    return h("div", { class: "view selling" + (c.lines.length ? " has-cart" : "") + (tabDrawer ? " tab-drawer" : "") },
       drawerMode ? sellDrawer() : null,
       drawerMode ? null : h("div", { class: "sell-head" }, h("h1", { text: "Sell" }),
         dock ? null : h("span", { class: "muted small sell-hint", text: "Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box." }),
@@ -3362,11 +3366,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "grid", style: "gap:10px" },
           dock || drawerMode ? null : h("div", { class: "pos-acts" }, ...posButtons()),
           dock || drawerMode ? null : searchBox(),
-          (() => { const catRow = prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null;
-            if (!(drawerMode && document.documentElement.dataset.layout === "tablet")) return catRow;
-            // tablet: the panel button sits at the end of the category row (never over the Current sale panel)
-            return h("div", { style: "display:flex;gap:8px;align-items:center;min-width:0" }, catRow ? h("div", { style: "flex:1;min-width:0" }, catRow) : h("div", { style: "flex:1" }),
-              h("button", { class: "btn primary sd-open", onclick: () => { sellDrawerOpen = true; render(); setTimeout(() => $("#sellSearch")?.focus({ preventScroll: true }), 260); } }, "‹ ", svgIcon(IC.scan), L(" Scan · Hanap", " Scan · Search"))); })(),
+          prods.length && !f ? h("div", { class: "cats", role: "toolbar", "aria-label": "Categories" }, [["all", `All (${prods.length})`], ...(D.sold.size ? [["best", "⭐ Best sellers"]] : []), ...cats.map((k) => [k, k])].map(([k, l]) => h("button", { "aria-pressed": String(sellCat === k), onclick: () => { sellCat = k; render(); } }, l))) : null,
           !prods.length ? h("div", { class: "empty" }, "No products yet. ", h("button", { class: "btn sm", onclick: () => go("products", "new") }, "Add your first product"))
           : sellViewMode === "list" ? h("ul", { class: "plist", role: "list" }, shown.map((p) => {
             const inCart = cart.lines.find((l) => l.productId === p.id), q = stockOf(p.id), st = q <= 0 ? "out" : q <= (p.reorder || 0) ? "low" : "";
@@ -3387,7 +3387,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
                 h("span", { class: "r2" }, h("span", { class: "price num", text: peso(p.price) }), h("span", { class: "inq num", title: L("Nasa benta", "In this sale"), text: inCart ? inCart.qty : "0" })))),
               inCart ? h("button", { class: "minus", "aria-label": `One less ${p.name}`, onclick: () => minusOne(p) }, "−") : null);
           }))),
-        h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
+        tabDrawer ? null : h("div", { class: "card cart desktop" }, h("h2", { text: "Current sale", style: "margin-bottom:10px" }), checkout())),
       c.lines.length ? h("button", { class: "mobile-cart", onclick: () => openDialog("Current sale", checkoutDialog()) }, h("span", { text: `${c.lines.length} item(s)` }), h("span", { class: "num", text: `${peso(c.total)} ›` })) : null);
     function checkoutDialog() { const wrap = h("div", { id: "mcart" }); wrap.replaceChildren(checkout()); return wrap; }
   }

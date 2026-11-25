@@ -1336,6 +1336,8 @@ ${catalog}`;
     if (sub === "library") return adminPage("library", "Product photo library", viewLibrary());
     if (sub === "products") return adminPage("products", "Products across all stores", viewNetworkProducts());
     if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
+    if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
+    if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
     if (sub && sub.startsWith("audit")) return adminPage("audit", "Shelf audit", viewAudit());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
@@ -1968,10 +1970,178 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       h("p", { class: "muted small", text: "Points are shown here as KELSON approves each photo. Approved means the photo is clear and shows your shelf." }));
   }
 
+  // ---------- OUT OF STOCK: every out-of-stock record across the network, with store details ----------
+  // Two sources: (1) each store's stock records (items at 0 / at or below the alert level) sent with its summary,
+  // (2) shelf photos — must-stock SKUs the store showed before but missing from its latest photos.
+  let oosQ = "", oosCity = "", oosBrgy = "", oosSource = "", oosLow = false, oosView = "records", oosLimit = 50;
+  function oosRecords() {
+    const out = [];
+    for (const st of S.stores.filter((x) => adminSample || !x.sample)) {
+      const dir = dirFor(st.name);
+      for (const it of st.items || []) {
+        const isOut = it.stock <= 0, isLow = !isOut && it.stock <= (it.reorder || 0);
+        if (!isOut && !(oosLow && isLow)) continue;
+        const perDay = (it.s30 || 0) / 30;
+        out.push({ key: `s:${st.id}:${it.k}`, storeId: st.id, store: st.name, sample: !!st.sample, barangay: st.barangay || dir?.barangay || null, city: st.city || dir?.city || null,
+          address: dir?.address || null, owner: dir?.owner || null, phone: dir?.phone || null, lastActive: st.lastActiveAt || null,
+          product: it.name, cat: it.cat || null, status: isOut ? "out" : "low", stock: it.stock, reorder: it.reorder || 0, perDay, lostPerDay: isOut ? perDay * (it.price || 0) : 0, source: "Stock records" });
+      }
+    }
+    const M = S.msl?.items || [];
+    if (M.length) {
+      const { all, latest } = latestVisits();
+      for (const v of latest) {
+        const seen = new Set(v.photos.flatMap((a) => (a.p.items || []).map(itemKey)));
+        const ever = new Set(all.filter((a) => a.storeKey === v.storeKey).flatMap((a) => (a.p.items || []).map(itemKey)));
+        const dir = dirFor(v.store);
+        for (const x of M) if (ever.has(x.k) && !seen.has(x.k)) out.push({ key: `p:${v.storeKey}:${x.k}`, storeKey: v.storeKey, photoUid: v.photos[0].uid, store: v.store, sample: v.photos.some((a) => a.p.sample),
+          barangay: v.barangay || dir?.barangay || null, city: v.city || dir?.city || null, address: dir?.address || null, owner: dir?.owner || null, phone: dir?.phone || null,
+          lastActive: v.date ? v.date + "T12:00:00" : null, product: x.name, cat: null, status: "out", stock: 0, reorder: null, perDay: null, lostPerDay: 0, source: `Shelf photo ${fmtDate(v.date)}` });
+      }
+    }
+    return out;
+  }
+  function viewOOS() {
+    const all = oosRecords();
+    const cities = [...new Set(all.map((r) => r.city).filter(Boolean))].sort();
+    const brgys = [...new Set(all.filter((r) => !oosCity || r.city === oosCity).map((r) => r.barangay).filter(Boolean))].sort();
+    const q = oosQ.trim().toLowerCase();
+    const rows = all.filter((r) => (!oosCity || r.city === oosCity) && (!oosBrgy || r.barangay === oosBrgy) && (!oosSource || (oosSource === "photo" ? r.source.startsWith("Shelf") : r.source === "Stock records"))
+      && (!q || [r.store, r.product, r.barangay, r.city, r.owner, r.cat].filter(Boolean).join(" ").toLowerCase().includes(q)))
+      .sort((a, b) => (a.status === "out" ? 0 : 1) - (b.status === "out" ? 0 : 1) || b.lostPerDay - a.lostPerDay || a.store.localeCompare(b.store));
+    const outRows = rows.filter((r) => r.status === "out");
+    const storesOut = new Set(outRows.map((r) => r.storeId ?? r.storeKey)).size;
+    const lost = outRows.reduce((a, r) => a + r.lostPerDay, 0);
+    const byProduct = new Map(); for (const r of outRows) { const k = normName(r.product); const g = byProduct.get(k) || { product: r.product, stores: [], lost: 0 }; g.stores.push(r); g.lost += r.lostPerDay; byProduct.set(k, g); }
+    const byStore = new Map(); for (const r of outRows) { const k = r.storeId ?? r.storeKey; const g = byStore.get(k) || { r, items: [], lost: 0 }; g.items.push(r.product); g.lost += r.lostPerDay; byStore.set(k, g); }
+    const sel = (label, val, opts, set) => h("select", { "aria-label": label, onchange: (e) => { set(e.target.value); oosLimit = 50; render(); } }, h("option", { value: "", text: label }), opts.map(([v, l]) => h("option", { value: v, text: l, selected: val === v || null })));
+    const openStore = (r) => (r.storeId ? go("admin", "s-" + r.storeId) : go("admin", "audit-d-" + encodeURIComponent(r.photoUid)));
+    const download = () => {
+      const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`.replace(/^"([=+\-@])/, '"\'$1');
+      const head = ["Status", "Store", "Barangay", "City", "Address", "Owner", "Phone", "Product", "Category", "Stock", "Alert at", "Sold per day", "Est. lost sales per day (PHP)", "Source", "Store last active"];
+      const body = rows.map((r) => [r.status === "out" ? "Out of stock" : "Low", r.store, r.barangay, r.city, r.address, r.owner, r.phone, r.product, r.cat, r.stock, r.reorder, r.perDay == null ? "" : r.perDay.toFixed(2), (r.lostPerDay / 100).toFixed(2), r.source, r.lastActive ? r.lastActive.slice(0, 10) : ""]);
+      exportCsv([head, ...body].map((x) => x.map(esc).join(",")).join("\n"), "kelson-out-of-stock");
+    };
+    const contact = (r) => [r.owner, r.phone].filter(Boolean).length ? h("div", { class: "small" }, r.owner || "", r.phone ? h("div", {}, h("a", { href: "tel:" + r.phone.replace(/[^\d+]/g, ""), text: r.phone })) : null) : h("span", { class: "muted small", text: "—" });
+    return h("div", { class: "view" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox("Stores with out-of-stock items", String(storesOut), `of ${S.stores.filter((x) => adminSample || !x.sample).length + (S.visual?.length || 0)} stores & photo albums`),
+        kpiBox("Out-of-stock records", String(outRows.length), oosLow ? `${rows.length - outRows.length} more low on stock` : "turn on “include low stock” for items about to run out"),
+        kpiBox("Estimated sales lost per day", peso(lost), "from items that normally sell (stock records)"),
+        kpiBox("Products out somewhere", String(byProduct.size))),
+      h("div", { class: "toolbar" },
+        h("input", { type: "search", id: "oosSearch", placeholder: "Search store, product, owner, barangay", value: oosQ, "aria-label": "Search out-of-stock records",
+          oninput: (e) => { oosQ = e.target.value; oosLimit = 50; render(); const el = $("#oosSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
+        sel("All cities", oosCity, cities.map((c) => [c, c]), (v) => { oosCity = v; oosBrgy = ""; }),
+        sel("All barangays", oosBrgy, brgys.map((b) => [b, b]), (v) => (oosBrgy = v)),
+        sel("All sources", oosSource, [["stock", "Stock records"], ["photo", "Shelf photos"]], (v) => (oosSource = v)),
+        h("label", { class: "small", style: "display:flex;gap:6px;align-items:center" }, h("input", { type: "checkbox", checked: oosLow || null, onchange: (e) => { oosLow = e.target.checked; render(); } }), "Include low stock"),
+        h("button", { class: "btn", onclick: download }, "Download CSV")),
+      h("div", { class: "pills" }, [["records", `Records (${rows.length})`], ["stores", `By store (${byStore.size})`], ["products", `By product (${byProduct.size})`]].map(([k, l]) =>
+        h("button", { class: "btn sm" + (oosView === k ? " primary" : ""), onclick: () => { oosView = k; render(); } }, l))),
+      oosView === "records" ? h("div", { class: "card" }, rows.length ? [
+        h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Location", "Contact", "Product", "Stock", "Sold/day", "Lost/day", "Source", "Last active"].map((x, i) => h("th", { class: i >= 4 && i <= 6 ? "r" : "", text: x })))),
+          h("tbody", {}, rows.slice(0, oosLimit).map((r) => h("tr", { class: "click", tabindex: 0, onclick: () => openStore(r), onkeydown: (e) => { if (e.key === "Enter") openStore(r); } },
+            h("td", { style: "font-weight:600" }, r.store, r.sample ? h("span", { class: "sample-tag", text: "sample" }) : null),
+            h("td", { class: "small", style: "white-space:normal;min-width:160px" }, h("div", { text: [r.barangay, r.city].filter(Boolean).join(", ") || "—" }), r.address ? h("div", { class: "muted", text: r.address }) : null),
+            h("td", {}, contact(r)),
+            h("td", {}, h("div", { text: r.product }), r.cat ? h("div", { class: "muted small", text: r.cat }) : null),
+            h("td", { class: "r" }, statusChip(r.status === "out" ? ["off", "Out · 0"] : ["idle", `Low · ${qtyFmt(r.stock)}`])),
+            h("td", { class: "r num", text: r.perDay == null ? "—" : r.perDay.toFixed(1) }), h("td", { class: "r num", text: r.lostPerDay ? peso(r.lostPerDay) : "—" }),
+            h("td", { class: "small", text: r.source }), h("td", { class: "small", text: relTime(r.lastActive) })))))),
+        rows.length > oosLimit ? h("button", { class: "btn", style: "margin-top:10px", onclick: () => { oosLimit += 50; render(); } }, `Show more (${rows.length - oosLimit} left)`) : null,
+      ] : h("div", { class: "empty", text: "No out-of-stock records match." }))
+      : oosView === "stores" ? h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Location", "Contact", "Items out", "Lost/day", "Products"].map((x, i) => h("th", { class: i === 3 || i === 4 ? "r" : "", text: x })))),
+          h("tbody", {}, [...byStore.values()].sort((a, b) => b.lost - a.lost || b.items.length - a.items.length).slice(0, 200).map((g) => h("tr", { class: "click", onclick: () => openStore(g.r) },
+            h("td", { style: "font-weight:600" }, g.r.store, g.r.sample ? h("span", { class: "sample-tag", text: "sample" }) : null), h("td", { class: "small", text: [g.r.barangay, g.r.city].filter(Boolean).join(", ") || "—" }), h("td", {}, contact(g.r)),
+            h("td", { class: "r num", text: g.items.length }), h("td", { class: "r num", text: g.lost ? peso(g.lost) : "—" }), h("td", { class: "small", style: "white-space:normal;min-width:220px", text: g.items.slice(0, 6).join(", ") + (g.items.length > 6 ? ` +${g.items.length - 6} more` : "") })))))))
+      : h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Product", "Stores out", "Lost/day", "Where"].map((x, i) => h("th", { class: i === 1 || i === 2 ? "r" : "", text: x })))),
+          h("tbody", {}, [...byProduct.values()].sort((a, b) => b.stores.length - a.stores.length || b.lost - a.lost).slice(0, 200).map((g) => h("tr", { class: "click", onclick: () => openDialog(`${g.product} — out of stock`, h("ul", { class: "list" }, g.stores.map((r) => h("li", {}, h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: r.store }), h("div", { class: "muted small", text: [r.barangay, r.city].filter(Boolean).join(", ") + (r.phone ? ` · ${r.phone}` : "") })), h("span", { class: "muted small", text: r.source })))) ) },
+            h("td", { style: "font-weight:600", text: g.product }), h("td", { class: "r num", text: g.stores.length }), h("td", { class: "r num", text: g.lost ? peso(g.lost) : "—" }),
+            h("td", { class: "small", style: "white-space:normal;min-width:220px", text: [...new Set(g.stores.map((r) => r.barangay).filter(Boolean))].slice(0, 5).join(", ") || "—" }))))))),
+      h("p", { class: "muted small", text: "Stock records come from each store's own app; shelf-photo records compare a store's latest photos with what it showed before (must-stock list). Lost sales = usual units per day × price, for items that are at 0. Owner names and phone numbers come from your Directory and are visible only to you." }));
+  }
+
+  // ---------- BEST SELLERS: top products across the network and in each store (from stores' own sales) ----------
+  let bestQ = "", bestCity = "", bestView = "products", bestLimit = 30, bestPeriod = "s30";
+  function bestRows() {
+    const per = bestPeriod; // s30 = last 30 days, s7 = last 7 days
+    const out = [];
+    for (const st of S.stores.filter((x) => adminSample || !x.sample)) {
+      const dir = dirFor(st.name);
+      for (const it of st.items || []) {
+        const units = it[per] || 0; if (!units) continue;
+        out.push({ storeId: st.id, store: st.name, sample: !!st.sample, barangay: st.barangay || dir?.barangay || null, city: st.city || dir?.city || null, address: dir?.address || null,
+          owner: dir?.owner || null, phone: dir?.phone || null, k: it.k, product: it.name, cat: it.cat || null, units, revenue: per === "s30" ? (it.r30 || units * (it.price || 0)) : units * (it.price || 0), stock: it.stock, price: it.price || 0 });
+      }
+    }
+    return out;
+  }
+  function viewBest() {
+    const all = bestRows();
+    const cities = [...new Set(all.map((r) => r.city).filter(Boolean))].sort();
+    const q = bestQ.trim().toLowerCase();
+    const rows = all.filter((r) => (!bestCity || r.city === bestCity) && (!q || [r.store, r.product, r.barangay, r.city, r.cat].filter(Boolean).join(" ").toLowerCase().includes(q)));
+    const products = new Map();
+    for (const r of rows) { const g = products.get(r.k) || { product: r.product, cat: r.cat, units: 0, revenue: 0, stores: [] }; g.units += r.units; g.revenue += r.revenue; g.stores.push(r); products.set(r.k, g); }
+    const plist = [...products.values()].sort((a, b) => b.units - a.units);
+    for (const g of plist) g.stores.sort((a, b) => b.units - a.units);
+    const stores = new Map();
+    for (const r of rows) { const g = stores.get(r.storeId) || { r, units: 0, revenue: 0, items: [] }; g.units += r.units; g.revenue += r.revenue; g.items.push(r); stores.set(r.storeId, g); }
+    const slist = [...stores.values()].sort((a, b) => b.revenue - a.revenue);
+    for (const g of slist) g.items.sort((a, b) => b.units - a.units);
+    const label = bestPeriod === "s30" ? "30 days" : "7 days";
+    const totalUnits = rows.reduce((a, r) => a + r.units, 0), totalRev = rows.reduce((a, r) => a + r.revenue, 0);
+    const where = (r) => [r.barangay, r.city].filter(Boolean).join(", ") || "—";
+    const productDialog2 = (g) => openDialog(`${g.product} — where it sells`, h("div", { class: "grid" },
+      h("div", { class: "muted small", text: `${g.units.toLocaleString("en-PH")} units · ${peso(g.revenue)} in ${g.stores.length} store(s), last ${label}` }),
+      h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["#", "Store", "Location", "Units", "Sales", "In stock"].map((x, i) => h("th", { class: i >= 3 ? "r" : "", text: x })))),
+        h("tbody", {}, g.stores.map((r, n) => h("tr", { class: "click", onclick: () => { dlg.close(); go("admin", "s-" + r.storeId); } }, h("td", { class: "muted", text: String(n + 1) }),
+          h("td", {}, h("div", { style: "font-weight:600" }, r.store, r.sample ? h("span", { class: "sample-tag", text: "sample" }) : null), r.phone ? h("div", { class: "muted small", text: [r.owner, r.phone].filter(Boolean).join(" · ") }) : null),
+          h("td", { class: "small", text: where(r) }), h("td", { class: "r num", text: r.units }), h("td", { class: "r num", text: peso(r.revenue) }),
+          h("td", { class: "r" }, statusChip(r.stock <= 0 ? ["off", "Out"] : ["week", qtyFmt(r.stock)])))))))));
+    const barMax = Math.max(1, ...plist.slice(0, 10).map((g) => g.units));
+    const download = () => {
+      const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`.replace(/^"([=+\-@])/, '"\'$1');
+      const head = ["Product", "Category", "Store", "Barangay", "City", "Address", "Owner", "Phone", `Units (${label})`, `Sales PHP (${label})`, "In stock"];
+      exportCsv([head, ...rows.sort((a, b) => b.units - a.units).map((r) => [r.product, r.cat, r.store, r.barangay, r.city, r.address, r.owner, r.phone, r.units, (r.revenue / 100).toFixed(2), r.stock])].map((x) => x.map(esc).join(",")).join("\n"), "kelson-best-sellers");
+    };
+    return h("div", { class: "view" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox(`Units sold · ${label}`, totalUnits.toLocaleString("en-PH"), `${stores.size} store(s) selling`), kpiBox(`Sales · ${label}`, peso(totalRev)),
+        kpiBox("#1 product", plist[0]?.product || "—", plist[0] ? `${plist[0].units.toLocaleString("en-PH")} units in ${plist[0].stores.length} stores` : ""),
+        kpiBox("#1 store by sales", slist[0]?.r.store || "—", slist[0] ? `${peso(slist[0].revenue)} · ${where(slist[0].r)}` : "")),
+      h("div", { class: "toolbar" },
+        h("input", { type: "search", id: "bestSearch", placeholder: "Search product, store, barangay", value: bestQ, "aria-label": "Search best sellers",
+          oninput: (e) => { bestQ = e.target.value; bestLimit = 30; render(); const el = $("#bestSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
+        h("select", { "aria-label": "City", onchange: (e) => { bestCity = e.target.value; render(); } }, h("option", { value: "", text: "All cities" }), cities.map((c) => h("option", { value: c, text: c, selected: bestCity === c || null }))),
+        h("select", { "aria-label": "Period", onchange: (e) => { bestPeriod = e.target.value; render(); } }, [["s30", "Last 30 days"], ["s7", "Last 7 days"]].map(([v, l]) => h("option", { value: v, text: l, selected: bestPeriod === v || null }))),
+        h("button", { class: "btn", onclick: download }, "Download CSV")),
+      h("div", { class: "pills" }, [["products", "Best products"], ["stores", "Best sellers per store"]].map(([k, l]) => h("button", { class: "btn sm" + (bestView === k ? " primary" : ""), onclick: () => { bestView = k; bestLimit = 30; render(); } }, l))),
+      bestView === "products" ? h("div", { class: "grid", style: "gap:16px" },
+        h("div", { class: "card" }, h("h2", { text: `Top 10 — units sold, last ${label}`, style: "margin-bottom:10px" }),
+          plist.length ? h("div", { class: "grid", style: "gap:7px" }, plist.slice(0, 10).map((g) => h("button", { class: "bar-row", style: "grid-template-columns:minmax(0,190px) 1fr auto;background:none;border:0;padding:0;text-align:left;cursor:pointer", onclick: () => productDialog2(g) },
+            h("span", { class: "trunc", text: g.product }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(g.units / barMax) * 100}%;background:var(--s1)` })), h("span", { class: "num", text: `${g.units.toLocaleString("en-PH")} · ${g.stores.length} st.` })))) : h("div", { class: "empty", text: "No sales recorded yet." })),
+        h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["#", "Product", "Units", "Sales", "Stores", "Sells most at"].map((x, i) => h("th", { class: i >= 2 && i <= 4 ? "r" : "", text: x })))),
+          h("tbody", {}, plist.slice(0, bestLimit).map((g, n) => h("tr", { class: "click", tabindex: 0, onclick: () => productDialog2(g), onkeydown: (e) => { if (e.key === "Enter") productDialog2(g); } },
+            h("td", { class: "muted", text: String(n + 1) }), h("td", {}, h("div", { style: "font-weight:600", text: g.product }), g.cat ? h("div", { class: "muted small", text: g.cat }) : null),
+            h("td", { class: "r num", text: g.units.toLocaleString("en-PH") }), h("td", { class: "r num", text: peso(g.revenue) }), h("td", { class: "r num", text: g.stores.length }),
+            h("td", { class: "small", style: "white-space:normal;min-width:220px" }, g.stores.slice(0, 3).map((r, j) => h("div", {}, h("b", { text: `${r.store}` }), ` · ${where(r)} · ${r.units} units`, j === 2 && g.stores.length > 3 ? h("span", { class: "muted", text: ` (+${g.stores.length - 3} more)` }) : null)))))))),
+          plist.length > bestLimit ? h("button", { class: "btn", style: "margin-top:10px", onclick: () => { bestLimit += 30; render(); } }, `Show more (${plist.length - bestLimit} left)`) : null))
+      : h("div", { class: "card" }, h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["#", "Store", "Location", "Contact", "Sales", "Top sellers"].map((x, i) => h("th", { class: i === 4 ? "r" : "", text: x })))),
+          h("tbody", {}, slist.slice(0, bestLimit).map((g, n) => h("tr", { class: "click", onclick: () => go("admin", "s-" + g.r.storeId) },
+            h("td", { class: "muted", text: String(n + 1) }), h("td", { style: "font-weight:600" }, g.r.store, g.r.sample ? h("span", { class: "sample-tag", text: "sample" }) : null),
+            h("td", { class: "small", style: "white-space:normal;min-width:150px" }, h("div", { text: where(g.r) }), g.r.address ? h("div", { class: "muted", text: g.r.address }) : null),
+            h("td", { class: "small" }, g.r.owner || g.r.phone ? [g.r.owner, g.r.phone].filter(Boolean).join(" · ") : "—"), h("td", { class: "r num", text: peso(g.revenue) }),
+            h("td", { class: "small", style: "white-space:normal;min-width:260px" }, h("div", { class: "chips" }, g.items.slice(0, 5).map((r, j) => h("span", { class: "chip" }, `${j + 1}. ${r.product}`, h("b", { text: String(r.units) })))))))))),
+          slist.length > bestLimit ? h("button", { class: "btn", style: "margin-top:10px", onclick: () => { bestLimit += 30; render(); } }, `Show more (${slist.length - bestLimit} left)`) : null),
+      h("p", { class: "muted small", text: "From each store's own sales in KWADERNO (sales recorded in the app and ledger photos). Owner names and phone numbers come from your Directory and are visible only to you." }));
+  }
+
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

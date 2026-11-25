@@ -341,7 +341,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const L = (tl, en) => (lang === "en" ? en : tl); // bilingual text written in place
   const I18N = (() => {
     const toTl = new Map(), toEn = new Map();
-    for (const [en, tl] of [["Sign in to use the store", "Mag-sign in para magamit ang tindahan"], ["This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor).", "Sine-save ng app ang paninda, benta at utang online. Buksan ito sa claude.ai habang naka-sign in (bilang may-ari, o Contributor o Editor na binahagian)."], ["Search product", "Hanapin ang produkto"], ["Search the photo library", "Hanapin sa photo library"], ["From your gallery, Google Drive, or files. Square photos look best.", "Mula sa gallery, Google Drive o files. Mas maganda ang parisukat na litrato."], ["See all ›", "Tingnan lahat ›"], ["Tips appear once enough stores are using KWADERNO.", "Lalabas ang tips kapag sapat na ang tindahang gumagamit ng KWADERNO."], ["No tips right now — your store is in good shape. 🎉", "Walang tips ngayon — maayos ang tindahan mo. 🎉"], ["Today", "Ngayon"], ["Your store ledger", "Kwaderno ng tindahan mo"], ["Store tools", "Mga gamit ng tindahan"], ["Recent sales", "Mga huling benta"], ["No sales yet. Tap “Sell”.", "Wala pang benta. Pindutin ang “Magbenta”."], ["Low stock", "Paubos na"], ["Quick add", "Mabilisang dagdag"], ["This month", "Ngayong buwan"], ["Net profit this month", "Net na kita ngayong buwan"], ["Sales − cost of goods − expenses", "Benta − puhunan ng nabenta − gastos"], ["Add expense", "Magdagdag ng gastos"], ["Category", "Kategorya"], ["e.g. Meralco bill October", "hal. Meralco bill ng Oktubre"], ["History", "Kasaysayan"], ["Delete expense", "Burahin ang gastos"], ["No expenses yet. Add bills, rent, transport and other costs to see your real profit.", "Wala pang gastos. Idagdag ang bills, upa, pamasahe at iba pa para makita ang tunay na kita."], ["Cash sale", "Benta (cash)"], ["Utang payment", "Bayad sa utang"], ["Stock purchase", "Pambili ng paninda"], ["Opening cash", "Panimulang cash"], ["Expected cash in the drawer", "Inaasahang pera sa kaha"], ["Counts cash sales, cash utang payments, cash expenses and your cash in/out. GCash is not counted here. Count your drawer — if it differs, record a cash in or out with a note.", "Binibilang ang cash na benta, bayad sa utang, gastos at cash in/out. Hindi kasama ang GCash. Bilangin ang kaha — kung iba, mag-record ng cash in o out na may tala."], ["No cash movement in this period. Start the day with “+ Cash in” → opening cash.", "Walang galaw ng cash sa panahong ito. Simulan ang araw sa “+ Cash in” → panimulang cash."], ["e.g. Meralco, Maynilad, Upa sa pwesto", "hal. Meralco, Maynilad, Upa sa pwesto"], ["Usual amount (optional)", "Karaniwang halaga (opsyonal)"], ["Every month", "Buwan-buwan"], ["One time", "Isang beses"], ["Saved as an expense, so it shows in your profit and cash ledger.", "Mase-save bilang gastos, kaya makikita sa kita at sa kaha."], ["Overdue or due in 3 days", "Lampas na o due sa loob ng 3 araw"], ["Unpaid (usual amounts)", "Hindi pa bayad (karaniwang halaga)"], ["No bills yet. Add rent, kuryente, tubig, internet — we'll remind you before they're due.", "Wala pang bills. Idagdag ang upa, kuryente, tubig, internet — paaalalahanan ka bago mag-due."], ["Recently paid", "Kamakailang binayaran"], ["Sales history", "Kasaysayan ng benta"], ["No sales here yet.", "Wala pang benta dito."], ["Showing the latest 300. Download everything from Reports.", "Ipinapakita ang huling 300. I-download lahat sa Ulat."], ["e.g. Yelo, tingi na asukal, piso-net", "hal. Yelo, tingi na asukal, piso-net"], ["For things you don't track in stock. It is added to this sale and to your sales totals, but no stock is deducted.", "Para sa hindi mo binibilang sa stock. Kasama sa benta at kabuuan, pero walang ibabawas sa stock."], ["Tap products to add them here.", "Pindutin ang produkto para idagdag dito."], ["Less", "Bawas"], ["Quantity", "Dami"], ["More", "Dagdag"], ["Total", "Kabuuan"], ["Payment method", "Paraan ng bayad"], ["Recorded only. Check your GCash app to confirm the payment arrived.", "Naitala lang. Tingnan sa GCash app kung pumasok ang bayad."], ["Sell", "Magbenta"], ["Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box.", "Pindutin ang produkto, i-scan gamit ang camera, o gumamit ng USB/Bluetooth barcode scanner sa search box."], ["Search product or type barcode", "Hanapin o i-type ang barcode"], ["Search products", "Hanapin ang produkto"], ["Categories", "Mga kategorya"], ["Current sale", "Kasalukuyang benta"], ["Discount", "Diskwento"], ["TOTAL", "KABUUAN"], ["Reason (required), e.g. wrong item", "Dahilan (kailangan), hal. maling item"], ["Stock comes back and any utang from it is removed. The sale stays in history marked as voided.", "Babalik ang stock at aalisin ang utang mula rito. Mananatili sa kasaysayan ang benta bilang voided."], ["Products & stock", "Paninda at stock"], ["Search name, category or barcode", "Hanapin ang pangalan, kategorya o barcode"], ["Photo", "Litrato"], ["e.g. Lucky Me Pancit Canton 60g", "hal. Lucky Me Pancit Canton 60g"], ["e.g. Noodles", "hal. Noodles"], ["Scan barcode", "I-scan ang barcode"], ["In stock", "May stock"], ["Price", "Presyo"], ["Cost", "Puhunan"], ["Stock history", "Kasaysayan ng stock"], ["When", "Kailan"], ["What", "Ano"], ["Note", "Tala"], ["No stock movements yet.", "Wala pang galaw ng stock."], ["Reason (required), e.g. punit ang sachet", "Dahilan (kailangan), hal. punit ang sachet"], ["Add a product to this delivery…", "Magdagdag ng produkto sa delivery…"], ["Record a delivery. Stock increases when you confirm.", "I-record ang delivery. Madadagdagan ang stock kapag kinumpirma mo."], ["e.g. Super8, Suy Sing", "hal. Super8, Suy Sing"], ["Not in your products yet:", "Wala pa sa mga produkto mo:"], ["Remove", "Alisin"], ["Add the products in this delivery.", "Idagdag ang mga produkto sa delivery na ito."], ["Total cost", "Kabuuang puhunan"], ["Add product photos", "Magdagdag ng litrato ng produkto"], ["Every product has a photo. 🎉", "May litrato na ang bawat produkto. 🎉"], ["Choose product…", "Pumili ng produkto…"], ["This records an 'expired' stock movement and closes this batch.", "Itatala ito bilang 'expired' na galaw ng stock at isasara ang batch."], ["Sell first what expires first.", "Unahing ibenta ang unang mag-e-expire."], ["Name", "Pangalan"], ["09171234567 (optional)", "09171234567 (opsyonal)"], ["No limit", "Walang limit"], ["Customers & utang", "Mga customer at utang"], ["Total utang outstanding", "Kabuuang utang na hindi pa bayad"], ["No customers yet. Add the people who buy on utang.", "Wala pang customer. Idagdag ang mga umuutang."], ["Utang balance", "Natitirang utang"], ["Utang history", "Kasaysayan ng utang"], ["No utang yet.", "Wala pang utang."], ["Opens your phone's own Messages app with this text — normal SMS rates from your load apply. Be polite: a friendly reminder keeps the suki.", "Bubuksan ang Messages app ng phone mo kasama ang text na ito — normal na singil sa SMS mula sa load. Maging magalang: ang mabait na paalala ay nagpapanatili ng suki."], ["No mobile number saved for this customer — copy the text and send it on Messenger, or add their number.", "Walang naka-save na numero para sa customer — kopyahin ang text at ipadala sa Messenger, o idagdag ang numero."], ["GCash ref (optional)", "GCash ref (opsyonal)"], ["Profit & loss", "Kita at lugi"], ["Reports", "Ulat"], ["Sales", "Benta"], ["Gross profit", "Kita bago gastos"], ["Net profit (after expenses)", "Net na kita (pagkatapos ng gastos)"], ["Utang given", "Naibigay na utang"], ["Stock value now", "Halaga ng stock ngayon"], ["Daily sales", "Benta kada araw"], ["Sales by product", "Benta kada produkto"], ["No sales in this period.", "Walang benta sa panahong ito."], ["Welcome to KWADERNO", "Maligayang pagdating sa KWADERNO"], ["Set up your store", "I-set up ang tindahan mo"], ["Your products, sales and utang are private to you. KELSON sees only store totals (sales, stock, utang) to support the network.", "Pribado sa iyo ang paninda, benta at utang mo. Kabuuan lang (benta, stock, utang) ang nakikita ng KELSON para suportahan ang network."], ["Not connected", "Hindi konektado"], ["Could not open that photo", "Hindi mabuksan ang litrato"], ["Reading barcode…", "Binabasa ang barcode…"], ["New barcode", "Bagong barcode"], ["Add as a new product", "Idagdag bilang bagong produkto"], ["Cancel", "Kanselahin"], ["Photo saved", "Na-save ang litrato"], ["Adding photos needs Editor access to this app", "Kailangan ng Editor access para magdagdag ng litrato"], ["Product photo", "Litrato ng produkto"], ["Upload a photo", "Mag-upload ng litrato"], ["Take a photo", "Kumuha ng litrato"], ["Choose from KELSON photo library", "Pumili sa KELSON photo library"], ["Remove photo", "Alisin ang litrato"], ["Photo removed", "Naalis ang litrato"], ["Saving photo…", "Sine-save ang litrato…"], ["🔥 Best sellers you don't have yet", "🔥 Mabenta na wala ka pa"], ["Add", "Idagdag"], ["Top sellers among stores in your barangay that you don't carry.", "Mabenta sa mga tindahan sa barangay mo na wala ka."], ["📦 Restock soon", "📦 I-restock agad"], ["Stock in", "Stock-in"], ["🏷️ Price check", "🏷️ Suriin ang presyo"], ["Edit price", "Baguhin ang presyo"], ["🐢 Slow sellers", "🐢 Matumal"], ["New sale", "Bagong benta"], ["Stock-in / receipt", "Stock-in / resibo"], ["Add product", "Magdagdag ng produkto"], ["Add bill", "Magdagdag ng bill"], ["Utang / payment", "Utang / bayad"], ["Shelf photo", "Litrato ng shelf"], ["Sell (POS)", "Magbenta (POS)"], ["Products", "Mga produkto"], ["Cash ledger", "Kaha"], ["Expenses", "Gastos"], ["Bills", "Bayarin"], ["All ›", "Lahat ›"], ["Enter the amount, e.g. 250", "Ilagay ang halaga, hal. 250"], ["Expense saved", "Na-save ang gastos"], ["Delete this expense?", "Burahin ang gastos na ito?"], ["Deleted", "Nabura"], ["Delete", "Burahin"], ["Amount ₱", "Halaga ₱"], ["Note (optional)", "Tala (opsyonal)"], ["Date", "Petsa"], ["Save expense", "I-save ang gastos"], ["This is today's opening cash (panimula)", "Ito ang panimulang cash ngayon"], ["Enter the amount", "Ilagay ang halaga"], ["Saved", "Na-save"], ["Enter the bill name", "Ilagay ang pangalan ng bill"], ["Pick the due date", "Piliin ang due date"], ["Enter a valid amount", "Maglagay ng tamang halaga"], ["Bill added", "Naidagdag ang bill"], ["New bill", "Bagong bill"], ["Repeats", "Umuulit"], ["Enter the amount paid", "Ilagay ang ibinayad"], ["Mark as paid", "Markahang bayad na"], ["Amount paid ₱", "Ibinayad ₱"], ["Bill removed", "Naalis ang bill"], ["Remove this bill", "Alisin ang bill"], ["+ Add bill", "+ Magdagdag ng bill"], ["Pay", "Bayaran"], ["Custom item", "Ibang item"], ["Item name", "Pangalan ng item"], ["Price ₱ (each)", "Presyo ₱ (bawat isa)"], ["Qty", "Dami"], ["Enter the price", "Ilagay ang presyo"], ["Enter the quantity", "Ilagay ang dami"], ["Added to the sale", "Naidagdag sa benta"], ["Add to sale", "Idagdag sa benta"], ["Discount (optional)", "Diskwento (opsyonal)"], ["Cash received (optional)", "Natanggap na cash (opsyonal)"], ["GCash reference no. (optional)", "GCash reference no. (opsyonal)"], ["+ New customer", "+ Bagong customer"], ["Scan", "I-scan"], ["Product", "Produkto"], ["No product with that name", "Walang produktong ganyan ang pangalan"], ["Add your first product", "Idagdag ang unang produkto"], ["Printing is not available here", "Hindi puwedeng mag-print dito"], ["Print receipt (Bluetooth / USB printer)", "I-print ang resibo (Bluetooth / USB printer)"], ["Void this sale", "I-void ang benta"], ["Give a short reason", "Magbigay ng maikling dahilan"], ["Sale voided — stock and utang restored", "Na-void ang benta — naibalik ang stock at utang"], ["Void sale", "I-void"], ["Void this sale?", "I-void ang benta?"], ["Add photos", "Magdagdag ng litrato"], ["+ Add product", "+ Magdagdag ng produkto"], ["Edit photo", "Baguhin ang litrato"], ["Enter the product name", "Ilagay ang pangalan ng produkto"], ["Enter a valid selling price, e.g. 16.00", "Maglagay ng tamang presyo, hal. 16.00"], ["Enter a valid cost", "Maglagay ng tamang puhunan"], ["That barcode is already used by another product", "Ginagamit na ng ibang produkto ang barcode na iyan"], ["Barcode (optional)", "Barcode (opsyonal)"], ["‹ Products", "‹ Mga produkto"], ["Adjust stock", "Ayusin ang stock"], ["Edit", "Baguhin"], ["Barcode saved", "Na-save ang barcode"], ["Add barcode", "Magdagdag ng barcode"], ["Track expiry", "Bantayan ang expiry"], ["Archived — history kept", "Na-archive — nakatago ang kasaysayan"], ["Archive", "I-archive"], ["Damaged / sira", "Sira"], ["Returned to supplier", "Ibinalik sa supplier"], ["Customer returned item", "Ibinalik ng customer"], ["Received stock (no receipt)", "Dumating na stock (walang resibo)"], ["Correct the count to…", "Itama ang bilang sa…"], ["Enter a quantity", "Ilagay ang dami"], ["No change to record", "Walang babaguhin"], ["Stock updated", "Na-update ang stock"], ["Record", "I-record"], ["What happened?", "Ano ang nangyari?"], ["Reason", "Dahilan"], ["Enter the name and selling price", "Ilagay ang pangalan at presyo"], ["Product added to this delivery", "Naidagdag ang produkto sa delivery"], ["Add product and include it", "Idagdag ang produkto at isama"], ["New product from receipt", "Bagong produkto mula sa resibo"], ["Product name", "Pangalan ng produkto"], ["Counted in", "Binibilang bilang"], ["Selling price ₱", "Presyo ₱"], ["Supplier (optional)", "Supplier (opsyonal)"], ["Receipt / invoice no. (optional)", "Resibo / invoice no. (opsyonal)"], ["Skip", "Laktawan"], ["Unit cost ₱", "Puhunan bawat isa ₱"], ["Pay supplier within (days)", "Bayaran ang supplier sa loob ng (araw)"], ["Confirm stock-in", "Kumpirmahin ang stock-in"], ["Upload", "Mag-upload"], ["Which product?", "Aling produkto?"], ["Photo of the product", "Litrato ng produkto"], ["Photo of the expiry date label", "Litrato ng expiry label"], ["Date and quantity", "Petsa at dami"], ["No date readable — type it", "Hindi mabasa ang petsa — i-type"], ["Expiry date (as printed)", "Expiry date (ayon sa nakalimbag)"], ["How many have this date? (optional)", "Ilan ang may ganitong petsa? (opsyonal)"], ["Enter the date printed on the label", "Ilagay ang petsa sa label"], ["Expiry saved", "Na-save ang expiry"], ["How many are you throwing away?", "Ilan ang itatapon?"], ["Remove from stock", "Alisin sa stock"], ["+ Track expiry", "+ Bantayan ang expiry"], ["Batch closed", "Sarado na ang batch"], ["Sold out", "Ubos na"], ["Dispose", "Itapon"], ["Track an item", "Magbantay ng item"], ["Enter the customer's name", "Ilagay ang pangalan ng customer"], ["Use a PH mobile number like 09171234567", "Gumamit ng PH mobile number tulad ng 09171234567"], ["Enter a valid limit", "Maglagay ng tamang limit"], ["Customer added", "Naidagdag ang customer"], ["Add customer", "Idagdag ang customer"], ["New customer", "Bagong customer"], ["Utang limit ₱ (optional)", "Limit ng utang ₱ (opsyonal)"], ["+ Add customer", "+ Magdagdag ng customer"], ["‹ Customers", "‹ Mga customer"], ["Record payment", "I-record ang bayad"], ["Remind", "Paalalahanan"], ["Utang reminder", "Paalala sa utang"], ["Open Messages", "Buksan ang Messages"], ["Copied", "Nakopya"], ["Select and copy the text", "Piliin at kopyahin ang text"], ["Copy text", "Kopyahin"], ["Less discounts", "Bawas na diskwento"], ["Net sales", "Net na benta"], ["Cost of goods sold", "Puhunan ng nabenta"], ["Total expenses", "Kabuuang gastos"], ["Net profit", "Net na kita"], ["Download CSV", "I-download (CSV)"], ["Download isn't available here", "Hindi puwedeng mag-download dito"], ["Download was not saved", "Hindi na-save ang download"], ["Enter your store name", "Ilagay ang pangalan ng tindahan"], ["Store ready!", "Handa na ang tindahan!"], ["Start using KWADERNO", "Simulan ang KWADERNO"], ["Stock purchases", "Paninda (stock)"], ["Electricity", "Kuryente"], ["Water", "Tubig"], ["Transport", "Pamasahe"], ["Wages", "Sahod"], ["Other", "Iba pa"], ["Cash (from drawer)", "Cash (mula sa kaha)"], ["Paid", "Bayad na"], ["Due today", "Due ngayon"], ["All", "Lahat"], ["Voided", "Na-void"], ["⭐ Best sellers", "⭐ Pinakamabenta"], ["Out of stock", "Ubos"], ["Cash from drawer", "Cash mula sa kaha"], ["Pay later (supplier credit)", "Bayaran mamaya (utang sa supplier)"], ["Personal money / not tracked", "Sariling pera / hindi itatala"], ["This week", "Ngayong linggo"], ["This year", "Ngayong taon"], ["Hide ₱", "Itago ₱"], ["Show ₱", "Ipakita ₱"], ["Amounts hidden", "Nakatago ang halaga"], ["Deducted from your cash ledger.", "Ibabawas sa kaha mo."], ["Recorded as paid by GCash.", "Itatala bilang bayad sa GCash."], ["Added to Bills so you're reminded before it's due.", "Idadagdag sa Bayarin para mapaalalahanan ka bago mag-due."], ["Stock is added; no money movement is recorded.", "Madadagdagan ang stock; walang itatalang galaw ng pera."], ["Cash in", "Cash in"], ["Cash out", "Cash out"], ["Money put into the drawer that is not a sale — opening cash, extra capital, change fund.", "Perang inilagay sa kaha na hindi benta — panimula, dagdag puhunan, pansukli."], ["Money taken out that is not a store expense — owner withdrawal, bank deposit.", "Perang kinuha na hindi gastos ng tindahan — kuha ng may-ari, deposito sa bangko."], ["Save cash in", "I-save ang cash in"], ["Save cash out", "I-save ang cash out"], ["Today", "Ngayon"], ["7 days", "7 araw"], ["30 days", "30 araw"], ["How I know", "Paano ko nalaman"], ["Steps", "Mga hakbang"], ["Did you mean:", "Ibig mo bang sabihin:"], ["Was this helpful?", "Nakatulong ba?"], ["👍 Yes", "👍 Oo"], ["👎 No", "👎 Hindi"], ["Thanks! This helps improve the answers.", "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot."], ["✨ Ask your device's AI", "✨ Itanong pa sa AI ng device mo"], ["Ask another", "Magtanong ulit"], ["Ask", "Itanong"], ["🧠 Ask Kwaderno", "🧠 Tanong kay Kwaderno"], ["Your store data + business guidance", "Datos ng tindahan + gabay sa negosyo"], ["Business questions only. Questions (names removed) are sent to KELSON to improve answers for every store.", "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan."], ["Ask: What sold best this week?", "Itanong: Ano ang pinakamabenta ko this week?"], ["Ask your device's AI", "Itanong sa AI ng device mo"], ["This is exactly what will be shared — you can edit it. Nothing is sent until you pick an app. Customer and store names are removed.", "Ito mismo ang ibabahagi — puwede mo itong i-edit. Walang ipapadala hangga't hindi ka pumipili ng app. Tinanggal na ang pangalan ng customer at ng tindahan."], ["Share to an AI app", "Ibahagi sa AI app (Share)"], ["Copy", "Kopyahin (Copy)"], ["In Share, pick the AI app on your phone or computer. If it isn't listed, copy and paste into your AI app.", "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app."], ["Copy and paste into the AI app or assistant on your computer.", "Kopyahin at i-paste sa AI app o assistant ng computer mo."], ["Copied — paste it into your AI app", "Nakopya — i-paste sa AI app mo"], ["Select the text and copy it", "Piliin ang text at kopyahin"], ["Share isn't available here — copied instead", "Hindi mabuksan ang Share dito — kinopya na lang"], ["What to restock", "Ano ang i-restock"], ["Best sellers", "Pinakamabenta"], ["Not selling", "Hindi nabebenta"], ["Profit", "Kita / tubo"], ["Sales trend", "Takbo ng benta"], ["Cash in the drawer", "Cash sa kaha"]]) { if (en !== tl) { toTl.set(en, tl); toEn.set(tl, en); } }
+    for (const [en, tl] of [["Sign in to use the store", "Mag-sign in para magamit ang tindahan"], ["This app saves your store's products, sales and utang online. Open it on claude.ai while signed in (as the owner, or as someone it was shared with as Contributor or Editor).", "Sine-save ng app ang paninda, benta at utang online. Buksan ito sa claude.ai habang naka-sign in (bilang may-ari, o Contributor o Editor na binahagian)."], ["Search product", "Hanapin ang produkto"], ["Search the photo library", "Hanapin sa photo library"], ["From your gallery, Google Drive, or files. Square photos look best.", "Mula sa gallery, Google Drive o files. Mas maganda ang parisukat na litrato."], ["See all ›", "Tingnan lahat ›"], ["Tips appear once enough stores are using KWADERNO.", "Lalabas ang tips kapag sapat na ang tindahang gumagamit ng KWADERNO."], ["No tips right now — your store is in good shape. 🎉", "Walang tips ngayon — maayos ang tindahan mo. 🎉"], ["Today", "Ngayon"], ["Your store ledger", "Kwaderno ng tindahan mo"], ["Store tools", "Mga gamit ng tindahan"], ["Recent sales", "Mga huling benta"], ["No sales yet. Tap “Sell”.", "Wala pang benta. Pindutin ang “Magbenta”."], ["Low stock", "Paubos na"], ["Quick add", "Mabilisang dagdag"], ["This month", "Ngayong buwan"], ["Net profit this month", "Net na kita ngayong buwan"], ["Sales − cost of goods − expenses", "Benta − puhunan ng nabenta − gastos"], ["Add expense", "Magdagdag ng gastos"], ["Category", "Kategorya"], ["e.g. Meralco bill October", "hal. Meralco bill ng Oktubre"], ["History", "Kasaysayan"], ["Delete expense", "Burahin ang gastos"], ["No expenses yet. Add bills, rent, transport and other costs to see your real profit.", "Wala pang gastos. Idagdag ang bills, upa, pamasahe at iba pa para makita ang tunay na kita."], ["Cash sale", "Benta (cash)"], ["Utang payment", "Bayad sa utang"], ["Stock purchase", "Pambili ng paninda"], ["Opening cash", "Panimulang cash"], ["Expected cash in the drawer", "Inaasahang pera sa kaha"], ["Counts cash sales, cash utang payments, cash expenses and your cash in/out. GCash is not counted here. Count your drawer — if it differs, record a cash in or out with a note.", "Binibilang ang cash na benta, bayad sa utang, gastos at cash in/out. Hindi kasama ang GCash. Bilangin ang kaha — kung iba, mag-record ng cash in o out na may tala."], ["No cash movement in this period. Start the day with “+ Cash in” → opening cash.", "Walang galaw ng cash sa panahong ito. Simulan ang araw sa “+ Cash in” → panimulang cash."], ["e.g. Meralco, Maynilad, Upa sa pwesto", "hal. Meralco, Maynilad, Upa sa pwesto"], ["Usual amount (optional)", "Karaniwang halaga (opsyonal)"], ["Every month", "Buwan-buwan"], ["One time", "Isang beses"], ["Saved as an expense, so it shows in your profit and cash ledger.", "Mase-save bilang gastos, kaya makikita sa kita at sa kaha."], ["Overdue or due in 3 days", "Lampas na o due sa loob ng 3 araw"], ["Unpaid (usual amounts)", "Hindi pa bayad (karaniwang halaga)"], ["No bills yet. Add rent, kuryente, tubig, internet — we'll remind you before they're due.", "Wala pang bills. Idagdag ang upa, kuryente, tubig, internet — paaalalahanan ka bago mag-due."], ["Recently paid", "Kamakailang binayaran"], ["Sales history", "Kasaysayan ng benta"], ["No sales here yet.", "Wala pang benta dito."], ["Showing the latest 300. Download everything from Reports.", "Ipinapakita ang huling 300. I-download lahat sa Ulat."], ["e.g. Yelo, tingi na asukal, piso-net", "hal. Yelo, tingi na asukal, piso-net"], ["For things you don't track in stock. It is added to this sale and to your sales totals, but no stock is deducted.", "Para sa hindi mo binibilang sa stock. Kasama sa benta at kabuuan, pero walang ibabawas sa stock."], ["Tap products to add them here.", "Pindutin ang produkto para idagdag dito."], ["Less", "Bawas"], ["Quantity", "Dami"], ["More", "Dagdag"], ["Total", "Kabuuan"], ["Payment method", "Paraan ng bayad"], ["Recorded only. Check your GCash app to confirm the payment arrived.", "Naitala lang. Tingnan sa GCash app kung pumasok ang bayad."], ["Sell", "Magbenta"], ["Tap a product, scan with the camera, or use a USB/Bluetooth barcode scanner in the search box.", "Pindutin ang produkto, i-scan gamit ang camera, o gumamit ng USB/Bluetooth barcode scanner sa search box."], ["Search product or type barcode", "Hanapin o i-type ang barcode"], ["Search products", "Hanapin ang produkto"], ["Categories", "Mga kategorya"], ["Current sale", "Kasalukuyang benta"], ["Discount", "Diskwento"], ["TOTAL", "KABUUAN"], ["Reason (required), e.g. wrong item", "Dahilan (kailangan), hal. maling item"], ["Stock comes back and any utang from it is removed. The sale stays in history marked as voided.", "Babalik ang stock at aalisin ang utang mula rito. Mananatili sa kasaysayan ang benta bilang voided."], ["Products & stock", "Paninda at stock"], ["Search name, category or barcode", "Hanapin ang pangalan, kategorya o barcode"], ["Photo", "Litrato"], ["e.g. Lucky Me Pancit Canton 60g", "hal. Lucky Me Pancit Canton 60g"], ["e.g. Noodles", "hal. Noodles"], ["Scan barcode", "I-scan ang barcode"], ["In stock", "May stock"], ["Price", "Presyo"], ["Cost", "Puhunan"], ["Stock history", "Kasaysayan ng stock"], ["When", "Kailan"], ["What", "Ano"], ["Note", "Tala"], ["No stock movements yet.", "Wala pang galaw ng stock."], ["Reason (required), e.g. punit ang sachet", "Dahilan (kailangan), hal. punit ang sachet"], ["Add a product to this delivery…", "Magdagdag ng produkto sa delivery…"], ["Record a delivery. Stock increases when you confirm.", "I-record ang delivery. Madadagdagan ang stock kapag kinumpirma mo."], ["e.g. Super8, Suy Sing", "hal. Super8, Suy Sing"], ["Not in your products yet:", "Wala pa sa mga produkto mo:"], ["Remove", "Alisin"], ["Add the products in this delivery.", "Idagdag ang mga produkto sa delivery na ito."], ["Total cost", "Kabuuang puhunan"], ["Add product photos", "Magdagdag ng litrato ng produkto"], ["Every product has a photo. 🎉", "May litrato na ang bawat produkto. 🎉"], ["Choose product…", "Pumili ng produkto…"], ["This records an 'expired' stock movement and closes this batch.", "Itatala ito bilang 'expired' na galaw ng stock at isasara ang batch."], ["Sell first what expires first.", "Unahing ibenta ang unang mag-e-expire."], ["Name", "Pangalan"], ["09171234567 (optional)", "09171234567 (opsyonal)"], ["No limit", "Walang limit"], ["Customers & utang", "Mga customer at utang"], ["Total utang outstanding", "Kabuuang utang na hindi pa bayad"], ["No customers yet. Add the people who buy on utang.", "Wala pang customer. Idagdag ang mga umuutang."], ["Utang balance", "Natitirang utang"], ["Utang history", "Kasaysayan ng utang"], ["No utang yet.", "Wala pang utang."], ["Opens your phone's own Messages app with this text — normal SMS rates from your load apply. Be polite: a friendly reminder keeps the suki.", "Bubuksan ang Messages app ng phone mo kasama ang text na ito — normal na singil sa SMS mula sa load. Maging magalang: ang mabait na paalala ay nagpapanatili ng suki."], ["No mobile number saved for this customer — copy the text and send it on Messenger, or add their number.", "Walang naka-save na numero para sa customer — kopyahin ang text at ipadala sa Messenger, o idagdag ang numero."], ["GCash ref (optional)", "GCash ref (opsyonal)"], ["Profit & loss", "Kita at lugi"], ["Reports", "Ulat"], ["Sales", "Benta"], ["Gross profit", "Kita bago gastos"], ["Net profit (after expenses)", "Net na kita (pagkatapos ng gastos)"], ["Utang given", "Naibigay na utang"], ["Stock value now", "Halaga ng stock ngayon"], ["Daily sales", "Benta kada araw"], ["Sales by product", "Benta kada produkto"], ["No sales in this period.", "Walang benta sa panahong ito."], ["Welcome to KWADERNO", "Maligayang pagdating sa KWADERNO"], ["Set up your store", "I-set up ang tindahan mo"], ["Your products, sales and utang are private to you. KELSON sees only store totals (sales, stock, utang) to support the network.", "Pribado sa iyo ang paninda, benta at utang mo. Kabuuan lang (benta, stock, utang) ang nakikita ng KELSON para suportahan ang network."], ["Not connected", "Hindi konektado"], ["Could not open that photo", "Hindi mabuksan ang litrato"], ["Reading barcode…", "Binabasa ang barcode…"], ["New barcode", "Bagong barcode"], ["Add as a new product", "Idagdag bilang bagong produkto"], ["Cancel", "Kanselahin"], ["Photo saved", "Na-save ang litrato"], ["Adding photos needs Editor access to this app", "Kailangan ng Editor access para magdagdag ng litrato"], ["Product photo", "Litrato ng produkto"], ["Upload a photo", "Mag-upload ng litrato"], ["Take a photo", "Kumuha ng litrato"], ["Choose from KELSON photo library", "Pumili sa KELSON photo library"], ["Remove photo", "Alisin ang litrato"], ["Photo removed", "Naalis ang litrato"], ["Saving photo…", "Sine-save ang litrato…"], ["🔥 Best sellers you don't have yet", "🔥 Mabenta na wala ka pa"], ["Add", "Idagdag"], ["Top sellers among stores in your barangay that you don't carry.", "Mabenta sa mga tindahan sa barangay mo na wala ka."], ["📦 Restock soon", "📦 I-restock agad"], ["Stock in", "Stock-in"], ["🏷️ Price check", "🏷️ Suriin ang presyo"], ["Edit price", "Baguhin ang presyo"], ["🐢 Slow sellers", "🐢 Matumal"], ["New sale", "Bagong benta"], ["Stock-in / receipt", "Stock-in / resibo"], ["Add product", "Magdagdag ng produkto"], ["Add bill", "Magdagdag ng bill"], ["Utang / payment", "Utang / bayad"], ["Shelf photo", "Litrato ng shelf"], ["Sell (POS)", "Magbenta (POS)"], ["Products", "Mga produkto"], ["Cash ledger", "Kaha"], ["Expenses", "Gastos"], ["Bills", "Bayarin"], ["All ›", "Lahat ›"], ["Enter the amount, e.g. 250", "Ilagay ang halaga, hal. 250"], ["Expense saved", "Na-save ang gastos"], ["Delete this expense?", "Burahin ang gastos na ito?"], ["Deleted", "Nabura"], ["Delete", "Burahin"], ["Amount ₱", "Halaga ₱"], ["Note (optional)", "Tala (opsyonal)"], ["Date", "Petsa"], ["Save expense", "I-save ang gastos"], ["This is today's opening cash (panimula)", "Ito ang panimulang cash ngayon"], ["Enter the amount", "Ilagay ang halaga"], ["Saved", "Na-save"], ["Enter the bill name", "Ilagay ang pangalan ng bill"], ["Pick the due date", "Piliin ang due date"], ["Enter a valid amount", "Maglagay ng tamang halaga"], ["Bill added", "Naidagdag ang bill"], ["New bill", "Bagong bill"], ["Repeats", "Umuulit"], ["Enter the amount paid", "Ilagay ang ibinayad"], ["Mark as paid", "Markahang bayad na"], ["Amount paid ₱", "Ibinayad ₱"], ["Bill removed", "Naalis ang bill"], ["Remove this bill", "Alisin ang bill"], ["+ Add bill", "+ Magdagdag ng bill"], ["Pay", "Bayaran"], ["Custom item", "Ibang item"], ["Item name", "Pangalan ng item"], ["Price ₱ (each)", "Presyo ₱ (bawat isa)"], ["Qty", "Dami"], ["Enter the price", "Ilagay ang presyo"], ["Enter the quantity", "Ilagay ang dami"], ["Added to the sale", "Naidagdag sa benta"], ["Add to sale", "Idagdag sa benta"], ["Discount (optional)", "Diskwento (opsyonal)"], ["Cash received (optional)", "Natanggap na cash (opsyonal)"], ["GCash reference no. (optional)", "GCash reference no. (opsyonal)"], ["+ New customer", "+ Bagong customer"], ["Scan", "I-scan"], ["Product", "Produkto"], ["No product with that name", "Walang produktong ganyan ang pangalan"], ["Add your first product", "Idagdag ang unang produkto"], ["Printing is not available here", "Hindi puwedeng mag-print dito"], ["Print receipt (Bluetooth / USB printer)", "I-print ang resibo (Bluetooth / USB printer)"], ["Void this sale", "I-void ang benta"], ["Give a short reason", "Magbigay ng maikling dahilan"], ["Sale voided — stock and utang restored", "Na-void ang benta — naibalik ang stock at utang"], ["Void sale", "I-void"], ["Void this sale?", "I-void ang benta?"], ["Add photos", "Magdagdag ng litrato"], ["+ Add product", "+ Magdagdag ng produkto"], ["Edit photo", "Baguhin ang litrato"], ["Enter the product name", "Ilagay ang pangalan ng produkto"], ["Enter a valid selling price, e.g. 16.00", "Maglagay ng tamang presyo, hal. 16.00"], ["Enter a valid cost", "Maglagay ng tamang puhunan"], ["That barcode is already used by another product", "Ginagamit na ng ibang produkto ang barcode na iyan"], ["Barcode (optional)", "Barcode (opsyonal)"], ["‹ Products", "‹ Mga produkto"], ["Adjust stock", "Ayusin ang stock"], ["Edit", "Baguhin"], ["Barcode saved", "Na-save ang barcode"], ["Add barcode", "Magdagdag ng barcode"], ["Track expiry", "Bantayan ang expiry"], ["Archived — history kept", "Na-archive — nakatago ang kasaysayan"], ["Archive", "I-archive"], ["Damaged / sira", "Sira"], ["Returned to supplier", "Ibinalik sa supplier"], ["Customer returned item", "Ibinalik ng customer"], ["Received stock (no receipt)", "Dumating na stock (walang resibo)"], ["Correct the count to…", "Itama ang bilang sa…"], ["Enter a quantity", "Ilagay ang dami"], ["No change to record", "Walang babaguhin"], ["Stock updated", "Na-update ang stock"], ["Record", "I-record"], ["What happened?", "Ano ang nangyari?"], ["Reason", "Dahilan"], ["Enter the name and selling price", "Ilagay ang pangalan at presyo"], ["Product added to this delivery", "Naidagdag ang produkto sa delivery"], ["Add product and include it", "Idagdag ang produkto at isama"], ["New product from receipt", "Bagong produkto mula sa resibo"], ["Product name", "Pangalan ng produkto"], ["Counted in", "Binibilang bilang"], ["Selling price ₱", "Presyo ₱"], ["Supplier (optional)", "Supplier (opsyonal)"], ["Receipt / invoice no. (optional)", "Resibo / invoice no. (opsyonal)"], ["Skip", "Laktawan"], ["Unit cost ₱", "Puhunan bawat isa ₱"], ["Pay supplier within (days)", "Bayaran ang supplier sa loob ng (araw)"], ["Confirm stock-in", "Kumpirmahin ang stock-in"], ["Upload", "Mag-upload"], ["Which product?", "Aling produkto?"], ["Photo of the product", "Litrato ng produkto"], ["Photo of the expiry date label", "Litrato ng expiry label"], ["Date and quantity", "Petsa at dami"], ["No date readable — type it", "Hindi mabasa ang petsa — i-type"], ["Expiry date (as printed)", "Expiry date (ayon sa nakalimbag)"], ["How many have this date? (optional)", "Ilan ang may ganitong petsa? (opsyonal)"], ["Enter the date printed on the label", "Ilagay ang petsa sa label"], ["Expiry saved", "Na-save ang expiry"], ["How many are you throwing away?", "Ilan ang itatapon?"], ["Remove from stock", "Alisin sa stock"], ["+ Track expiry", "+ Bantayan ang expiry"], ["Batch closed", "Sarado na ang batch"], ["Sold out", "Ubos na"], ["Dispose", "Itapon"], ["Track an item", "Magbantay ng item"], ["Enter the customer's name", "Ilagay ang pangalan ng customer"], ["Use a PH mobile number like 09171234567", "Gumamit ng PH mobile number tulad ng 09171234567"], ["Enter a valid limit", "Maglagay ng tamang limit"], ["Customer added", "Naidagdag ang customer"], ["Add customer", "Idagdag ang customer"], ["New customer", "Bagong customer"], ["Utang limit ₱ (optional)", "Limit ng utang ₱ (opsyonal)"], ["+ Add customer", "+ Magdagdag ng customer"], ["‹ Customers", "‹ Mga customer"], ["Record payment", "I-record ang bayad"], ["Remind", "Paalalahanan"], ["Utang reminder", "Paalala sa utang"], ["Open Messages", "Buksan ang Messages"], ["Copied", "Nakopya"], ["Select and copy the text", "Piliin at kopyahin ang text"], ["Copy text", "Kopyahin"], ["Less discounts", "Bawas na diskwento"], ["Net sales", "Net na benta"], ["Cost of goods sold", "Puhunan ng nabenta"], ["Total expenses", "Kabuuang gastos"], ["Net profit", "Net na kita"], ["Download CSV", "I-download (CSV)"], ["Download isn't available here", "Hindi puwedeng mag-download dito"], ["Download was not saved", "Hindi na-save ang download"], ["Enter your store name", "Ilagay ang pangalan ng tindahan"], ["Store ready!", "Handa na ang tindahan!"], ["Start using KWADERNO", "Simulan ang KWADERNO"], ["Stock purchases", "Paninda (stock)"], ["Electricity", "Kuryente"], ["Water", "Tubig"], ["Transport", "Pamasahe"], ["Wages", "Sahod"], ["Other", "Iba pa"], ["Cash (from drawer)", "Cash (mula sa kaha)"], ["Paid", "Bayad na"], ["Due today", "Due ngayon"], ["All", "Lahat"], ["Voided", "Na-void"], ["⭐ Best sellers", "⭐ Pinakamabenta"], ["Out of stock", "Ubos"], ["Cash from drawer", "Cash mula sa kaha"], ["Pay later (supplier credit)", "Bayaran mamaya (utang sa supplier)"], ["Personal money / not tracked", "Sariling pera / hindi itatala"], ["This week", "Ngayong linggo"], ["This year", "Ngayong taon"], ["Hide ₱", "Itago ₱"], ["Show ₱", "Ipakita ₱"], ["Amounts hidden", "Nakatago ang halaga"], ["Deducted from your cash ledger.", "Ibabawas sa kaha mo."], ["Recorded as paid by GCash.", "Itatala bilang bayad sa GCash."], ["Added to Bills so you're reminded before it's due.", "Idadagdag sa Bayarin para mapaalalahanan ka bago mag-due."], ["Stock is added; no money movement is recorded.", "Madadagdagan ang stock; walang itatalang galaw ng pera."], ["Cash in", "Cash in"], ["Cash out", "Cash out"], ["Money put into the drawer that is not a sale — opening cash, extra capital, change fund.", "Perang inilagay sa kaha na hindi benta — panimula, dagdag puhunan, pansukli."], ["Money taken out that is not a store expense — owner withdrawal, bank deposit.", "Perang kinuha na hindi gastos ng tindahan — kuha ng may-ari, deposito sa bangko."], ["Save cash in", "I-save ang cash in"], ["Save cash out", "I-save ang cash out"], ["Today", "Ngayon"], ["7 days", "7 araw"], ["30 days", "30 araw"], ["How I know", "Paano ko nalaman"], ["Steps", "Mga hakbang"], ["Did you mean:", "Ibig mo bang sabihin:"], ["Was this helpful?", "Nakatulong ba?"], ["👍 Yes", "👍 Oo"], ["👎 No", "👎 Hindi"], ["Thanks! This helps improve the answers.", "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot."], ["✨ Ask your device's AI", "✨ Itanong pa sa AI ng device mo"], ["Ask another", "Magtanong ulit"], ["Ask", "Itanong"], ["🧠 Ask Kwaderno", "🧠 Tanong kay Kwaderno"], ["Your store data + business guidance", "Datos ng tindahan + gabay sa negosyo"], ["Business questions only. Questions (names removed) are sent to KELSON to improve answers for every store.", "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan."], ["Ask: What sold best this week?", "Itanong: Ano ang pinakamabenta ko this week?"], ["Ask your device's AI", "Itanong sa AI ng device mo"], ["This is exactly what will be shared — you can edit it. Nothing is sent until you pick an app. Customer and store names are removed.", "Ito mismo ang ibabahagi — puwede mo itong i-edit. Walang ipapadala hangga't hindi ka pumipili ng app. Tinanggal na ang pangalan ng customer at ng tindahan."], ["Share to an AI app", "Ibahagi sa AI app (Share)"], ["Copy", "Kopyahin (Copy)"], ["In Share, pick the AI app on your phone or computer. If it isn't listed, copy and paste into your AI app.", "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app."], ["Copy and paste into the AI app or assistant on your computer.", "Kopyahin at i-paste sa AI app o assistant ng computer mo."], ["Copied — paste it into your AI app", "Nakopya — i-paste sa AI app mo"], ["Select the text and copy it", "Piliin ang text at kopyahin"], ["Share isn't available here — copied instead", "Hindi mabuksan ang Share dito — kinopya na lang"], ["What to restock", "Ano ang i-restock"], ["Best sellers", "Pinakamabenta"], ["Not selling", "Hindi nabebenta"], ["Profit", "Kita / tubo"], ["Sales trend", "Takbo ng benta"], ["Cash in the drawer", "Cash sa kaha"],["Logbook photo","Litrato ng kwaderno"],["Reading the writing","Binabasa ang sulat"],["Loading the reader (first time only)","Nilo-load ang pambasa (unang beses lang)"]]) { if (en !== tl) { toTl.set(en, tl); toEn.set(tl, en); } }
     for (const [en, tl] of [["Change", "Sukli"]]) toEn.set(tl, en);
     return { toTl, toEn, mixed: {"Benta ngayon · Sales today": ["Sales today", "Benta ngayon"], "Expenses · Gastos": ["Expenses", "Gastos"], "Cash ledger · Kaha": ["Cash ledger", "Kaha"], "Bills · Bayarin": ["Bills", "Bayarin"], "Salamat po! · Not an official receipt": ["Thank you! · Not an official receipt", "Salamat po! · Hindi opisyal na resibo"], "Paid with · Pinambayad": ["Paid with", "Pinambayad"], "Kita · Profit": ["Profit", "Kita"], "Gastos · Spent": ["Spent", "Gastos"], "Magbenta · Sell": ["Sell", "Magbenta"], "Upa · Rent": ["Rent", "Upa"], "Paninda (stock)": ["Stock purchases", "Paninda (stock)"], "Kuryente": ["Electricity", "Kuryente"], "Tubig": ["Water", "Tubig"], "Pamasahe": ["Transport", "Pamasahe"], "Sahod": ["Wages", "Sahod"], "Sukli": ["Change", "Sukli"]}, prefix: [["Use photo of ", "Gamitin ang litrato ng "], ["Upload photo of ", "Mag-upload ng litrato ng "], ["Take photo of ", "Kunan ng litrato ang "], ["Choose library photo for ", "Pumili ng litrato para sa "], ["Expense · ", "Gastos · "], ["Payment · ", "Bayad · "], ["Balance ", "Balanse "], ["End ", "Sa dulo "], ["Receipt: ", "Resibo: "], ["Some data could not load (", "Hindi na-load ang ilang datos ("], ["Question: ", "Tanong: "], ["📊 For your store: ", "📊 Para sa tindahan mo: "], ["Assumption: ", "Assumption: "], ["Confidence: ", "Kumpiyansa: "], ["Match: ", "Tugma: "]], regex: [["^(\\d+) sale\\(s\\)$", "$1 sale(s)", "$1 benta"], ["^(\\d+) item\\(s\\)$", "$1 item(s)", "$1 item"], ["^Due in (\\d+) day\\(s\\)$", "Due in $1 day(s)", "Due sa loob ng $1 araw"], ["^(\\d+) day\\(s\\) overdue$", "$1 day(s) overdue", "$1 araw nang lampas"], ["^(\\d+) customer\\(s\\)$", "$1 customer(s)", "$1 customer"]].map(([re, en, tl]) => [new RegExp(re), en, tl]) };
   })();
@@ -378,7 +378,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], kbDb: [], kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
@@ -430,6 +430,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
+    ref("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
     db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
@@ -518,7 +520,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function render() {
     applyLayout();
     document.documentElement.lang = lang === "en" ? "en" : "fil";
-    langBtn.replaceChildren(...[["tl", "TL"], ["en", "EN"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
+    langBtn.replaceChildren(...[["en", "English"], ["tl", "Tagalog"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
     langBtn.title = lang === "en" ? "Switch to Tagalog" : "Lumipat sa English";
     document.documentElement.classList.toggle("admin-mode", view === "admin");
     $("#storeName").textContent = view === "admin" ? "KELSON Super Admin" : S.store.name;
@@ -786,6 +788,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     history: "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6",
     scan: "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 8v8M11 8v8M14 8v8M17 8v8",
     tag: "M3 12V3h9l9 9-9 9zM7.5 7.5v.01",
+    logbook: "M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM9 3v18M12 8h4M12 12h4M12 16h2",
     cash: "M2 7h20v10H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 10v4M19 10v4",
     bill: "M7 3h10v18H7zM10 7h4M10 11h4M10 15h2M4 6v12M20 6v12",
     sms: "M4 4h16v12H8l-4 4zM8 9h8M8 12h5",
@@ -806,6 +809,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       appTile("Stock-in / receipt", IC.stockin, "var(--s1)", run(() => go("products", "stockin"))),
       appTile("Add product", IC.add, "var(--s3)", run(() => go("products", "new"))),
       appTile("Add expense", IC.expense, "var(--s2)", run(() => go("home", "expenses"))),
+      appTile("Logbook photo", IC.logbook, "var(--s1)", run(() => go("home", "logbook"))),
       appTile("Cash in / out", IC.cash, "var(--good)", run(() => go("home", "cash"))),
       appTile("Add bill", IC.bill, "var(--s1)", run(() => go("home", "bills"))),
       appTile("Utang / payment", IC.utang, "var(--bad)", run(() => go("utang"))),
@@ -1033,8 +1037,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   function kbAll() {
     const db = new Map((S.kbDb || []).map((e) => [e.id, e])), out = [];
-    for (const e0 of STARTER_KB) { const e = { ...e0, en: KB_EN[e0.id] }, o = db.get(e.id); if (o) { if (o.status !== "hidden") out.push({ ...e, ...o, en: o.en?.q ? o.en : e.en, source: "admin" }); db.delete(e.id); } else out.push({ ...e, source: "starter" }); }
-    for (const o of db.values()) if (o.status !== "hidden" && o.q && Array.isArray(o.bullets)) out.push({ ...o, source: "admin" });
+    for (const e0 of STARTER_KB) { const e = { ...e0, en: KB_EN[e0.id] }, o = db.get(e.id); if (o) { if (o.status !== "hidden") out.push({ ...e, ...o, en: o.en?.q ? o.en : e.en, source: "admin", origin: o.source || "admin" }); db.delete(e.id); } else out.push({ ...e, source: "starter" }); }
+    for (const o of db.values()) if (o.status !== "hidden" && o.q && Array.isArray(o.bullets)) out.push({ ...o, source: "admin", origin: o.source || "admin" });
     return out;
   }
   let kbIdx = null, bizSet = null; // rebuilt when published answers change
@@ -1060,11 +1064,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       return { forms, w: forms.length ? Math.max(...forms.map(([k]) => idf(k))) : 1.5 };
     });
     const total = T.reduce((a, x) => a + x.w, 0);
+    const qForms = new Set(terms.flatMap((t) => [t, "~" + stem(t)]));
+    const tcovOf = (title) => { const tw = [...new Set(toks(title).filter((w) => w.length >= 3 && !KB_STOP.has(w)))]; if (!tw.length) return 0;
+      return tw.filter((w) => qForms.has(w) || qForms.has("~" + stem(w)) || (w.length >= 5 && terms.some((t) => t.length >= 5 && lev(t, w) <= 1))).length / tw.length; };
     return I.docs.map(({ e, words }) => {
       let got = 0, n = 0;
       for (const x of T) { const f = Math.max(0, ...x.forms.filter(([k]) => words.has(k)).map(([, m]) => m)); if (f) { got += f * x.w; n++; } }
-      const cov = got / total;
-      return { e, cov, n, ok: cov >= 0.45 && (n >= 2 || terms.length <= 2) };
+      const cov = got / total, tcov = n ? Math.max(tcovOf(e.q), e.en?.q ? tcovOf(e.en.q) : 0) : 0;
+      return { e, cov, tcov, n, ok: cov >= 0.45 && (n >= 2 || terms.length <= 2) };
     }).filter((m) => m.n).sort((a, b) => b.cov - a.cov).slice(0, 3);
   }
   // Only business and app questions are answered. Jokes, insults and unrelated topics are declined and not saved.
@@ -1233,7 +1240,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   };
   function kbAnswer(m, Q, alts) {
     const e = m.e, t = kbText(e);
-    const res = { kind: "kb", kbId: e.id, title: t.q, lines: [...(t.bullets || [])], steps: [...(t.steps || [])], action: null,
+    const res = { kind: m.tcov == null || m.tcov >= 0.5 ? "kb" : "kb-weak", kbId: e.id, title: t.q, lines: [...(t.bullets || [])], steps: [...(t.steps || [])], action: null,
       evidence: [], assumptions: [L("Pangkalahatang payo ito para sa sari-sari store. Iakma sa sitwasyon mo.", "This is general advice for sari-sari stores. Adapt it to your situation.")],
       confidence: m.cov >= 0.75 ? "high" : "medium",
       confidenceWhy: L(`Tugma ang tanong mo sa “${t.q}” (${Math.round(m.cov * 100)}%). Galing ito sa ${e.source === "admin" ? "KELSON" : "gabay ng KWADERNO"}.`, `Your question matches “${t.q}” (${Math.round(m.cov * 100)}%). From ${e.source === "admin" ? "KELSON" : "the KWADERNO guide"}.`), alts };
@@ -1247,7 +1254,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function answerQuestion(raw, force) {
     const q = String(raw || "").trim().slice(0, 300), qt = toks(q), Q = dataQuality();
     if (!qt.length && !force) return null;
-    if (force && force.startsWith("kb:")) { const e = kbAll().find((x) => x.id === force.slice(3)); if (e) return kbAnswer({ e, cov: 1 }, Q, []); }
+    if (force && force.startsWith("kb:")) { const e = kbAll().find((x) => x.id === force.slice(3)); if (e) return kbAnswer({ e, cov: 1, tcov: 1 }, Q, []); }
     const off = force ? null : offTopic(qt);
     if (off) return { kind: "offtopic", title: L("Pang-negosyo lang ang tanong dito", "Business questions only"),
       lines: [off === "rude" ? L("Pakiusap, magalang na tanong lang po.", "Please keep questions respectful.") : L("Tungkol lang sa tindahan, paninda, pera, utang at sa paggamit ng app ang sinasagot dito.", "Only questions about your store, products, money, utang and using the app are answered here.")],
@@ -1276,6 +1283,57 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     res.confidenceWhy = rb ? L(rb[1], rb[2]) : L(`${Q.sales} benta sa nakaraang 30 araw, sa ${Q.days} araw.`, `${Q.sales} sales in the last 30 days, on ${Q.days} days.`) + (Q.costKnown < 0.6 ? L(" Maraming produkto na walang puhunan, kaya tantiya lang ang tubo.", " Many products have no cost, so profit is an estimate.") : "");
     return res;
   }
+
+  // ---------- VOICE: speak a question, hear the answer ----------
+  // Listening turns speech into text only (Claude page dictation, or the browser's own speech recognition);
+  // the answer still comes from the rule-based analyst. Reading aloud uses the phone's own voices first (free, offline).
+  const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null };
+  function voiceInit() {
+    if (voice.dict !== undefined) return;
+    voice.dict = null; voice.tts = null;
+    window.claude?.use?.("dictation").then((d) => { voice.dict = d; if (!d) return;
+      d.onPartial(({ text }) => setDraft((voice.said + " " + text).trim()));
+      d.onFinal(({ text }) => { voice.said = (voice.said + " " + text).trim(); setDraft(voice.said); });
+      d.onState(({ state }) => { voice.listening = state === "listening"; micState(); if (state === "idle") { const t = voice.said; voice.said = ""; if (t) askNow(t); } });
+    }).catch(() => {});
+    window.claude?.use?.("tts").then((t) => { voice.tts = t; t?.onState(({ state }) => { voice.speaking = state === "speaking"; speakState(); }); }).catch(() => {});
+  }
+  const setDraft = (t) => { askState.draft = t; const i = document.getElementById("aiQ"); if (i) i.value = t; };
+  const micState = () => { const b = document.getElementById("aiMic"); if (b) { b.setAttribute("aria-pressed", String(voice.listening)); b.classList.toggle("primary", voice.listening); } };
+  const speakState = () => { const b = document.getElementById("aiSpeak"); if (b) b.textContent = voice.speaking ? L("⏹ Itigil", "⏹ Stop") : L("🔊 Pakinggan", "🔊 Listen"); };
+  function listen() {
+    // called straight from the tap: start() must not wait for anything first
+    if (voice.listening) { voice.dict?.stop?.().catch(() => {}); voice.rec?.stop(); return; }
+    voice.said = "";
+    if (voice.dict) { voice.dict.start().catch((e) => toast(e?.code === "not_granted" ? L("Hindi pinayagan ang mikropono — i-type na lang", "Microphone not allowed — type instead") : L("Hindi masimulan ang boses", "Couldn't start voice input"))); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return toast(L("Walang voice input sa browser na ito — i-type na lang", "Voice input isn't available in this browser — type instead"));
+    try {
+      const rec = new SR(); voice.rec = rec; rec.lang = lang === "en" ? "en-PH" : "fil-PH"; rec.interimResults = true;
+      rec.onresult = (e) => { voice.said = [...e.results].map((r) => r[0].transcript).join(" ").trim(); setDraft(voice.said); };
+      rec.onerror = (e) => toast(e.error === "not-allowed" ? L("Hindi pinayagan ang mikropono — i-type na lang", "Microphone not allowed — type instead") : L("Hindi narinig nang malinaw — subukan ulit", "Didn't catch that — try again"));
+      rec.onend = () => { voice.listening = false; voice.rec = null; micState(); const t = voice.said; voice.said = ""; if (t) askNow(t); };
+      rec.start(); voice.listening = true; micState();
+    } catch { toast(L("Hindi masimulan ang boses", "Couldn't start voice input")); }
+  }
+  // Turn an answer into something a voice reads well: pesos as words, no symbols or emoji.
+  function speechText(r) {
+    const parts = [r.title, ...(r.lines || []), ...(r.steps?.length ? [L("Mga hakbang:", "Steps:"), ...r.steps] : []), r.mine ? L("Para sa tindahan mo: ", "For your store: ") + [r.mine.title, ...r.mine.lines, r.mine.action].filter(Boolean).join(". ") : null, r.action];
+    return parts.filter(Boolean).join(". ").replace(/[−-]?₱\s?([\d,]+)(\.(\d{2}))?/g, (m, a, _d, c) => `${a}${c && c !== "00" ? ` ${L("at", "and")} ${c} ${L("sentimo", "centavos")}` : ""} ${L("piso", "pesos")}`)
+      .replace(/×/g, L(" beses ", " times ")).replace(/~/g, L("mga ", "about ")).replace(/[→•📊📝🔥📦🏷️🐢⭐✨🧠]/gu, " ").replace(/\.\s*\./g, ".").replace(/\s+/g, " ").slice(0, 1900);
+  }
+  function speak(r) {
+    if (voice.speaking) { speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; speakState(); return; }
+    const text = speechText(r), want = lang === "en" ? /^en/i : /^(fil|tl)/i;
+    const voices = window.speechSynthesis?.getVoices?.() || [], v = voices.find((x) => want.test(x.lang) && /PH/i.test(x.lang)) || voices.find((x) => want.test(x.lang));
+    if (window.speechSynthesis && (v || !voice.tts)) {
+      const u = new SpeechSynthesisUtterance(text); try { if (v) u.voice = v; } catch { /* keep the default voice */ } u.lang = v?.lang || (lang === "en" ? "en-PH" : "fil-PH"); u.rate = 0.95;
+      u.onend = u.onerror = () => { voice.speaking = false; speakState(); };
+      speechSynthesis.cancel(); speechSynthesis.speak(u); voice.speaking = true; speakState(); return;
+    }
+    if (voice.tts) { voice.tts.speak(text, lang === "en" ? { language: "en" } : {}).catch(() => {}); voice.speaking = true; speakState(); return; }
+    toast(L("Walang boses sa device na ito", "No voice available on this device"));
+  }
   const askState = { draft: "", q: "", res: null, qid: null, voted: null };
   // Every business question is saved (names removed) and reaches the Super Admin through the store summary.
   async function logAsk(res, q) {
@@ -1288,6 +1346,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const text = String(q ?? askState.draft ?? "").trim().slice(0, 300);
     if (!text && !force) return;
     askState.q = text; askState.draft = text; askState.voted = null;
+    if (voice.speaking) { window.speechSynthesis?.cancel(); voice.tts?.stop?.(); voice.speaking = false; }
     askState.res = answerQuestion(text, force || null);
     if (!force) { askState.qid = null; logAsk(askState.res, text).then((id) => { if (id && askState.q === text) { askState.qid = id; if (view === "home") render(); } }); }
     else if (askState.qid) ref("questions/" + askState.qid).update({ kind: askState.res?.kind || "data", intent: askState.res?.intent || null, kb: askState.res?.kbId || null }).catch(() => {});
@@ -1314,6 +1373,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (askState.qid && r.kind !== "offtopic") body.push(h("div", { class: "pills", style: "align-items:center" }, h("span", { class: "small muted", text: askState.voted ? "Salamat! Makakatulong ito sa pagpapabuti ng mga sagot." : "Nakatulong ba?" }),
       askState.voted ? [] : [h("button", { onclick: () => askVote(true) }, "👍 Oo"), h("button", { onclick: () => askVote(false) }, "👎 Hindi")]));
     body.push(h("div", { class: "pills" },
+      h("button", { class: "btn sm primary", id: "aiSpeak", onclick: () => speak(r) }, voice.speaking ? L("⏹ Itigil", "⏹ Stop") : L("🔊 Pakinggan", "🔊 Listen")),
       r.kind !== "offtopic" ? h("button", { class: "btn sm", onclick: () => deviceAIDialog(r) }, "✨ Itanong pa sa AI ng device mo") : null,
       h("button", { class: "btn sm", onclick: () => { askState.q = ""; askState.draft = ""; askState.res = null; askState.qid = null; render(); } }, "Ask another")));
     return h("div", { class: "banner", style: "display:grid;gap:8px;color:var(--fg)" }, body);
@@ -1355,10 +1415,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("p", { class: "muted small", text: canShare ? "Sa Share, piliin ang AI app ng phone o computer mo. Kung wala doon, kopyahin at i-paste sa AI app." : "Kopyahin at i-paste sa AI app o assistant ng computer mo." })));
   }
   function aiCard() {
+    voiceInit();
     const input = h("input", { type: "search", id: "aiQ", placeholder: "Itanong: Ano ang pinakamabenta ko this week?", "aria-label": "Ask Kwaderno", value: askState.draft, oninput: (e) => { askState.draft = e.target.value; }, onkeydown: (e) => { if (e.key === "Enter") askNow(e.target.value); } });
     return h("section", { class: "card grid", style: "gap:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line))", "aria-label": "Ask Kwaderno" },
       h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap" }, h("h2", { text: "🧠 Tanong kay Kwaderno" }), h("span", { class: "muted small", text: "Datos ng tindahan + gabay sa negosyo" })),
-      h("div", { style: "display:flex;gap:6px" }, input, h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
+      h("div", { style: "display:flex;gap:6px" }, input,
+        h("button", { class: "btn", id: "aiMic", "aria-label": L("Magsalita", "Speak"), title: L("Magsalita", "Speak"), "aria-pressed": String(voice.listening), onclick: listen }, svgIcon("M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3")),
+        h("button", { class: "btn primary", onclick: () => askNow(input.value) }, "Ask")),
       !askState.res ? h("div", { class: "cats" }, askExamples().slice(0, 4).map((x) => h("button", { onclick: () => askNow(x) }, x))) : null,
       askState.res ? resultView(askState.res) : null,
       h("p", { class: "muted small", style: "margin:0", text: "Pang-negosyo lang. Ang mga tanong (walang pangalan) ay ipinapadala sa KELSON para mapabuti ang sagot para sa lahat ng tindahan." }));
@@ -1369,6 +1432,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "expenses") return viewExpenses();
     if (sub === "history") return viewHistory();
     if (sub === "cash") return viewCash();
+    if (sub === "logbook") return viewLogbook();
     if (sub === "bills") return viewBills();
     const t = todayKey();
     const today = S.sales.filter((s) => !s.voided && dayKey(s.at) === t);
@@ -1404,6 +1468,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("nav", { class: "apps", "aria-label": "Store tools" },
         appTile("Sell (POS)", IC.sell, "var(--accent)", () => go("sell")),
         appTile("Stock-in", IC.stockin, "var(--s1)", () => go("products", "stockin")),
+        appTile("Logbook photo", IC.logbook, "var(--s2)", () => go("home", "logbook")),
         appTile("Products", IC.products, "var(--s3)", () => { productFilter = "all"; go("products"); }),
         appTile("Low stock", IC.low, "var(--bad)", () => { productFilter = "low"; go("products"); }, low.length),
         appTile("Utang", IC.utang, "var(--bad)", () => go("utang"), owed.length),
@@ -1427,6 +1492,207 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "card" }, h("h2", { text: "Low stock" }),
           low.length ? h("ul", { class: "list" }, low.slice(0, 6).map((p) => h("li", {}, h("span", { class: "thumb" }, productImage(p)), h("span", { class: "grow trunc", text: p.name }), stockChip(p)))) : h("div", { class: "empty", text: prods.length ? "Everything is above its reorder level." : "Add products to start tracking stock." }))),
       h("button", { class: "fab", "aria-label": "Quick add", onclick: quickSheet }, svgIcon(IC.add)));
+  }
+
+
+  // ---------- LOGBOOK PHOTO → DATA: on-device OCR (Tesseract, no cloud), corrected by the KELSON dictionary ----------
+  // Tesseract is a small neural network that runs on the phone after a one-time download; nothing is sent anywhere.
+  // Handwriting is often misread, so every line is matched to the store's products and checked by the owner before saving.
+  const OCR_SEED = [["coke", "coca cola"], ["koke", "coca cola"], ["cocacola", "coca cola"], ["sprite", "sprite"], ["royal", "royal"], ["pepsi", "pepsi"],
+    ["pancit", "pancit canton"], ["canton", "pancit canton"], ["luckyme", "lucky me"], ["nudols", "noodles"], ["nudels", "noodles"], ["sardinas", "sardines"], ["sardin", "sardines"],
+    ["itlog", "egg"], ["eggs", "egg"], ["kape", "coffee"], ["asukal", "sugar"], ["bigas", "rice"], ["mantika", "cooking oil"], ["toyo", "soy sauce"], ["suka", "vinegar"],
+    ["patis", "fish sauce"], ["asin", "salt"], ["sabon", "soap"], ["shampo", "shampoo"], ["yosi", "cigarettes"], ["sigarilyo", "cigarettes"], ["yelo", "ice"],
+    ["tinapay", "bread"], ["gatas", "milk"], ["kandila", "candle"], ["posporo", "matches"], ["sopdrinks", "softdrinks"], ["dtrgent", "detergent"], ["detirgent", "detergent"]];
+  const OCR_IGNORE = new Set(["pcs", "pc", "piraso", "x", "php", "p", "pesos", "peso", "each", "bawat", "ea", "at"]);
+  const OCR_SKIP = new Set(["total", "kabuuan", "date", "petsa", "benta", "sales", "stock", "in", "page", "pahina", "sub", "subtotal"]);
+  const DIGITISH = { o: "0", d: "0", q: "9", l: "1", i: "1", "|": "1", "!": "1", z: "2", s: "5", b: "8", g: "9", t: "7" };
+  const ocrDictAll = () => { const m = new Map(OCR_SEED.map(([f, t]) => [f, { from: f, to: t, src: "built-in" }])); for (const e of S.ocrDict.entries || []) if (e.from) m.set(fold(e.from), { ...e, from: fold(e.from), to: fold(e.to || ""), src: "KELSON" }); return [...m.values()].filter((e) => e.to); };
+  function asNumber(tok) {
+    let t = String(tok).replace(/^(₱|php|p)(?=[\dOoIl|])/i, "").replace(/^[x@×]+|[x×]+$/gi, "").replace(/[.,\-]+$/, "");
+    if (!t) return null;
+    const digits = (t.match(/\d/g) || []).length;
+    if (!digits || digits / t.length < 0.5 || t.length > 8) return null;
+    t = t.replace(/[A-Za-z|!]/g, (c) => DIGITISH[c.toLowerCase()] ?? c);
+    return /^\d+([.,]\d{1,2})?$/.test(t) ? Number(t.replace(",", ".")) : null;
+  }
+  const bigrams = (x) => { const t = x.replace(/\s+/g, ""), out = new Map(); for (let i = 0; i < t.length - 1; i++) { const g = t.slice(i, i + 2); out.set(g, (out.get(g) || 0) + 1); } return out; };
+  function dice(a, b) { const A = bigrams(a), B = bigrams(b); let n = 0, ta = 0, tb = 0; for (const v of A.values()) ta += v; for (const v of B.values()) tb += v; for (const [g, v] of A) n += Math.min(v, B.get(g) || 0); return ta + tb ? (2 * n) / (ta + tb) : 0; }
+  // Replace misspellings and shorthand with the dictionary's words ("koke" → "coca cola", "nudols" → "noodles").
+  function ocrNormalize(text) {
+    const dict = new Map(ocrDictAll().map((e) => [e.from, e.to]));
+    let t = " " + fold(text) + " ";
+    for (const [f, to] of dict) if (f.includes(" ") && t.includes(" " + f + " ")) t = t.replace(" " + f + " ", " " + to + " ");
+    const keys = [...dict.keys()].filter((k) => !k.includes(" ") && k.length >= 4), out = [];
+    for (const w of t.trim().split(" ").filter(Boolean)) {
+      if (OCR_IGNORE.has(w)) continue;
+      if (dict.has(w)) { out.push(dict.get(w)); continue; }
+      const near = w.length >= 4 ? keys.find((k) => Math.abs(k.length - w.length) <= 1 && lev(k, w) <= 1) : null;
+      out.push(near ? dict.get(near) : w);
+    }
+    return out.join(" ");
+  }
+  const close = (t, w) => t === w || (w.length >= 4 && t.length >= 4 && lev(t, w) <= (w.length >= 7 ? 2 : 1));
+  function ocrMatch(rawName) {
+    const key = fold(rawName), learned = [...(S.ocrLearn.pairs || [])].reverse().find((x) => x.raw === key);
+    if (learned) { const p = activeProducts().find((x) => fold(x.name) === fold(learned.to)); if (p) return { p, score: 1, learned: true }; }
+    const n = ocrNormalize(rawName); if (!/[a-z]/.test(n)) return { p: null, score: 0 };
+    const qt = n.split(" ");
+    let best = null;
+    for (const p of activeProducts()) {
+      const pn = fold(p.name), pt = pn.split(" ").filter((w) => w.length >= 2);
+      const m = pt.filter((w) => qt.some((t) => close(t, w))).length, prec = qt.filter((t) => pt.some((w) => close(t, w))).length / qt.length, rec = m / pt.length;
+      const score = Math.max(m ? (2 * rec * prec) / (rec + prec) : 0, dice(n, pn) * 0.9), sold = D.sold.get(p.id) || 0;
+      if (!best || score > best.score + 1e-9 || (Math.abs(score - best.score) < 1e-9 && sold > best.sold)) best = { p, score, sold };
+    }
+    return best && best.score >= 0.4 ? { p: best.p, score: best.score } : { p: null, score: best?.score || 0 };
+  }
+  function parseLogLine(text, conf) {
+    const raw = String(text || "").trim();
+    // split digits glued to words ("3Joy" → "3 Joy", "Mackerelm64" → "Mackerelm 64") and drop stray marks at the start of a line
+    const toks = raw.replace(/^[^A-Za-z0-9₱]+/, "").replace(/[,;:=]/g, " ").replace(/^(\d{1,2})([A-Za-z]{2,})/, "$1 $2").replace(/([A-Za-z]{3,})(\d+)\b/g, "$1 $2").split(/\s+/).filter(Boolean);
+    const brands = new Set(activeProducts().flatMap((p) => toks.length ? fold(p.name).split(" ").filter((w) => /^\d+$/.test(w)) : []));
+    const nums = [], words = [];
+    toks.forEach((t, i) => { const n = asNumber(t); const brand = n != null && brands.has(fold(t)) && i + 1 < toks.length && asNumber(toks[i + 1]) == null; if (n != null && !brand) nums.push({ n, i }); else words.push(t); });
+    const name = words.join(" ");
+    let qty = null, amount = null;
+    if (nums.length >= 2) { const a = nums[0].n; if (Number.isInteger(a) && a > 0 && a < 100) qty = a; amount = nums[nums.length - 1].n; }
+    else if (nums.length === 1) { const a = nums[0].n; if (nums[0].i === 0 && Number.isInteger(a) && a > 0 && a < 100) qty = a; else amount = a; }
+    const header = !toks.length || !/[a-z]/i.test(name) || toks.every((t) => OCR_SKIP.has(fold(t)) || asNumber(t) != null);
+    const m = header ? { p: null, score: 0 } : ocrMatch(name);
+    let note = null; const price = m.p ? m.p.price / 100 : null;
+    if (m.p && qty == null && amount != null && price) { const r = amount / price; if (Math.round(r) >= 1 && Math.abs(r - Math.round(r)) < 0.1) { qty = Math.round(r); note = "fromAmount"; } }
+    if (m.p && qty != null && amount != null && price && Math.abs(qty * price - amount) > Math.max(1, amount * 0.1)) note = "mismatch";
+    return { raw, name, conf: Math.round(conf ?? 0), qty: qty ?? 1, amount, auto: m.p?.id || "", pid: m.p?.id || "", score: m.score, learned: !!m.learned, note, header };
+  }
+  // Clean the photo: grayscale, then local-contrast black & white (Bradley threshold) so pen strokes stand out from shadows and ruled lines.
+  async function prepImage(file, bw = true) {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(2, 1800 / Math.max(bmp.width, bmp.height)), W = Math.round(bmp.width * k), H = Math.round(bmp.height * k);
+    const c = document.createElement("canvas"); c.width = W; c.height = H;
+    const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(bmp, 0, 0, W, H);
+    const im = x.getImageData(0, 0, W, H), d = im.data, g = new Float32Array(W * H), I = new Float64Array((W + 1) * (H + 1));
+    for (let i = 0; i < W * H; i++) g[i] = 0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2];
+    if (!bw) { // plain grayscale with the contrast stretched (keeps thin pen strokes that black & white can break)
+      const sorted = Float32Array.from(g).sort(), lo = sorted[Math.floor(g.length * 0.02)], hi = sorted[Math.floor(g.length * 0.98)], span = Math.max(1, hi - lo);
+      for (let i = 0; i < W * H; i++) { const v = Math.max(0, Math.min(255, ((g[i] - lo) / span) * 255)); d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+      x.putImageData(im, 0, 0); return c;
+    }
+    for (let y = 0; y < H; y++) { let row = 0; for (let x2 = 0; x2 < W; x2++) { row += g[y * W + x2]; I[(y + 1) * (W + 1) + x2 + 1] = I[y * (W + 1) + x2 + 1] + row; } }
+    const r = Math.max(8, Math.round(Math.max(W, H) / 50)), T = 0.15;
+    for (let y = 0; y < H; y++) for (let x2 = 0; x2 < W; x2++) {
+      const x0 = Math.max(0, x2 - r), x1 = Math.min(W - 1, x2 + r), y0 = Math.max(0, y - r), y1 = Math.min(H - 1, y - -r);
+      const yy1 = Math.min(H - 1, y1), area = (x1 - x0 + 1) * (yy1 - y0 + 1);
+      const sum = I[(yy1 + 1) * (W + 1) + x1 + 1] - I[y0 * (W + 1) + x1 + 1] - I[(yy1 + 1) * (W + 1) + x0] + I[y0 * (W + 1) + x0];
+      const v = g[y * W + x2] * area < sum * (1 - T) ? 0 : 255, o = (y * W + x2) * 4; d[o] = d[o + 1] = d[o + 2] = v; d[o + 3] = 255;
+    }
+    x.putImageData(im, 0, 0);
+    return c;
+  }
+  let ocrP = null, ocrLog = null;
+  const OCR_BASE = () => window.__OCR_CDN || "https://cdn.jsdelivr.net/npm";
+  function loadOcr() {
+    return (ocrP ??= (async () => {
+      if (!window.Tesseract) await new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = OCR_BASE() + "/tesseract.js@5.1.1/dist/tesseract.min.js"; sc.onload = res; sc.onerror = () => rej(new Error("load")); document.head.append(sc); });
+      const w = await window.Tesseract.createWorker("eng", 1, { workerPath: OCR_BASE() + "/tesseract.js@5.1.1/dist/worker.min.js", corePath: OCR_BASE() + "/tesseract.js-core@5.1.1", langPath: OCR_BASE() + "/@tesseract.js-data/eng@1.0.0/4.0.0_best_int", logger: (m) => ocrLog?.(m) });
+      await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
+      return w;
+    })().catch((e) => { ocrP = null; throw e; }));
+  }
+  const lb = { mode: "sale", date: "", stage: "start", progress: 0, status: "", preview: "", rows: [], err: "" };
+  async function readLogbook(file) {
+    if (!file) return;
+    Object.assign(lb, { stage: "reading", progress: 0, status: "", err: "", rows: [] }); render();
+    try {
+      const canvas = await prepImage(file, true), gray = await prepImage(file, false);
+      const small = document.createElement("canvas"), k = Math.min(1, 900 / canvas.width); small.width = Math.round(canvas.width * k); small.height = Math.round(canvas.height * k);
+      small.getContext("2d").drawImage(await createImageBitmap(file), 0, 0, small.width, small.height); lb.preview = small.toDataURL("image/jpeg", 0.7);
+      ocrLog = (m) => { lb.status = m.status; lb.progress = Math.round((m.progress || 0) * 100); const el = document.getElementById("lbProg"); if (el) el.textContent = `${tx(m.status === "recognizing text" ? "Reading the writing" : "Loading the reader (first time only)")} · ${lb.progress}%`; };
+      const w = await loadOcr();
+      // read the page twice (black & white, and grayscale) and keep the reading that matches more of the store's products
+      const readAs = async (cv) => {
+        const { data } = await w.recognize(cv, {}, { text: true, blocks: true });
+        let lines = (data.blocks || []).flatMap((b) => (b.paragraphs || []).flatMap((pg) => pg.lines || [])).map((l) => ({ text: l.text, conf: l.confidence }));
+        if (!lines.length) lines = String(data.text || "").split("\n").map((t) => ({ text: t, conf: data.confidence }));
+        const rows = lines.filter((l) => String(l.text).trim()).map((l) => parseLogLine(l.text, l.conf));
+        return { rows, score: rows.filter((r) => r.pid).length + rows.reduce((a, r) => a + (r.pid ? r.conf : 0), 0) / 1000 };
+      };
+      const A = await readAs(canvas), B = await readAs(gray);
+      lb.rows = (B.score > A.score ? B : A).rows;
+      lb.stage = "review";
+      if (!lb.rows.length) lb.err = L("Walang nabasang sulat. Subukang kunan muli nang malapit, maliwanag at diretso.", "No writing was read. Try again closer, in good light, straight on.");
+    } catch (e) {
+      lb.stage = "review"; lb.rows = lb.rows || [];
+      lb.err = L("Hindi ma-load ang pambasa ng sulat dito. I-type na lang ang mga linya habang tinitingnan ang litrato.", "The writing reader couldn't load here. Type the lines while looking at the photo.");
+    }
+    render();
+  }
+  async function saveLogbook(btn) {
+    const rows = lb.rows.filter((r) => r.pid && !r.skip && Number(r.qty) > 0);
+    if (!rows.length) return toast(L("Pumili ng produkto sa kahit isang linya", "Pick a product on at least one line"));
+    btn.disabled = true;
+    const at = new Date((lb.date || todayKey()) + "T12:00:00").toISOString();
+    try {
+      if (lb.mode === "sale") {
+        const lines = rows.map((r) => { const p = productById(r.pid); return { productId: p.id, name: p.name, qty: Number(r.qty), price: p.price, cost: p.cost || 0 }; });
+        const total = lines.reduce((a, l) => a + Math.round(l.qty * l.price), 0);
+        await write("sales/" + uid(), { at, by: S.me || null, method: "cash", subtotal: total, discount: 0, total, tendered: total, ref: null, customerId: null, voided: false, lines, source: "logbook" });
+      } else {
+        for (const r of rows) { const p = productById(r.pid), cost = r.amount && Number(r.qty) ? Math.round((r.amount / Number(r.qty)) * 100) : p.cost || 0; await write("moves/" + uid(), { productId: p.id, kind: "stock_in", qty: Number(r.qty), cost, at, by: S.me || null, reason: "Logbook", source: "logbook" }); }
+      }
+      // learn from the owner's corrections: next time the same writing maps to the right product, and KELSON sees the pair
+      const fixes = rows.filter((r) => r.name && r.pid !== r.auto).map((r) => ({ raw: fold(r.name).slice(0, 60), to: productById(r.pid).name, at: new Date().toISOString() }));
+      if (fixes.length) await ref("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
+      toast(lb.mode === "sale" ? L(`Na-save: ${rows.length} item bilang benta`, `Saved ${rows.length} item(s) as sales`) : L(`Na-save: ${rows.length} item bilang stock-in`, `Saved ${rows.length} item(s) as stock-in`));
+      Object.assign(lb, { stage: "start", rows: [], preview: "", err: "" }); go("home");
+    } catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
+  }
+  function viewLogbook() {
+    const prods = activeProducts();
+    const head = h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: L("Litrato ng kwaderno", "Logbook photo"), style: "margin-top:8px" })));
+    const pick = (camera) => h("button", { class: "btn " + (camera ? "primary big" : "big"), onclick: async () => readLogbook(await pickPhoto(camera)) }, camera ? camIcon() : null, camera ? L("Kunan ng litrato ang pahina", "Take a photo of the page") : L("Pumili ng litrato", "Choose a photo"));
+    if (lb.stage === "reading") return h("div", { class: "view" }, head, h("div", { class: "card grid", style: "text-align:center" },
+      lb.preview ? h("img", { src: lb.preview, alt: "", style: "width:100%;max-height:260px;object-fit:contain;border-radius:12px" }) : null,
+      h("div", { id: "lbProg", style: "font-weight:700", text: L("Inihahanda ang litrato…", "Preparing the photo…") }),
+      h("p", { class: "muted small", text: L("Binabasa sa phone mo mismo — walang ipinapadala sa internet.", "Read on your phone itself — nothing is sent online.") })));
+    if (lb.stage === "review") {
+      const inc = lb.rows.filter((r) => r.pid && !r.skip && Number(r.qty) > 0);
+      const total = inc.reduce((a, r) => a + Math.round(Number(r.qty) * (productById(r.pid)?.price || 0)), 0);
+      const row = (r, i) => {
+        const p = productById(r.pid), confLow = r.conf && r.conf < 60;
+        return h("li", { style: "flex-wrap:wrap;gap:6px;align-items:end" + (r.skip || !r.pid ? ";opacity:.75" : "") },
+          h("div", { style: "flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center" },
+            h("span", { class: "small", style: "font-family:ui-monospace,monospace;background:var(--surface-2);padding:2px 6px;border-radius:6px", text: "📝 " + (r.raw || L("(bagong linya)", "(new line)")) }),
+            r.conf ? h("span", { class: "chip " + (confLow ? "low" : "ok"), text: L(`basa ${r.conf}%`, `read ${r.conf}%`) }) : null,
+            r.learned ? h("span", { class: "chip ok", text: L("natutunan", "learned") }) : null,
+            r.note === "mismatch" ? h("span", { class: "chip low", text: L(`₱${r.amount} sa kwaderno — suriin`, `₱${r.amount} in logbook — check`) }) : null,
+            r.note === "fromAmount" ? h("span", { class: "chip", text: L(`dami mula sa ₱${r.amount}`, `qty from ₱${r.amount}`) }) : null,
+            r.header ? h("span", { class: "chip", text: L("hindi item", "not an item") }) : null),
+          h("label", { class: "f", style: "flex:1 1 180px" }, L("Produkto", "Product"),
+            h("select", { id: "lbp-" + i, onchange: (e) => { r.pid = e.target.value; r.skip = !r.pid; render(); } },
+              h("option", { value: "", text: L("— laktawan —", "— skip —") }), prods.map((x) => h("option", { value: x.id, text: x.name, selected: x.id === r.pid })))),
+          h("label", { class: "f", style: "width:80px" }, L("Dami", "Qty"), h("input", { type: "text", inputmode: "decimal", id: "lbq-" + i, value: String(r.qty), oninput: (e) => { r.qty = e.target.value; } })),
+          h("span", { class: "num", style: "width:90px;text-align:right;font-weight:600;padding-bottom:10px", text: p ? peso(Math.round(Number(r.qty || 0) * p.price)) : "—" }));
+      };
+      return h("div", { class: "view" }, head,
+        lb.err ? h("div", { class: "note", text: lb.err }) : null,
+        lb.preview ? h("details", { class: "card", open: true }, h("summary", { style: "cursor:pointer;font-weight:600", text: L("Litrato", "Photo") }), h("img", { src: lb.preview, alt: L("Litrato ng kwaderno", "Logbook photo"), style: "width:100%;margin-top:8px;border-radius:10px;border:1px solid var(--line)" })) : null,
+        h("div", { class: "card grid" },
+          h("div", { class: "toolbar" }, h("h2", { text: L("Suriin ang bawat linya", "Check every line"), style: "margin-right:auto" }), h("span", { class: "muted small", text: L(`${inc.length} isasama · ${peso(total)}`, `${inc.length} included · ${peso(total)}`) })),
+          h("p", { class: "muted small", style: "margin:0", text: L("Puwedeng magkamali ang pagbasa ng sulat-kamay. Itama ang produkto at dami; ginagamit ang presyo sa app. Natututo ang app sa mga pagtatama mo.", "Handwriting can be misread. Fix the product and quantity; app prices are used. The app learns from your corrections.") }),
+          lb.rows.length ? h("ul", { class: "list" }, lb.rows.map(row)) : h("div", { class: "empty", text: L("Walang linya.", "No lines.") }),
+          h("button", { class: "btn", onclick: () => { lb.rows.push({ raw: "", name: "", conf: 0, qty: 1, amount: null, auto: "", pid: "", score: 0 }); render(); } }, L("+ Magdagdag ng linya", "+ Add a line")),
+          h("button", { class: "btn primary big", disabled: !inc.length, onclick: (e) => saveLogbook(e.currentTarget) }, lb.mode === "sale" ? L(`I-save bilang benta (${lb.date || todayKey()})`, `Save as sales (${lb.date || todayKey()})`) : L(`I-save bilang stock-in (${lb.date || todayKey()})`, `Save as stock-in (${lb.date || todayKey()})`)),
+          h("button", { class: "btn", onclick: () => { Object.assign(lb, { stage: "start", rows: [], preview: "", err: "" }); render(); } }, L("Ibang litrato", "Another photo"))));
+    }
+    return h("div", { class: "view" }, head,
+      h("div", { class: "card grid" },
+        h("p", { style: "margin:0", text: L("Kunan ng litrato ang pahina ng kwaderno at gagawin itong benta o stock-in. Binabasa ito sa phone mo mismo, walang AI sa cloud.", "Photograph a logbook page and turn it into sales or stock-in. It is read on your phone itself, with no cloud AI.") }),
+        h("div", { class: "methods", style: "grid-template-columns:1fr 1fr", role: "radiogroup", "aria-label": L("Uri ng pahina", "Page type") },
+          [["sale", L("Benta", "Sales")], ["stockin", "Stock-in"]].map(([k, l]) => h("button", { role: "radio", "aria-checked": String(lb.mode === k), onclick: () => { lb.mode = k; render(); } }, l))),
+        h("label", { class: "f" }, L("Petsa sa pahina", "Date on the page"), h("input", { type: "date", id: "lbDate", max: todayKey(), value: lb.date || todayKey(), oninput: (e) => { lb.date = e.target.value; } })),
+        pick(true), pick(false),
+        h("div", { class: "banner small" }, h("b", { text: L("Para mas tama ang basa:", "For better reading:") }),
+          h("ul", { style: "margin:6px 0 0;padding-left:18px" }, [L("Isang item bawat linya: dami, pangalan, halaga — hal. 2 Coke 30", "One item per line: qty, name, amount — e.g. 2 Coke 30"), L("Malalaking letra, malinaw na numero", "Large letters, clear numbers"), L("Maliwanag, diretso sa itaas ng pahina, walang anino", "Good light, straight above the page, no shadows")].map((t) => h("li", { text: t }))))));
   }
 
   // ---------- EXPENSES (gastos) ----------
@@ -2285,6 +2551,7 @@ ${catalog}`;
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
       days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10), items,
       exp: activeExpiries().slice(0, 60).map((e) => ({ name: productById(e.productId)?.name || "Product", date: e.date, qty: e.qty || null })),
+      ocrfix: (S.ocrLearn.pairs || []).slice(-40),
       asks: [...S.questions].sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 40).map((x) => ({ q: x.q, at: x.at, kind: x.kind || null, intent: x.intent || null, kb: x.kb || null, helpful: x.helpful ?? null })),
     };
   }
@@ -2335,6 +2602,7 @@ ${catalog}`;
     if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
     if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
+    if (sub === "dict") return adminPage("dict", "Logbook dictionary — reading handwriting", viewOcrDict());
     if (sub && sub.startsWith("audit")) return adminPage("audit", "Shelf audit", viewAudit());
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
@@ -3144,7 +3412,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       const k = qKey(a.q); if (!k || dismissed.has(k)) continue;
       const x = g.get(k) || { k, q: a.q, variants: new Set(), n: 0, stores: new Set(), last: "", none: 0, up: 0, down: 0, kb: null, kinds: {} };
       x.variants.add(a.q); x.n++; x.stores.add(st.id); if (a.at > x.last) { x.last = a.at; x.q = a.q; }
-      if (a.kind === "none") x.none++; if (a.helpful === true) x.up++; if (a.helpful === false) x.down++; if (a.kb) x.kb = a.kb;
+      if (a.kind === "none") x.none++; if (a.kind === "kb-weak") x.weak = (x.weak || 0) + 1; if (a.helpful === true) x.up++; if (a.helpful === false) x.down++; if (a.kb) x.kb = a.kb;
       x.kinds[a.kind || "data"] = (x.kinds[a.kind || "data"] || 0) + 1; g.set(k, x);
     }
     return [...g.values()];
@@ -3164,62 +3432,115 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     catch (x) { toast("Could not save: " + (x?.code || "try again")); }
   }
   const LINKS = [["", "Wala"], ["sales", "Benta"], ["profit", "Kita"], ["trend", "Takbo ng benta"], ["restock", "Restock"], ["best", "Pinakamabenta"], ["slow", "Hindi nabebenta"], ["utang", "Utang"], ["bills", "Bills"], ["expiry", "Expiry"], ["cash", "Cash"], ["expenses", "Gastos"]];
-  // Draft or edit an answer. Claude is used only here, by the Super Admin; stores never call it.
-  function kbEditor(entry, group) {
-    const lines = (a) => (a || []).join("\n");
-    const q = h("input", { type: "text", id: "kbQ", maxlength: 160, value: entry?.q || group?.q || "" });
-    const cat = h("select", { id: "kbCat" }, KB_CATS.map((c) => h("option", { value: c, text: c, selected: (entry?.cat || "Paglago") === c })));
-    const kw = h("input", { type: "text", id: "kbKw", value: [].concat(entry?.kw || []).join(" "), placeholder: "Mga salitang ginagamit ng tindera, hal. palaguin benta dagdag customer" });
-    const bullets = h("textarea", { id: "kbBullets", rows: 6, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); bullets.value = lines(entry?.bullets);
-    const steps = h("textarea", { id: "kbSteps", rows: 3, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); steps.value = lines(entry?.steps);
-    const link = h("select", { id: "kbLink" }, LINKS.map(([v, l]) => h("option", { value: v, text: l, selected: (entry?.link || "") === v })));
-    const status = h("div", { class: "small muted", role: "status" });
-    const variants = group ? [...group.variants] : [];
-    const draftBtn = h("button", { class: "btn", onclick: async () => {
-      draftBtn.disabled = true; status.textContent = "Claude is drafting…";
-      const net = (S.insights?.products || []).slice(0, 10).map((x) => x.name).filter(Boolean);
-      const prompt = `You write short, practical guidance for owners of small Filipino sari-sari stores, shown inside the KWADERNO store app.
-A store owner asked: "${q.value.trim()}"${variants.length > 1 ? `\nOther ways stores asked it: ${variants.slice(0, 8).map((v) => `"${v}"`).join("; ")}` : ""}
+  // ---------- How the admin side thinks: reuse what we know, use AI only for what is new ----------
+  // 1. Stores answer offline (store data + guide). 2. What they can't answer comes here. 3. If an existing answer fits,
+  // reuse it (no AI). 4. Otherwise Claude drafts with anonymous network data. 5. The admin approves; every store learns it.
+  const med = (arr) => { const v = arr.filter(Number.isFinite).sort((x, y) => x - y); return v.length ? v[Math.floor(v.length / 2)] : null; };
+  function networkFacts() {
+    const st = S.stores, daily = st.map((x) => (x.days || []).slice(-30).reduce((a, d) => a + (d.t || 0), 0) / 30);
+    const margins = st.map((x) => { const it = (x.items || []).filter((i) => i.cost > 0 && i.r30 > 0); const rev = it.reduce((a, i) => a + i.r30, 0), cogs = it.reduce((a, i) => a + i.s30 * i.cost, 0); return rev ? (rev - cogs) / rev : NaN; });
+    const utang = st.map((x) => { const s30 = (x.days || []).reduce((a, d) => a + (d.t || 0), 0); return s30 ? (x.utang || 0) / s30 : NaN; });
+    const carry = new Map(); for (const x of st) for (const i of x.items || []) { const c = carry.get(i.k) || { name: i.name, n: 0, prices: [], s30: 0 }; c.n++; c.prices.push(i.price); c.s30 += i.s30 || 0; carry.set(i.k, c); }
+    const top = [...carry.values()].sort((x, y) => y.s30 - x.s30).slice(0, 10).map((c) => `${c.name} (in ${c.n} stores, usual ₱${((med(c.prices) || 0) / 100).toFixed(2)})`);
+    const active = st.filter((x) => x.lastActiveAt && Date.now() - new Date(x.lastActiveAt) < 7 * DAYMS).length;
+    return `${st.length} stores (${active} active this week). Median sales per store per day: ₱${((med(daily) || 0) / 100).toFixed(0)}. Median gross margin: ${Math.round((med(margins) || 0) * 100)}%. Median utang outstanding vs 30-day sales: ${Math.round((med(utang) || 0) * 100)}%. Network best sellers: ${top.join("; ") || "not enough data"}.`;
+  }
+  // One Claude call. Returns a normalised draft, or { offtopic: true }.
+  async function claudeDraft(question, variants = []) {
+    const prompt = `You write short, practical guidance for owners of small Filipino sari-sari stores, shown inside the KWADERNO store app. The app answers offline from these guides, so they must stand on their own.
+A store owner asked: "${question}"${variants.length > 1 ? `\nOther ways stores asked it: ${variants.slice(0, 8).map((v) => `"${v}"`).join("; ")}` : ""}
 Rules:
 - Only answer questions about running a small store or using the app (sales, pricing, inventory, suppliers, money, utang, accounting, staff, growth, permits). If the question is off-topic, a joke or abusive, return {"offtopic": true}.
-- Simple, respectful Taglish. 3 to 6 bullets of one sentence each, and 1 to 3 concrete steps the owner can do this week.
+- Think critically: give advice that holds for a typical sari-sari store, say when it would not apply, and point the owner to which of their own numbers to check.
+- Simple, respectful Taglish for the main version, and plain English for the "en" version. 3 to 6 bullets of one sentence each, and 1 to 3 concrete steps for this week.
+- Use the network facts below where they help (for example typical margins or best sellers), without naming any store.
 - Do not invent laws, tax rates, fees or government program details. For legal, tax or permit questions give general guidance and say to confirm with the BIR, their LGU or a DTI Negosyo Center.
 - No brand endorsements and no named financial products.
-Context (aggregated, no store names): ${S.stores.length} stores use the app; widely carried products include ${net.join(", ") || "basic groceries"}.
+Network facts (anonymous totals from all stores): ${networkFacts()}
 Existing answers (do not duplicate; if one already covers it, write a better version of that one): ${kbAll().map((e) => e.q).slice(0, 80).join(" | ")}
-Return ONLY JSON: {"offtopic": false, "q": "the question as a clear title", "cat": one of ${JSON.stringify(KB_CATS)}, "keywords": ["words owners might type, Tagalog and English"], "bullets": ["..."], "steps": ["..."], "link": one of ${JSON.stringify(LINKS.map(([v]) => v))}}`;
-      try {
-        const r = await askClaudeJson(prompt);
-        if (r?.offtopic) { status.textContent = "Claude: not a business question. Consider hiding it."; return; }
-        if (r?.q) q.value = String(r.q).slice(0, 160);
-        if (KB_CATS.includes(r?.cat)) cat.value = r.cat;
-        if (Array.isArray(r?.keywords)) kw.value = r.keywords.map(String).join(" ").slice(0, 400);
-        if (Array.isArray(r?.bullets)) bullets.value = r.bullets.map(String).slice(0, 8).join("\n");
-        if (Array.isArray(r?.steps)) steps.value = r.steps.map(String).slice(0, 4).join("\n");
-        if (LINKS.some(([v]) => v === r?.link)) link.value = r.link;
-        status.textContent = "Draft ready. Check every line before publishing.";
-      } catch (e) { status.textContent = claudeError(e); }
-      finally { draftBtn.disabled = false; }
+Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": one of ${JSON.stringify(KB_CATS)}, "keywords": ["words owners might type, Tagalog and English"], "bullets": ["..."], "steps": ["..."], "link": one of ${JSON.stringify(LINKS.map(([v]) => v))}, "en": {"q": "...", "bullets": ["..."], "steps": ["..."]}}`;
+    const r = await askClaudeJson(prompt);
+    if (r?.offtopic) return { offtopic: true };
+    const arr = (x, n) => (Array.isArray(x) ? x.map(String).map((y) => y.trim()).filter(Boolean).slice(0, n) : []);
+    return { q: String(r?.q || question).slice(0, 160), cat: KB_CATS.includes(r?.cat) ? r.cat : "Paglago", kw: arr(r?.keywords, 30).join(" ").slice(0, 400), bullets: arr(r?.bullets, 8), steps: arr(r?.steps, 4),
+      link: LINKS.some(([v]) => v === r?.link) ? r.link || null : null, en: r?.en?.q ? { q: String(r.en.q).slice(0, 160), bullets: arr(r.en.bullets, 8), steps: arr(r.en.steps, 4) } : null };
+  }
+  const kbBest = (q) => { const m = kbSearch(toks(q))[0]; return m && m.cov >= 0.3 ? m : null; };
+  async function saveKbMeta(patch) { S.kbMeta = { ...S.kbMeta, ...patch }; await S.db.doc("admin/kbmeta").set(S.kbMeta); }
+  const markResolved = (keys) => saveKbMeta({ resolved: { ...(S.kbMeta.resolved || {}), ...Object.fromEntries(keys.map((k) => [k, new Date().toISOString()])) } });
+  // Reuse an existing answer for a question group: no AI, the stores' wordings are added so they match it next time.
+  async function linkToExisting(e, g, quiet) {
+    const { source, ...rest } = e;
+    await S.db.doc("network/kb/items/" + e.id).set({ ...rest, alts: [...new Set([...(e.alts || []), ...g.variants])].slice(-60), status: "published", updatedAt: new Date().toISOString(), by: S.me || null });
+    await markResolved([g.k]); if (!quiet) toast("Linked — stores will get this answer (no AI used)");
+  }
+  let autoBusy = false;
+  async function autoAnswer(open, btn) {
+    if (autoBusy) return; autoBusy = true; btn.disabled = true;
+    const drafts = [...(S.kbMeta.drafts || [])], done = [];
+    let reused = 0, drafted = 0, calls = 0, skipped = 0;
+    try {
+      for (const g of open) {
+        if (drafts.some((d) => d.k === g.k)) continue;
+        btn.textContent = `Working… ${reused + drafted + skipped}/${open.length}`;
+        const m = kbBest(g.q);
+        if (m && m.cov >= 0.6 && m.tcov >= 0.6) { await linkToExisting(m.e, g, true); reused++; continue; }
+        if (calls >= 10) continue;
+        calls++;
+        const r = await claudeDraft(g.q, [...g.variants]);
+        if (r.offtopic) { skipped++; done.push(g.k); continue; }
+        if (r.bullets.length < 2) { skipped++; continue; }
+        drafts.push({ ...r, k: g.k, variants: [...g.variants], n: g.n, stores: g.stores.size, at: new Date().toISOString() }); drafted++;
+      }
+      await saveKbMeta({ drafts: drafts.slice(-100), dismissed: [...new Set([...(S.kbMeta.dismissed || []), ...done])] });
+      toast(`Reused ${reused} existing answer(s) without AI · ${drafted} new draft(s) from Claude to review${skipped ? ` · ${skipped} not business` : ""}`);
+    } catch (e) { toast(claudeError(e)); }
+    finally { autoBusy = false; render(); }
+  }
+  // Draft or edit an answer. Claude is used only here, by the Super Admin; stores never call it.
+  function kbEditor(entry, group, draft) {
+    const src = draft || entry || {}, lines = (x) => (x || []).join("\n");
+    const ta = (id, rows, v) => { const t = h("textarea", { id, rows, style: "width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font:inherit" }); t.value = v; return t; };
+    const q = h("input", { type: "text", id: "kbQ", maxlength: 160, value: src.q || group?.q || "" });
+    const cat = h("select", { id: "kbCat" }, KB_CATS.map((c) => h("option", { value: c, text: c, selected: (src.cat || "Paglago") === c })));
+    const kw = h("input", { type: "text", id: "kbKw", value: [].concat(src.kw || []).join(" "), placeholder: "Words owners type, e.g. palaguin benta dagdag customer" });
+    const bullets = ta("kbBullets", 6, lines(src.bullets)), steps = ta("kbSteps", 3, lines(src.steps));
+    const qEn = h("input", { type: "text", id: "kbQen", maxlength: 160, value: src.en?.q || "" }), bulletsEn = ta("kbBulletsEn", 5, lines(src.en?.bullets)), stepsEn = ta("kbStepsEn", 2, lines(src.en?.steps));
+    const link = h("select", { id: "kbLink" }, LINKS.map(([v, l]) => h("option", { value: v, text: l, selected: (src.link || "") === v })));
+    const status = h("div", { class: "small muted", role: "status" });
+    const variants = draft?.variants || (group ? [...group.variants] : []);
+    const fill = (r) => { q.value = r.q; cat.value = r.cat; kw.value = r.kw; bullets.value = lines(r.bullets); steps.value = lines(r.steps); link.value = r.link || ""; if (r.en) { qEn.value = r.en.q; bulletsEn.value = lines(r.en.bullets); stepsEn.value = lines(r.en.steps); } };
+    const existing = !entry && !draft && group ? kbBest(group.q) : null; // shown as a suggestion; the admin decides
+    const draftBtn = h("button", { class: "btn", onclick: async () => {
+      draftBtn.disabled = true; status.textContent = "Claude is drafting with network data…";
+      try { const r = await claudeDraft(q.value.trim() || group?.q || "", variants); if (r.offtopic) status.textContent = "Claude: not a business question. Consider hiding it."; else { fill(r); status.textContent = "Draft ready. Check every line before publishing."; } }
+      catch (e) { status.textContent = claudeError(e); } finally { draftBtn.disabled = false; }
     } }, "✨ Draft with Claude");
     const publish = h("button", { class: "btn primary big", onclick: async () => {
-      const b = bullets.value.split("\n").map((x) => x.trim()).filter(Boolean), st = steps.value.split("\n").map((x) => x.trim()).filter(Boolean);
-      if (q.value.trim().length < 5) return toast("Write the question title"); if (b.length < 2) return toast("Write at least 2 answer lines");
+      const sp = (t) => t.value.split("\n").map((x) => x.trim()).filter(Boolean), bl = sp(bullets), st = sp(steps);
+      if (q.value.trim().length < 5) return toast("Write the question title"); if (bl.length < 2) return toast("Write at least 2 answer lines");
       const off = offTopic(toks(q.value)); if (off === "rude" || off === "joke") return toast("That is not a business question");
-      const id = entry?.id || "kb-" + uid().replace(/-/g, "").slice(0, 10);
-      const alts = [...new Set([...(entry?.alts || []), ...variants])].slice(0, 40);
+      const id = entry?.id || "kb-" + uid().replace(/-/g, "").slice(0, 10), en = qEn.value.trim() ? { q: qEn.value.trim(), bullets: sp(bulletsEn).slice(0, 8), steps: sp(stepsEn).slice(0, 4) } : null;
       publish.disabled = true;
       try {
-        await S.db.doc("network/kb/items/" + id).set({ q: q.value.trim(), cat: cat.value, kw: kw.value.trim().slice(0, 400), bullets: b.slice(0, 8), steps: st.slice(0, 4), link: link.value || null, alts, status: "published", updatedAt: new Date().toISOString(), by: S.me || null });
+        await S.db.doc("network/kb/items/" + id).set({ q: q.value.trim(), cat: cat.value, kw: kw.value.trim().slice(0, 400), bullets: bl.slice(0, 8), steps: st.slice(0, 4), link: link.value || null, en,
+          alts: [...new Set([...(entry?.alts || []), ...variants])].slice(-60), status: "published", source: draft ? "ai-approved" : "admin", updatedAt: new Date().toISOString(), by: S.me || null });
+        const k = draft?.k || group?.k;
+        await saveKbMeta({ drafts: (S.kbMeta.drafts || []).filter((d) => d.k !== k), resolved: k ? { ...(S.kbMeta.resolved || {}), [k]: new Date().toISOString() } : S.kbMeta.resolved || {} });
         dlg.close(); toast("Published to all stores");
       } catch (e) { publish.disabled = false; toast("Could not publish: " + (e?.code || "try again")); }
     } }, "Publish to all stores");
-    openDialog(entry ? "Edit answer" : "New answer", h("div", { class: "grid" },
-      group ? h("div", { class: "banner small", text: `Asked ${group.n}× by ${group.stores.size} store(s). ${variants.length > 1 ? `${variants.length} wordings are saved with the answer so stores find it.` : ""}` }) : null,
-      h("label", { class: "f" }, "Question (title stores see)", q),
+    openDialog(draft ? "Review Claude's draft" : entry ? "Edit answer" : "New answer", h("div", { class: "grid" },
+      group || draft ? h("div", { class: "banner small", text: `Asked ${draft?.n ?? group.n}× by ${draft?.stores ?? group.stores.size} store(s). ${variants.length > 1 ? `${variants.length} wordings are saved with the answer so stores find it.` : ""}` }) : null,
+      existing ? h("div", { class: "note", style: "display:grid;gap:6px" }, h("div", { text: `An existing answer may already fit (${Math.round(existing.cov * 100)}% match): “${existing.e.q}”. Reusing it costs no AI.` }),
+        h("button", { class: "btn sm primary", style: "justify-self:start", onclick: async () => { await linkToExisting(existing.e, group); dlg.close(); } }, "Use existing (no AI)")) : null,
+      h("label", { class: "f" }, "Question (title stores see, Taglish)", q),
       h("div", { class: "form" }, h("label", { class: "f" }, "Category", cat), h("label", { class: "f" }, "Show the store's own numbers", link)),
       h("label", { class: "f" }, "Keywords", kw),
       h("label", { class: "f" }, "Answer — one line per bullet", bullets),
       h("label", { class: "f" }, "Steps this week — one per line", steps),
+      h("details", { open: !!src.en }, h("summary", { style: "cursor:pointer;font-weight:600", text: "English version" }),
+        h("div", { class: "grid", style: "margin-top:8px" }, h("label", { class: "f" }, "Question", qEn), h("label", { class: "f" }, "Answer — one line per bullet", bulletsEn), h("label", { class: "f" }, "Steps", stepsEn))),
       h("div", { class: "pills", style: "align-items:center" }, draftBtn, status),
       publish));
   }
@@ -3227,41 +3548,88 @@ Return ONLY JSON: {"offtopic": false, "q": "the question as a clear title", "cat
     const groups = askGroups(), stats = kbStats(), entries = kbAll(), byId = new Map(entries.map((e) => [e.id, e]));
     const asks = S.stores.flatMap((st) => st.asks || []), rated = asks.filter((a) => a.helpful != null), up = rated.filter((a) => a.helpful).length;
     const kinds = (k) => asks.filter((a) => (a.kind || "data") === k).length;
-    const open = groups.filter((g) => g.none > 0 || g.down > g.up).sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+    const resolved = S.kbMeta.resolved || {}, drafts = S.kbMeta.drafts || [];
+    const open = groups.filter((g) => (g.none > 0 || g.weak > 0 || g.down > g.up) && !(resolved[g.k] && resolved[g.k] >= g.last) && !drafts.some((d) => d.k === g.k)).sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
     const top = [...groups].sort((a, b) => b.n - a.n);
     const pill = (k, l) => h("button", { "aria-pressed": String(kbTab === k), onclick: () => { kbTab = k; render(); } }, l);
-    const groupRow = (g) => { const e = g.kb ? byId.get(g.kb) : null; return h("li", { style: "flex-wrap:wrap" },
+    const groupRow = (g) => { const e = g.kb ? byId.get(g.kb) : null, m = kbTab === "open" && (g.none || g.weak || !e) ? kbBest(g.q) : null; return h("li", { style: "flex-wrap:wrap" },
       h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: g.q }),
-        h("div", { class: "muted small", text: [`${g.n}× · ${g.stores.size} store(s)`, relTime(g.last), g.none ? `${g.none} unanswered` : e ? "Answered: " + e.q : g.kinds.data || g.kinds.product ? "Answered from store data" : null, g.up || g.down ? `👍 ${g.up} · 👎 ${g.down}` : null].filter(Boolean).join(" · ") })),
+        h("div", { class: "muted small", text: [`${g.n}× · ${g.stores.size} store(s)`, relTime(g.last), g.none ? `${g.none} unanswered` : g.weak && e ? "Partly answered by: " + e.q : e ? "Answered: " + e.q : g.kinds.data || g.kinds.product ? "Answered from store data" : null, g.up || g.down ? `👍 ${g.up} · 👎 ${g.down}` : null].filter(Boolean).join(" · ") }),
+        m ? h("div", { class: "small", style: `color:var(${m.tcov >= 0.6 ? "--accent" : "--warn"})`, text: `${m.tcov >= 0.6 ? "Existing answer fits" : "Existing answer only partly fits"} (question ${Math.round(m.cov * 100)}%, topic ${Math.round(m.tcov * 100)}%): ${m.e.q}` }) : null),
       h("div", { class: "pills" },
-        h("button", { class: "btn sm primary", onclick: () => kbEditor(g.none || !e ? null : e, g) }, g.none || !e ? "Answer" : "Improve answer"),
+        m ? h("button", { class: "btn sm primary", onclick: () => linkToExisting(m.e, g) }, "Use existing (no AI)") : null,
+        h("button", { class: "btn sm" + (m ? "" : " primary"), onclick: () => kbEditor(g.none || g.weak || !e ? null : e, g) }, g.none || g.weak || !e ? (m ? "Write new" : "Answer") : "Improve answer"),
         h("button", { class: "btn sm", onclick: () => dismissGroup(g.k) }, "Hide"))); };
     const f = fold(kbFilter);
     const list = entries.filter((e) => !f || fold(e.q + " " + e.cat).includes(f)).sort((a, b) => (stats.get(b.id)?.n || 0) - (stats.get(a.id)?.n || 0) || a.q.localeCompare(b.q));
     const hidden = (S.kbDb || []).filter((e) => e.status === "hidden");
+    const autoBtn = h("button", { class: "btn primary", disabled: !open.length, onclick: (e) => autoAnswer(open, e.currentTarget) }, `⚡ Auto-answer ${open.length} (reuse first, AI only if new)`);
     return h("div", { class: "grid", style: "gap:16px" },
       h("div", { class: "grid kpis wide" },
         kpiBox("Questions from stores", String(asks.length), `${S.stores.filter((x) => x.asks?.length).length} store(s) asking · latest 40 per store`),
-        kpiBox("Answered from store data", String(kinds("data") + kinds("product"))),
-        kpiBox("Answered by guidance", String(kinds("kb")), `${entries.length} answers live`),
-        kpiBox("Waiting for an answer", String(open.length), "Unanswered or rated unhelpful"),
+        kpiBox("Answered offline", String(kinds("data") + kinds("product") + kinds("kb")), `${kinds("data") + kinds("product")} from store data · ${kinds("kb")} from guides`),
+        kpiBox("Needs an answer", String(open.length), "Unanswered or rated unhelpful"),
+        kpiBox("Drafts to review", String(drafts.length), "Written by Claude, not live yet"),
         kpiBox("Helpful", rated.length ? Math.round((up / rated.length) * 100) + "%" : "—", `${rated.length} rating(s)`)),
-      h("div", { class: "banner small", text: "Stores never call AI. Their questions (names removed) arrive here. Draft an answer with Claude, check it, and publish: every store gets it at once, and the wordings stores used are saved so they find it." }),
-      h("div", { class: "pills" }, pill("open", `Needs an answer (${open.length})`), pill("top", "Most asked"), pill("kb", `Answers (${entries.length})`)),
+      h("div", { class: "banner small" }, h("b", { text: "How it works: " }), "stores answer offline from their own data and these guides, with no AI. Questions they can't answer come here. Auto-answer first reuses an existing answer when one fits (no AI cost), and only asks Claude for new topics, using anonymous totals from all stores. Claude's drafts wait for your approval; once published, every store's offline brain knows it."),
+      drafts.length ? h("div", { class: "card" }, h("h2", { text: `Claude drafts to review (${drafts.length})`, style: "margin-bottom:6px" }),
+        h("ul", { class: "list" }, drafts.map((dr) => h("li", { style: "flex-wrap:wrap" },
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: dr.q }), h("div", { class: "muted small", text: `${dr.cat} · asked ${dr.n}× by ${dr.stores} store(s) · ${dr.bullets[0] || ""}` })),
+          h("div", { class: "pills" }, h("button", { class: "btn sm primary", onclick: () => kbEditor(null, null, dr) }, "Review & publish"),
+            h("button", { class: "btn sm", onclick: () => saveKbMeta({ drafts: drafts.filter((x) => x.k !== dr.k) }).then(() => render()) }, "Discard")))))) : null,
+      h("div", { class: "toolbar" }, h("div", { class: "pills" }, pill("open", `Needs an answer (${open.length})`), pill("top", "Most asked"), pill("kb", `Answers (${entries.length})`)), h("span", { style: "margin-left:auto" }), kbTab === "open" ? autoBtn : null),
       kbTab === "kb" ? h("div", { class: "card" },
         h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("input", { type: "search", id: "kbSearch", placeholder: "Search answers", value: kbFilter, oninput: (e) => { kbFilter = e.target.value; render(); } }), h("button", { class: "btn primary", onclick: () => kbEditor(null, null) }, "+ New answer")),
         h("ul", { class: "list" }, list.map((e) => { const st = stats.get(e.id); return h("li", { style: "flex-wrap:wrap" },
-          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: e.q }), h("div", { class: "muted small", text: [e.cat, e.source === "admin" ? "KELSON" : "Starter", st ? `used ${st.n}×` : "not used yet", st && (st.up || st.down) ? `👍 ${st.up} · 👎 ${st.down}` : null].filter(Boolean).join(" · ") })),
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: e.q }), h("div", { class: "muted small", text: [e.cat, e.source === "admin" ? (e.origin === "ai-approved" ? "Claude, approved" : "KELSON") : "Starter", e.en?.q ? "TL + EN" : "TL only", st ? `used ${st.n}×` : "not used yet", st && (st.up || st.down) ? `👍 ${st.up} · 👎 ${st.down}` : null].filter(Boolean).join(" · ") })),
           h("div", { class: "pills" }, h("button", { class: "btn sm", onclick: () => kbEditor(e, null) }, "Edit"), h("button", { class: "btn sm", onclick: () => setKbStatus(e, "hidden") }, "Hide"))); })),
         hidden.length ? h("details", { style: "margin-top:10px" }, h("summary", { class: "small", text: `Hidden answers (${hidden.length})` }),
           h("ul", { class: "list" }, hidden.map((e) => h("li", {}, h("span", { class: "grow", text: e.q || e.id }), h("button", { class: "btn sm", onclick: () => setKbStatus({ ...(STARTER_KB.find((x) => x.id === e.id) || {}), ...e }, "published") }, "Show again"))))) : null)
       : h("div", { class: "card" }, (kbTab === "open" ? open : top).length ? h("ul", { class: "list" }, (kbTab === "open" ? open : top).slice(0, 200).map(groupRow))
-        : h("div", { class: "empty", text: kbTab === "open" ? "Nothing waiting. Every question so far was answered and nobody rated an answer unhelpful." : "No questions from stores yet." })));
+        : h("div", { class: "empty", text: kbTab === "open" ? "Nothing waiting. Every question so far was answered offline and nobody rated an answer unhelpful." : "No questions from stores yet." })));
+  }
+  // ---------- SUPER ADMIN · LOGBOOK DICTIONARY: misspellings and shorthand → the right words, shared with every store ----------
+  let dictFilter = "";
+  async function saveOcrDict(entries) {
+    try { await S.db.doc("network/ocr").set({ entries: entries.slice(0, 3000), updatedAt: new Date().toISOString(), by: S.me || null }); toast("Dictionary saved for all stores"); }
+    catch (e) { toast("Could not save: " + (e?.code || "try again")); }
+  }
+  const addDict = (from, to) => { from = fold(from).slice(0, 60); to = fold(to).slice(0, 80); if (!from || !to) return toast("Enter both words"); saveOcrDict([...(S.ocrDict.entries || []).filter((e) => fold(e.from) !== from), { from, to, at: new Date().toISOString() }]); };
+  function viewOcrDict() {
+    const ignored = new Set(S.kbMeta.ocrIgnored || []), dict = new Map(ocrDictAll().map((e) => [e.from, e.to])), g = new Map();
+    for (const st of S.stores) for (const x of st.ocrfix || []) {
+      const to = fold(x.to), k = x.raw + "→" + to; if (!x.raw || ignored.has(k) || dict.get(x.raw) === to) continue;
+      const y = g.get(k) || { k, raw: x.raw, to, toName: x.to, n: 0, stores: new Set(), last: "" }; y.n++; y.stores.add(st.id); if (x.at > y.last) y.last = x.at; g.set(k, y);
+    }
+    const fixes = [...g.values()].sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+    const f = fold(dictFilter), entries = ocrDictAll().filter((e) => !f || (e.from + " " + e.to).includes(f)).sort((a, b) => a.from.localeCompare(b.from));
+    const from = h("input", { type: "text", id: "dictFrom", placeholder: "Misspelling or shorthand, e.g. koke" }), to = h("input", { type: "text", id: "dictTo", placeholder: "Correct word(s), e.g. coca cola" });
+    return h("div", { class: "grid", style: "gap:16px" },
+      h("div", { class: "grid kpis wide" },
+        kpiBox("Dictionary words", String(ocrDictAll().length), `${(S.ocrDict.entries || []).length} added by KELSON`),
+        kpiBox("Corrections from stores", String(fixes.reduce((a, x) => a + x.n, 0)), `${new Set(fixes.flatMap((x) => [...x.stores])).size} store(s)`),
+        kpiBox("Waiting for review", String(fixes.length))),
+      h("div", { class: "banner small", text: "Stores read logbook photos on the phone (no cloud AI). Each line is corrected with this dictionary, then matched to the store's products. When an owner fixes a line, the pair (what was read → the product) arrives here. Add good pairs so every store reads that writing correctly next time." }),
+      h("div", { class: "card" }, h("h2", { text: `Corrections from stores (${fixes.length})`, style: "margin-bottom:6px" }),
+        fixes.length ? h("ul", { class: "list" }, fixes.slice(0, 200).map((x) => h("li", { style: "flex-wrap:wrap" },
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600" }, h("span", { style: "font-family:ui-monospace,monospace", text: x.raw }), " → ", x.toName), h("div", { class: "muted small", text: `${x.n}× · ${x.stores.size} store(s) · ${relTime(x.last)}` })),
+          h("div", { class: "pills" }, h("button", { class: "btn sm primary", onclick: () => addDict(x.raw, x.to) }, "Add to dictionary"),
+            h("button", { class: "btn sm", onclick: async () => { try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, ocrIgnored: [...ignored, x.k].slice(-2000) }); toast("Ignored"); } catch (e) { toast("Could not save: " + (e?.code || "try again")); } } }, "Ignore")))))
+          : h("div", { class: "empty", text: "No corrections waiting. They appear when store owners fix a logbook line." })),
+      h("div", { class: "card grid" }, h("h2", { text: "Add a word" }),
+        h("div", { class: "form" }, h("label", { class: "f" }, "What the logbook says", from), h("label", { class: "f" }, "What it means", to)),
+        h("button", { class: "btn primary", style: "justify-self:start", onclick: () => addDict(from.value, to.value) }, "Add for all stores")),
+      h("div", { class: "card" },
+        h("div", { class: "toolbar", style: "margin-bottom:8px" }, h("h2", { text: `Dictionary (${ocrDictAll().length})`, style: "margin-right:auto" }), h("input", { type: "search", id: "dictSearch", placeholder: "Search", value: dictFilter, oninput: (e) => { dictFilter = e.target.value; render(); } })),
+        h("ul", { class: "list" }, entries.slice(0, 400).map((e) => h("li", {},
+          h("span", { class: "grow" }, h("span", { style: "font-family:ui-monospace,monospace", text: e.from }), " → ", e.to),
+          h("span", { class: "chip", text: e.src }),
+          e.src === "KELSON" ? h("button", { class: "btn sm", onclick: () => saveOcrDict((S.ocrDict.entries || []).filter((x) => fold(x.from) !== e.from)) }, "Remove") : null)))));
   }
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("dict", "Logbook dictionary", "dict"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

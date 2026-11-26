@@ -4431,6 +4431,7 @@ ${catalog}`;
     if (sub === "orders") return adminPage("orders", "Supplier orders — all stores", viewSupplyOrders());
     if (sub && sub.startsWith("orders-")) { watchAdminOrders(); const o = allSupplyOrders().find((x) => x.id === sub.slice(7)); return adminPage("orders", o ? `Order · ${supStoreName(o)}` : "Order", o ? viewSupplyOrder(o) : h("div", { class: "card" }, h("p", { class: "muted", text: "Loading this order… If it doesn't appear, the store hasn't sent it to the supplier yet." }), h("button", { class: "btn", onclick: () => go("admin", "orders") }, "‹ All orders"))); }
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
+    if (sub === "market") return adminPage("market", "Market by area — who dominates where", viewMarket());
     if (sub === "mfr") return adminPage("mfr", "Manufacturers — sales by company", viewManufacturers());
     if (sub && sub.startsWith("mfr-")) return adminPage("mfr", "Manufacturer · " + decodeURIComponent(sub.slice(4)), viewManufacturer(decodeURIComponent(sub.slice(4))));
     if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
@@ -5593,7 +5594,7 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
     { k: "stores", icon: "🏪", label: "Stores & sales", hint: "Every store's sales, stock and directory",
       pages: () => [["stores", `All stores (${S.stores.length})`, null], ["directory", `Directory (${S.directory.length})`, "directory"], ["products", "Products", "products"]] },
     { k: "reports", icon: "📊", label: "Reports", hint: "Statistics by company / manufacturer, product and area",
-      pages: () => [["mfr", "Manufacturers", "mfr"], ["best", "Best sellers", "best"], ["oos", "Out of stock", "oos"]] },
+      pages: () => [["market", "Market by area", "market"], ["mfr", "Manufacturers", "mfr"], ["best", "Best sellers", "best"], ["oos", "Out of stock", "oos"]] },
     { k: "orders", icon: "📦", label: "Orders", hint: "Supplier orders from stores", badge: () => allSupplyOrders().filter((o) => o.status === "new").length,
       pages: () => [["orders", "Supplier orders", "orders"]] },
     { k: "ai", icon: "🤖", label: "AI data", hint: "Questions stores asked, answers, and logbook reading",
@@ -5608,7 +5609,7 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
   const MFR_BRANDS = [
     ["Coca-Cola Beverages PH", ["coca-cola", "coke", "sprite", "royal", "wilkins", "minute maid"]],
     ["Pepsi-Cola Products PH", ["pepsi", "mountain dew", "7up", "7-up", "mug", "gatorade", "sting"]],
-    ["Universal Robina (URC)", ["c2", "great taste", "nissin", "payless", "piattos", "nova", "chippy", "jack n jill", "jack 'n jill", "roller coaster", "magic flakes", "cream-o", "x.o.", "presto"]],
+    ["Universal Robina (URC)", ["c2", "great taste", "v-cut", "v cut", "nissin", "payless", "piattos", "nova", "chippy", "jack n jill", "jack 'n jill", "roller coaster", "magic flakes", "cream-o", "x.o.", "presto"]],
     ["Monde Nissin", ["lucky me", "skyflakes", "fita", "m.y. san", "monde"]],
     ["Nestlé Philippines", ["nescafé", "nescafe", "bear brand", "milo", "maggi", "coffee-mate", "nestea", "nestlé", "nestle", "koko krunch"]],
     ["Alaska Milk (FrieslandCampina)", ["alaska"]],
@@ -5622,9 +5623,17 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
     ["NutriAsia", ["ufc", "datu puti", "papa", "golden fiesta", "mang tomas", "jufran"]],
     ["Del Monte Philippines", ["del monte", "today's", "s&w"]],
     ["Procter & Gamble", ["head & shoulders", "safeguard", "downy", "ariel", "pantene", "tide", "joy", "whisper"]],
-    ["Unilever", ["sunsilk", "cream silk", "surf", "dove", "clear", "rexona", "breeze", "knorr", "lady's choice", "close-up", "closeup"]],
+    ["Unilever", ["sunsilk", "cream silk", "surf", "dove", "clear", "rexona", "breeze", "knorr", "lady's choice", "close-up", "closeup", "vaseline", "pond's", "ponds"]],
     ["Colgate-Palmolive", ["colgate", "palmolive"]],
     ["Green Cross", ["zonrox", "green cross"]],
+    ["San Miguel Food & Beverage", ["purefoods", "star", "magnolia", "tender juicy", "san miguel"]],
+    ["Emperador", ["emperador"]],
+    ["Peerless Products", ["champion", "del"]],
+    ["Asia Brewery", ["cobra"]],
+    ["Yakult Philippines", ["yakult"]],
+    ["Liwayway (Oishi)", ["oishi"]],
+    ["Zesto", ["zesto"]],
+    ["Kenvue (Johnson & Johnson)", ["modess", "johnson's", "johnsons"]],
   ];
   let mfrIdx = null, mfrQ = "", mfrCat = "", mfrArea = "";
   const mfrKey = (name) => fold(String(name || ""));
@@ -5697,6 +5706,152 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
       h("p", { class: "muted small", text: "Companies are matched from the product name using a built-in brand list. Open a company or \"Unassigned\" to correct a product." }));
   }
   let mfrQT = null;
+
+  // ---------- MARKET BY AREA: store sales + shelf audit, by barangay / city / region / island group ----------
+  // City or province → region. Island groups: Luzon, Visayas, Mindanao. Ambiguous names (San Fernando, Talisay, Naga,
+  // San Carlos) use the store's map position when known, else the bigger city.
+  const PH_REGIONS = [
+    ["NCR", "Luzon", "metro manila,ncr,manila,quezon city,caloocan,las pinas,makati,malabon,mandaluyong,marikina,muntinlupa,navotas,paranaque,pasay,pasig,pateros,san juan,taguig,valenzuela"],
+    ["CAR", "Luzon", "cordillera,baguio,benguet,la trinidad,abra,apayao,ifugao,kalinga,tabuk,mountain province"],
+    ["Region I – Ilocos", "Luzon", "ilocos norte,ilocos sur,la union,pangasinan,laoag,batac,vigan,candon,dagupan,alaminos,urdaneta"],
+    ["Region II – Cagayan Valley", "Luzon", "cagayan,isabela,nueva vizcaya,quirino,batanes,tuguegarao,cauayan,ilagan,santiago"],
+    ["Region III – Central Luzon", "Luzon", "bulacan,pampanga,tarlac,nueva ecija,bataan,zambales,aurora,angeles,san fernando,olongapo,malolos,meycauayan,san jose del monte,cabanatuan,gapan,palayan,science city of munoz,balanga,mabalacat,tarlac city"],
+    ["Region IV-A – CALABARZON", "Luzon", "calabarzon,cavite,laguna,batangas,rizal,quezon,antipolo,bacoor,imus,dasmarinas,general trias,cavite city,tagaytay,trece martires,carmona,calamba,san pablo,santa rosa,binan,cabuyao,san pedro,batangas city,lipa,tanauan,santo tomas,lucena,tayabas"],
+    ["MIMAROPA", "Luzon", "mimaropa,occidental mindoro,oriental mindoro,mindoro,marinduque,romblon,palawan,puerto princesa,calapan"],
+    ["Region V – Bicol", "Luzon", "bicol,albay,camarines norte,camarines sur,catanduanes,masbate,sorsogon,legazpi,naga,iriga,tabaco,ligao,masbate city,sorsogon city"],
+    ["Region VI – Western Visayas", "Visayas", "aklan,antique,capiz,guimaras,iloilo,iloilo city,roxas,passi"],
+    ["NIR – Negros Island", "Visayas", "negros,negros occidental,negros oriental,siquijor,bacolod,dumaguete,bago,cadiz,escalante,himamaylan,kabankalan,la carlota,sagay,san carlos,silay,sipalay,victorias,bais,bayawan,canlaon,guihulngan,tanjay"],
+    ["Region VII – Central Visayas", "Visayas", "cebu,bohol,cebu city,mandaue,lapu lapu,talisay,danao,toledo,carcar,bogo,tagbilaran"],
+    ["Region VIII – Eastern Visayas", "Visayas", "leyte,southern leyte,samar,eastern samar,northern samar,biliran,tacloban,ormoc,calbayog,catbalogan,borongan,maasin,baybay"],
+    ["Region IX – Zamboanga Peninsula", "Mindanao", "zamboanga del norte,zamboanga del sur,zamboanga sibugay,zamboanga,zamboanga city,dipolog,dapitan,pagadian,isabela city"],
+    ["Region X – Northern Mindanao", "Mindanao", "bukidnon,camiguin,lanao del norte,misamis occidental,misamis oriental,cagayan de oro,iligan,malaybalay,valencia,gingoog,el salvador,oroquieta,ozamiz,tangub"],
+    ["Region XI – Davao", "Mindanao", "davao,davao del norte,davao del sur,davao oriental,davao de oro,davao occidental,davao city,digos,mati,panabo,tagum,samal"],
+    ["Region XII – SOCCSKSARGEN", "Mindanao", "soccsksargen,cotabato,north cotabato,south cotabato,sultan kudarat,sarangani,general santos,koronadal,kidapawan,tacurong"],
+    ["Region XIII – Caraga", "Mindanao", "caraga,agusan del norte,agusan del sur,dinagat islands,surigao del norte,surigao del sur,butuan,cabadbaran,bayugan,surigao,surigao city,bislig,tandag"],
+    ["BARMM", "Mindanao", "barmm,basilan,lanao del sur,maguindanao,sulu,tawi tawi,marawi,lamitan,cotabato city,jolo"],
+  ];
+  const PH_IDX = new Map(); for (const [r, isl, names] of PH_REGIONS) for (const n of names.split(",")) if (!PH_IDX.has(n)) PH_IDX.set(n, [r, isl]);
+  const ISLANDS = ["Luzon", "Visayas", "Mindanao"];
+  /** Rough island group from a map position (only when the city isn't known). */
+  function islandFromPos(lat, lng) {
+    if (!(lat > 4 && lat < 22 && lng > 116 && lng < 127.5)) return "";
+    if (lng < 120.5 && lat < 12.5 && lat > 7.6) return "Luzon"; // Palawan
+    if (lat < 7.5 && lng < 122.3) return "Mindanao"; // Sulu, Tawi-Tawi, Basilan
+    if (lat < 9.9 && lng > 121.8) return "Mindanao";
+    if (lat < 12.7 && lng > 121.8) return "Visayas";
+    if (lat < 11.6 && lng > 121.4) return "Visayas";
+    return "Luzon";
+  }
+  /** Where a store is: barangay, city, region, island group (approx: true when only the map position told us). */
+  function geoOf(st) {
+    const city = String(st.city || "").trim(), brgy = String(st.barangay || "").trim(), k = fold(city).replace(/^city of /, "").replace(/ city$/, (m) => (PH_IDX.has(fold(city)) ? m : ""));
+    let hit = PH_IDX.get(fold(city)) || PH_IDX.get(k) || PH_IDX.get(fold(st.province || "")) || null;
+    // the same name in two regions: decide by position when we have it
+    const amb = { "san fernando": [[16.6, "Region I – Ilocos", "Luzon"]], "talisay": [[123.4, "NIR – Negros Island", "Visayas", "lngLt"]], "naga": [[10.3, "Region VII – Central Visayas", "Visayas", "latLt"]], "san carlos": [[15.5, "Region I – Ilocos", "Luzon", "latGt"]] }[fold(city)];
+    if (amb && st.lat && st.lng) { const [v, r, isl, how] = amb[0]; if ((how === "lngLt" && st.lng < v) || (how === "latLt" && st.lat < v) || ((how === "latGt" || !how) && st.lat > v)) hit = [r, isl]; }
+    const island = hit ? hit[1] : islandFromPos(Number(st.lat), Number(st.lng));
+    return { barangay: brgy || "Barangay not set", city: city || "City not set", region: hit ? hit[0] : "Region not set", island: island || "Not set", approx: !hit && !!island };
+  }
+  let mkLevel = "city", mkMeasure = "sales", mkWhat = "co", mkIsland = "", mkRegion = "", mkCity = "", mkCat = "";
+  const MK_LEVELS = [["island", "Luzon · Visayas · Mindanao"], ["region", "Region"], ["city", "City"], ["barangay", "Barangay"]];
+  /** One row per thing sold or seen: from store records (sales) and from shelf-audit photos (on the shelf). */
+  function marketData() {
+    const sales = [], shelf = [], auditStores = new Set(), salesStores = new Set();
+    const inArea = (g) => (!mkIsland || g.island === mkIsland) && (!mkRegion || g.region === mkRegion) && (!mkCity || g.city === mkCity);
+    for (const st of S.stores.filter((x) => adminSample || !x.sample)) {
+      const g = geoOf(st); if (!inArea(g)) continue;
+      for (const it of st.items || []) {
+        if (!it.k || (mkCat && it.cat !== mkCat)) continue;
+        sales.push({ g, store: "s:" + st.id, pk: it.k, product: it.name, co: mfrOf(it.name) || "Unassigned", rev: it.r30 || (it.s30 || 0) * (it.price || 0), units: it.s30 || 0 });
+        salesStores.add("s:" + st.id);
+      }
+    }
+    // shelf audit: the latest photo date per store counts (one visit), facings show how much shelf space a product has
+    const latest = new Map(); for (const a of auditPhotos()) { if (!(a.p.items || []).length) continue; const d = a.date || ""; const cur = latest.get(a.storeKey); if (!cur || d > cur.d) latest.set(a.storeKey, { d, list: [a] }); else if (d === cur.d) cur.list.push(a); }
+    for (const [key, { list }] of latest) {
+      const g = geoOf({ city: list[0].city, barangay: list[0].barangay }); if (!inArea(g)) continue;
+      const seen = new Map();
+      for (const a of list) for (const it of a.p.items || []) { const k = itemKey(it); if (!seen.has(k)) seen.set(k, it); }
+      for (const [k, it] of seen) {
+        if (mkCat && it.category !== mkCat) continue;
+        shelf.push({ g, store: key, pk: k, product: it.name, co: mfrOf(it.brand) || mfrOf(it.name) || "Unassigned", facings: facingsOf(it) });
+        auditStores.add(key);
+      }
+    }
+    return { sales, shelf, salesStores, auditStores };
+  }
+  function marketAreas(data) {
+    const areas = new Map(), area = (g) => { const name = g[mkLevel]; let a = areas.get(name); if (!a) areas.set(name, (a = { name, g, sales: new Map(), shelf: new Map(), rev: 0, units: 0, facings: 0, sStores: new Set(), aStores: new Set(), shelfStores: new Map() })); return a; };
+    const key = (r) => (mkWhat === "co" ? r.co : r.pk), label = (r) => (mkWhat === "co" ? r.co : r.product);
+    for (const r of data.sales) { const a = area(r.g); a.sStores.add(r.store); const v = mkMeasure === "units" ? r.units : r.rev; a.rev += v; const x = a.sales.get(key(r)) || { label: label(r), co: r.co, v: 0 }; x.v += v; a.sales.set(key(r), x); }
+    for (const r of data.shelf) { const a = area(r.g); a.aStores.add(r.store); a.facings += r.facings; const x = a.shelf.get(key(r)) || { label: label(r), co: r.co, v: 0, stores: new Set() }; x.v += r.facings; x.stores.add(r.store); a.shelf.set(key(r), x); }
+    const out = [...areas.values()].map((a) => {
+      const sl = [...a.sales.values()].sort((x, y) => y.v - x.v), sh = [...a.shelf.values()].sort((x, y) => y.v - x.v);
+      // combined ranking: average of sales share and shelf share (only the sources this area has)
+      const names = new Map();
+      for (const x of sl) names.set(x.label, { label: x.label, co: x.co, sales: a.rev ? x.v / a.rev : 0, shelf: null, presence: null });
+      for (const x of sh) { const n = names.get(x.label) || { label: x.label, co: x.co, sales: a.rev ? 0 : null, shelf: 0, presence: 0 }; n.shelf = a.facings ? x.v / a.facings : 0; n.presence = a.aStores.size ? x.stores.size / a.aStores.size : 0; names.set(x.label, n); }
+      for (const n of names.values()) { if (n.shelf === null && a.facings) n.shelf = 0; const parts = [n.sales, n.shelf].filter((v) => v !== null); n.score = parts.length ? parts.reduce((p, v) => p + v, 0) / parts.length : 0; }
+      const unassigned = mkWhat === "co" ? names.get("Unassigned") || null : null;
+      const ranked = [...names.values()].filter((n) => (mkWhat === "co" ? n.label !== "Unassigned" : true)).sort((x, y) => y.score - x.score);
+      return { ...a, ranked, unassigned, salesLeader: sl.find((x) => x.label !== "Unassigned"), shelfLeader: sh.find((x) => x.label !== "Unassigned"), sTotal: a.rev };
+    });
+    return out.sort((x, y) => y.sStores.size + y.aStores.size - (x.sStores.size + x.aStores.size) || x.name.localeCompare(y.name));
+  }
+  async function marketCsv(areas) {
+    const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+    const pct = (v) => (v === null || v === undefined ? "" : (v * 100).toFixed(1));
+    const lines = [["Level", "Area", "Rank", mkWhat === "co" ? "Company" : "Product", "Company", `Sales share % (${mkMeasure === "units" ? "units" : "peso"})`, "Shelf share % (facings)", "On shelf in % of audited stores", "Combined %", "Stores with sales data", "Stores audited"].map(cell).join(",")];
+    for (const a of areas) a.ranked.slice(0, 20).forEach((n, i) => lines.push([mkLevel, a.name, i + 1, n.label, n.co, pct(n.sales), pct(n.shelf), pct(n.presence), pct(n.score), a.sStores.size, a.aStores.size].map(cell).join(",")));
+    const body = "\uFEFF" + lines.join("\r\n"), name = `market-${mkLevel}-${todayKey()}.csv`;
+    try { const dl = await window.claude?.use?.("downloads"); if (!dl) throw new Error("none"); await dl.save({ filename: name, data: body }); toast("Saved " + name); }
+    catch { try { await navigator.clipboard.writeText(body); toast("Couldn't save a file here — copied the table instead"); } catch { toast("Couldn't export here"); } }
+  }
+  function viewMarket() {
+    const data = marketData(), areas = marketAreas(data);
+    const allGeo = [...S.stores.filter((x) => adminSample || !x.sample).map(geoOf), ...auditPhotos().map((a) => geoOf({ city: a.city, barangay: a.barangay }))];
+    const regions = [...new Set(allGeo.filter((g) => !mkIsland || g.island === mkIsland).map((g) => g.region))].sort();
+    const cities = [...new Set(allGeo.filter((g) => (!mkIsland || g.island === mkIsland) && (!mkRegion || g.region === mkRegion)).map((g) => g.city))].sort();
+    const cats = [...new Set([...S.stores.flatMap((x) => (x.items || []).map((i) => i.cat)), ...auditPhotos().flatMap((a) => (a.p.items || []).map((i) => i.category))].filter(Boolean))].sort();
+    const unmapped = new Set(allGeo.filter((g) => g.region === "Region not set").map((g) => g.city)).size;
+    const pill = (id, cur, k, label, set) => h("button", { id, "aria-pressed": String(cur === k), onclick: () => { set(k); render(); } }, label);
+    const sel = (id, label, val, opts, set) => h("select", { id, "aria-label": label, onchange: (e) => { set(e.target.value); render(); } }, h("option", { value: "", text: label }), opts.map((o) => h("option", { value: o, text: o, selected: val === o })));
+    const pct = (v) => (v === null || v === undefined ? "—" : (v * 100).toFixed(1) + "%");
+    const bar = (v, color) => h("div", { style: "height:6px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:3px" }, h("div", { style: `height:100%;width:${Math.min(100, (v || 0) * 100).toFixed(1)}%;background:${color}` }));
+    const what = mkWhat === "co" ? "company" : "product";
+    return h("div", { class: "grid", id: "mkView" },
+      h("div", { class: "card grid", style: "gap:10px" },
+        h("div", { class: "pills", role: "group", "aria-label": "Compare by" }, h("b", { class: "small", style: "align-self:center", text: "Compare by:" }), MK_LEVELS.map(([k, l]) => pill("mkL-" + k, mkLevel, k, l, (v) => { mkLevel = v; }))),
+        h("div", { class: "pills", role: "group", "aria-label": "Show" }, h("b", { class: "small", style: "align-self:center", text: "Show:" }), pill("mkW-co", mkWhat, "co", "Companies", (v) => { mkWhat = v; }), pill("mkW-p", mkWhat, "p", "Products", (v) => { mkWhat = v; }),
+          h("b", { class: "small", style: "align-self:center;margin-left:8px", text: "Sales in:" }), pill("mkM-sales", mkMeasure, "sales", "Pesos", (v) => { mkMeasure = v; }), pill("mkM-units", mkMeasure, "units", "Units", (v) => { mkMeasure = v; })),
+        h("div", { class: "pills mfr-filters", style: "align-items:center" },
+          sel("mkIsland", "All island groups", mkIsland, ISLANDS, (v) => { mkIsland = v; mkRegion = ""; mkCity = ""; }),
+          sel("mkRegion", "All regions", mkRegion, regions, (v) => { mkRegion = v; mkCity = ""; }),
+          sel("mkCity", "All cities", mkCity, cities, (v) => { mkCity = v; }),
+          sel("mkCat", "All categories", mkCat, cats, (v) => { mkCat = v; }),
+          h("button", { class: "btn", id: "mkCsv", onclick: () => marketCsv(areas) }, "⬇️ Export CSV"))),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px" },
+        kpiBox("Areas", String(areas.length), MK_LEVELS.find(([k]) => k === mkLevel)[1]),
+        kpiBox("Stores with sales data", String(data.salesStores.size), "store records · last 30 days"),
+        kpiBox("Stores shelf-audited", String(data.auditStores.size), "latest photo visit per store"),
+        kpiBox("Locations not mapped", String(unmapped), unmapped ? "city not in the region list" : "all mapped to a region")),
+      h("p", { class: "muted small", style: "margin:0", text: `“Combined” = the average of sales share (what stores sold) and shelf share (facings in the shelf-audit photos). The leader in each area is the ${what} with the highest combined share. Shares are within the area.` }),
+      areas.length ? h("div", { class: "grid", id: "mkAreas", style: "grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px" }, areas.slice(0, 60).map((a) => {
+        const top = a.ranked.slice(0, 5), lead = top[0];
+        return h("div", { class: "card mk-area", style: "margin:0;display:grid;gap:8px;align-content:start" },
+          h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { style: "margin:0;font-size:1.05rem", text: a.name }),
+            h("span", { class: "muted small", text: [mkLevel !== "island" ? a.g.island + (a.g.approx ? " (approx.)" : "") : null, mkLevel === "barangay" ? a.g.city : mkLevel === "city" ? a.g.region : null].filter(Boolean).join(" · ") })),
+          h("div", { class: "muted small", text: `${a.sStores.size} store(s) with sales · ${a.aStores.size} shelf-audited` }),
+          lead ? h("div", { class: "note", style: "margin:0" }, h("div", { class: "small muted", text: `Dominant ${what}` }), h("div", { style: "font-weight:700", text: lead.label }), mkWhat === "p" ? h("div", { class: "small muted", text: lead.co }) : null,
+            h("div", { class: "small", text: `Combined ${pct(lead.score)} · sales ${pct(lead.sales)} · shelf ${pct(lead.shelf)}${lead.presence !== null ? ` · on ${pct(lead.presence)} of audited shelves` : ""}` })) : null,
+          h("ol", { style: "margin:0;padding-left:20px;display:grid;gap:6px" }, top.map((n) => h("li", {},
+            h("div", { style: "display:flex;justify-content:space-between;gap:8px" }, h("span", { text: n.label + (mkWhat === "p" ? ` · ${n.co}` : "") }), h("b", { class: "num", text: pct(n.score) })),
+            h("div", { class: "small muted", text: `sales ${pct(n.sales)} · shelf ${pct(n.shelf)}` }), bar(n.score, "var(--accent)")))),
+          a.unassigned && a.unassigned.score > 0 ? h("div", { class: "small muted", text: `Not yet assigned to a company: ${pct(a.unassigned.score)} — fix in Reports → Manufacturers` }) : null,
+          a.salesLeader && a.shelfLeader && a.salesLeader.label !== a.shelfLeader.label ? h("div", { class: "small", style: "color:var(--warn)", text: `Best seller (${a.salesLeader.label}) is not the one with the most shelf space (${a.shelfLeader.label}).` }) : null);
+      })) : h("div", { class: "empty", text: "No data for this filter yet." }),
+      h("p", { class: "muted small", text: "Sources: each store's own sales records (summary only, no customer data) and shelf-audit photos. Company names come from the Manufacturers list — correct them in Reports → Manufacturers. Region and island group come from the store's city; when the city isn't known, the map position is used (marked approx.)." }));
+  }
   /** In-page box for a new company name (window.prompt is blocked inside claude.ai). */
   function askCompany(product) {
     return new Promise((res) => {

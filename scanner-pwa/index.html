@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>KWADERNO Scan</title>
-  <meta name="description" content="Scan QR codes and barcodes with your phone or computer camera.">
-  <meta name="theme-color" content="#1f1f1f">
+  <meta name="description" content="Point your camera at a barcode or QR code — it reads it by itself.">
+  <meta name="theme-color" content="#000000">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png" type="image/png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -16,80 +16,100 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top"><h1>SCAN</h1></header>
+  <!-- ===== LIVE SCANNER ===== -->
+  <section id="scan" class="scan" aria-label="Scanner">
+    <div class="stage" id="stage">
+      <video id="video" playsinline muted autoplay aria-label="Camera"></video>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+      <div class="mask" aria-hidden="true"><div class="frame" id="frame"><i></i><i></i><i></i><i></i><b class="laser"></b></div></div>
+      <div class="focus-ring" id="focusRing" aria-hidden="true"></div>
+      <div class="stage-msg" id="stageMsg" hidden></div>
+    </div>
 
-  <main>
-    <!-- ===== SCAN ===== -->
-    <section id="tab-scan" class="tab" aria-labelledby="scanTitle">
-      <h2 id="scanTitle" class="title">Scan the barcode or QR code</h2>
-      <p class="sub">Line it up inside the red corners and keep the phone steady.</p>
-
-      <div class="stage" id="stage">
-        <div id="reader" aria-label="Camera view"></div>
-        <div class="frame" id="frame" aria-hidden="true"><i></i><i></i><i></i><i></i><b class="laser"></b></div>
-        <div class="stage-msg" id="stageMsg" hidden></div>
+    <header class="bar top">
+      <button class="icon" id="histBtn" type="button" title="History" aria-label="History">☰</button>
+      <div class="title"><b>SCAN</b><span id="kwBadge" hidden>→ KWADERNO</span></div>
+      <div class="right">
+        <button class="icon" id="torchBtn" type="button" aria-pressed="false" title="Flashlight" aria-label="Flashlight" hidden>🔦</button>
+        <button class="icon" id="lensBtn" type="button" title="Switch camera" aria-label="Switch camera" hidden>⟲</button>
       </div>
+    </header>
 
-      <div class="status" id="status" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span id="statusText">Starting camera…</span></div>
+    <p class="hint" id="hint" role="status" aria-live="polite">Point the camera at a barcode or QR code</p>
 
-      <div class="controls">
-        <label class="sel">
-          <span class="sr">Camera</span>
-          <select id="cameraSel" aria-label="Camera / lens"><option value="">Back camera</option></select>
-        </label>
-        <button class="icon" id="torchBtn" type="button" aria-pressed="false" hidden title="Flashlight">🔦<span class="sr"> Flashlight</span></button>
-        <button class="icon" id="pauseBtn" type="button" title="Pause camera">⏸<span class="sr"> Pause</span></button>
-      </div>
+    <div class="bottom">
       <div class="zoom" id="zoomRow" hidden>
-        <span aria-hidden="true">🔍</span>
+        <button type="button" class="z" id="zoomOut" aria-label="Zoom out">−</button>
         <input type="range" id="zoom" min="1" max="1" step="0.1" value="1" aria-label="Zoom">
+        <button type="button" class="z" id="zoomIn" aria-label="Zoom in">+</button>
       </div>
+      <div class="status" id="status"><span class="spin" aria-hidden="true"></span><span id="statusText">Starting camera…</span></div>
+      <div class="hid" id="hidState" title="Bluetooth / USB scanner">⌨︎ Bluetooth/USB scanner ready</div>
+      <nav class="actions" aria-label="Scanner">
+        <button type="button" id="typeBtn" class="act"><span aria-hidden="true">#</span>Type</button>
+        <button type="button" id="pauseBtn" class="shutter" aria-label="Pause scanning"><span aria-hidden="true">▮▮</span></button>
+        <button type="button" id="batchBtn" class="act" aria-pressed="false"><span aria-hidden="true">⧉</span>Batch</button>
+      </nav>
+      <label class="sr" for="cameraSel">Camera</label>
+      <select id="cameraSel" class="sr"><option value="">Back camera</option></select>
+    </div>
+  </section>
 
-      <div class="row">
-        <label class="btn file">
-          <input type="file" id="fileIn" accept="image/*" hidden>
-          🖼️ Scan from a photo
-        </label>
-        <label class="chk"><input type="checkbox" id="keepGoing"> Keep scanning</label>
-      </div>
-
-      <!-- result card -->
-      <div class="result" id="result" hidden>
-        <div class="res-head"><span class="badge" id="resFormat">QR</span><span class="time" id="resTime"></span></div>
-        <div class="res-text" id="resText"></div>
-        <div class="res-actions">
-          <button class="btn primary" id="copyBtn" type="button">📋 Copy</button>
-          <a class="btn" id="openBtn" hidden target="_blank" rel="noopener noreferrer">🔗 Open link</a>
-          <button class="btn" id="againBtn" type="button">↻ Scan again</button>
+  <!-- ===== RESULT (product page) ===== -->
+  <section id="result" class="sheet" hidden aria-labelledby="resTitle">
+    <header class="bar"><button class="icon" id="resBack" type="button" aria-label="Back to scanner">←</button><b id="resTitle">Product</b><span></span></header>
+    <div class="sheet-body">
+      <div class="product">
+        <div class="pimg" id="resImg" aria-hidden="true">▥</div>
+        <div class="pinfo">
+          <div class="pname" id="resName">Looking up…</div>
+          <div class="pbrand" id="resBrand"></div>
+          <div class="pcode"><span class="badge" id="resFormat">EAN-13</span> <span id="resCode"></span></div>
+          <div class="pcheck" id="resCheck"></div>
         </div>
-        <p class="warn" id="linkWarn" hidden>Check the address before opening. QR codes can point to fake sites.</p>
       </div>
-    </section>
+      <div class="tools">
+        <button type="button" id="copyBtn" class="tool"><span aria-hidden="true">⧉</span>Copy</button>
+        <a id="webBtn" class="tool" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">⌕</span>Web search</a>
+        <a id="openBtn" class="tool" target="_blank" rel="noopener noreferrer" hidden><span aria-hidden="true">↗</span>Open link</a>
+        <a id="kwBack" class="tool" hidden><span aria-hidden="true">⮌</span>KWADERNO</a>
+      </div>
+      <p class="warn" id="linkWarn" hidden>Check the address before opening. QR codes can lead to fake sites.</p>
+      <div class="barcode-art" id="resArt" aria-hidden="true"></div>
+      <button type="button" class="btn primary big" id="againBtn">Scan next</button>
+      <p class="muted small" id="resSource"></p>
+    </div>
+  </section>
 
-    <!-- ===== HISTORY ===== -->
-    <section id="tab-history" class="tab" hidden aria-labelledby="histTitle">
-      <h2 id="histTitle" class="title">History</h2>
-      <div class="row">
-        <input type="search" id="histSearch" placeholder="Search scans" aria-label="Search scans">
-      </div>
-      <div class="row">
-        <button class="btn primary" id="csvBtn" type="button">⬇️ Export CSV</button>
-        <button class="btn" id="clearBtn" type="button">🗑 Clear</button>
-      </div>
-      <p class="sub" id="histCount"></p>
+  <!-- ===== HISTORY ===== -->
+  <section id="history" class="sheet" hidden aria-labelledby="histTitle">
+    <header class="bar"><button class="icon" id="histBack" type="button" aria-label="Back to scanner">←</button><b id="histTitle">History</b><span></span></header>
+    <div class="sheet-body">
+      <input type="search" id="histSearch" placeholder="Search scans" aria-label="Search scans">
+      <div class="row"><button class="btn primary" id="csvBtn" type="button">Export CSV</button><button class="btn" id="clearBtn" type="button">Clear all</button></div>
+      <p class="muted small" id="histCount"></p>
       <ul class="hist" id="histList"></ul>
-      <p class="sub small">Saved only on this device.</p>
-    </section>
-  </main>
+      <p class="muted small">Saved only on this device.</p>
+    </div>
+  </section>
 
-  <nav class="tabs" aria-label="Sections">
-    <button type="button" data-tab="scan" aria-current="page"><span aria-hidden="true">▣</span>Scan</button>
-    <button type="button" data-tab="history"><span aria-hidden="true">⟲</span>History</button>
-  </nav>
+  <!-- batch list (continuous mode) -->
+  <div class="batch" id="batch" hidden>
+    <div class="batch-head"><b id="batchCount">0 scanned</b><button class="btn sm" id="batchSend" type="button" hidden>Send to KWADERNO</button><button class="btn sm" id="batchDone" type="button">Done</button></div>
+    <ul id="batchList"></ul>
+  </div>
+
+  <dialog id="typeDlg" aria-labelledby="typeTitle">
+    <form method="dialog" class="sheet-body" id="typeForm">
+      <b id="typeTitle">Type the number under the barcode</b>
+      <input type="text" id="typeIn" inputmode="numeric" autocomplete="off" maxlength="64" placeholder="e.g. 4800016644290">
+      <p class="warn" id="typeWarn"></p>
+      <div class="row"><button class="btn primary" id="typeOk" value="ok">Use it</button><button class="btn" value="cancel" formnovalidate>Cancel</button></div>
+    </form>
+  </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-  <script src="vendor/html5-qrcode.min.js"></script>
   <script src="vendor/zxing-library-0.21.3.min.js"></script>
   <script src="app.js"></script>
 </body>

@@ -1204,7 +1204,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const hit = byBarcode(code);
     if ((mode || (view === "sell" ? "sell" : "")) === "sell") {
       if (view !== "sell") go("sell");
-      if (hit) { scanBeep(true); addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); });
+      if (hit) { scanBeep(true); addToCart(hit); toast(`+1 ${hit.name} · ${inSale(hit)} ${L("sa benta", "in the sale")}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name} · ${inSale(np)} ${L("sa benta", "in the sale")}`); });
     } else if (hit) { scanBeep(true); go("products", "p-" + hit.id); } else unknownBarcode(code, (np) => go("products", "p-" + np.id));
   }
   window.addEventListener("message", (e) => {
@@ -3524,6 +3524,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         : h("div", { class: "empty", text: L("Walang open bill.", "No open bills.") })));
   }
   // ---------- SELL ----------
+  const inSale = (p) => Number(cart.lines.find((l) => l.productId === p.id)?.qty || 0); // how many of this product are in the open sale
   function addToCart(p) {
     const i = cart.lines.findIndex((l) => l.productId === p.id);
     if (i >= 0) cart.lines[i].qty = String((Number(cart.lines[i].qty) || 0) + 1);
@@ -3631,15 +3632,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     // sideways phone: the photos get the whole screen; title, buttons and search live in a side panel (swipe left)
     const drawerMode = sellDrawerLayout();
     const posButtons = () => [
-            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name} · ${inSale(hit)} ${L("sa benta", "in the sale")}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name} · ${inSale(np)} ${L("sa benta", "in the sale")}`); }); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
       h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
       h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
       h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")];
-    const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); };
+    const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name} · ${inSale(hit)} ${L("sa benta", "in the sale")}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name} · ${inSale(np)} ${L("sa benta", "in the sale")}`); }); };
     const openCart = () => openDialog("Current sale", checkoutDialog());
     const searchBox = () => h("input", { type: "search", id: "sellSearch", placeholder: L("Hanapin o i-type ang barcode", "Search product or type barcode"), value: search, "aria-label": "Search products",
       oninput: (e) => { search = e.target.value; render(); }, onkeydown: sellSearchKey });
-    function sellSearchKey(e) { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = byBarcode(code) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) { search = ""; unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); } else if (code) toast("No product with that name"); } }
+    function sellSearchKey(e) { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = byBarcode(code) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name} · ${inSale(hit)} ${L("sa benta", "in the sale")}`); render(); } else if (code && /^\d{6,}$/.test(code)) { search = ""; unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name} · ${inSale(np)} ${L("sa benta", "in the sale")}`); }); } else if (code) toast("No product with that name"); } }
     const items = c.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0);
     function sellDrawer() {
       const close = () => { sellDrawerOpen = false; render(); };

@@ -596,7 +596,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     ["reports", "Reports", "M4 20V10M10 20V4M16 20v-7M22 20H2"],
   ];
   // bottom bar: the logbook camera sits in the middle; Branch at the end. Items with "home-x" open a Home sub-page.
-  const NAV_ITEMS = () => [VIEWS[0], VIEWS[1], VIEWS[2], ["home-logbook", "Kwaderno", "M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6zM9 3v18M12 8h4M12 12h4M12 16h2", "mid"], VIEWS[3], VIEWS[4], ["home-branches", "Branch", "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"]];
+  const NAV_ITEMS = () => [VIEWS[0], VIEWS[1], VIEWS[2], ["scan", "Scan", "M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M8 8v8M11 8v8M14 8v8M17 8v8", "mid"], VIEWS[3], VIEWS[4], ["home-branches", "Branch", "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"]];
 
   const derived = () => {
     const stock = new Map(), sold = new Map(), balance = new Map();
@@ -834,6 +834,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const navSub = view === "home" && (sub === "branches" || sub === "logbook") ? sub : null;
     container.replaceChildren(...NAV_ITEMS().map(([k, label, d, cls]) => {
       const subKey = k.startsWith("home-") ? k.slice(5) : null, cur = subKey ? navSub === subKey : view === k && !(k === "home" && navSub);
+      if (k === "scan") return h("a", { href: "#sell", class: (cls || "") + " nav-scan", "aria-label": L("Mabilis na scan", "Quick scan"), onclick: (e) => { e.preventDefault(); quickScan(); } }, withIcons ? svgIcon(d) : null, L("I-scan", "Scan"));
       return h("a", { href: "#" + k, class: cls || null, "aria-current": cur ? "page" : null, onclick: (e) => { e.preventDefault(); subKey ? go("home", subKey) : go(k); } }, withIcons ? svgIcon(d) : null, label);
     }));
     // tablet side bar: quick shortcuts in the empty space at the bottom
@@ -1196,6 +1197,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       dlg.addEventListener("close", () => finish(null), { once: true });
       open();
     });
+  }
+  /** The big middle button: straight to Sell and the scanner; every code read goes into the sale. */
+  async function quickScan() {
+    if (view !== "sell") go("sell");
+    const code = liveCameraAllowed() ? await liveScan(L("Mabilis na scan", "Quick scan")) : await externalScan(L("Mabilis na scan", "Quick scan"));
+    if (code === "__type__" || code === "__photo__") { const c = await scanBarcode({ ask: true }); if (c) incomingCode(c, "sell"); return; }
+    if (code) incomingCode(code, "sell");
   }
   /** A code from outside: the scanner tab, a Bluetooth/USB scanner, or a #scan- link. */
   function incomingCode(code, mode) {

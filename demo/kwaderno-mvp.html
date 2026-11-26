@@ -3976,7 +3976,7 @@ ${catalog}`;
   // ---------- SUPPLIER ORDERS: a sent order also goes to KELSON (the supplier) and pops up in the Super Admin ----------
   // Only what the supplier needs: store type, items, quantities, cost — never customer names. Everything else stays on this device.
   const BIZ_LABEL = { retail: "Sari-sari store", grocery: "Grocery", "food-pay": "Restaurant", "food-tab": "Restaurant" };
-  const SUP_ST = { new: ["Bago — hinihintay ang supplier", "New — waiting for the supplier"], accepted: ["Tinanggap ng supplier", "Accepted by the supplier"], delivering: ["Padating na", "Out for delivery"], received: ["Natanggap", "Received"], cancelled: ["Kinansela", "Cancelled"] };
+  const SUP_ST = { new: ["Bago — hinihintay ang supplier", "New — waiting for the supplier"], accepted: ["Tinanggap ng supplier", "Accepted by the supplier"], delivering: ["Padating na", "Out for delivery"], received: ["Natanggap", "Received"], cancelled: ["Kinansela", "Cancelled"], declined: ["Hindi tinanggap ng supplier", "Declined by the supplier"] };
   let supOrders = new Map(), supWatching = false;
   function watchMySupplyOrders() { if (supWatching || !S.db) return; supWatching = true;
     try { col("supplyorders").onSnapshot((snap) => { supOrders = new Map(snap.docs.map((d) => [d.id, d.data()])); if (view === "products") render(); }, () => {}); } catch { supWatching = false; } }
@@ -4053,6 +4053,7 @@ ${catalog}`;
           edit ? h("button", { class: "btn sm danger", "aria-label": L("Alisin", "Remove"), onclick: () => { o.lines = o.lines.filter((x) => x !== l); save(true); render(); } }, "×") : h("span"))))
           : h("div", { class: "empty", text: L("Wala pang laman ang order.", "This order is empty.") }),
         edit ? pick : null,
+        so && S.owner ? h("button", { class: "btn sm", id: "poAdminView", style: "justify-self:start", onclick: () => go("admin", "orders-" + o.id) }, "👁 Super Admin view") : null,
         so ? h("div", { class: "note", id: "poSupSt", style: "display:flex;gap:8px;align-items:center" }, h("span", { "aria-hidden": "true", text: so.status === "delivering" ? "🚚" : so.status === "accepted" ? "✅" : "📨" }),
           h("span", { text: L("Supplier (KELSON): ", "Supplier (KELSON): ") + L(...(SUP_ST[so.status] || [so.status, so.status])) })) : null,
         h("div", { class: "total" }, h("span", { class: "muted", text: L("Tantiyang halaga", "Estimated amount") }), h("span", { class: "v num", text: peso(orderTotal(o)) }))),
@@ -4415,6 +4416,7 @@ ${catalog}`;
     if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
     if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
     if (sub === "orders") return adminPage("orders", "Supplier orders — all stores", viewSupplyOrders());
+    if (sub && sub.startsWith("orders-")) { watchAdminOrders(); const o = allSupplyOrders().find((x) => x.id === sub.slice(7)); return adminPage("orders", o ? `Order · ${supStoreName(o)}` : "Order", o ? viewSupplyOrder(o) : h("div", { class: "card" }, h("p", { class: "muted", text: "Loading this order… If it doesn't appear, the store hasn't sent it to the supplier yet." }), h("button", { class: "btn", onclick: () => go("admin", "orders") }, "‹ All orders"))); }
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
     if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
     if (sub === "rules") return adminPage("rules", "Discount rules — all stores", viewRules());
@@ -4760,15 +4762,43 @@ ${catalog}`;
     document.body.append(box);
     if (voice.auto) setTimeout(say, sound ? 900 : 0);
   }
+  const supChip = (st) => h("span", { class: "chip " + (st === "new" ? "warn" : st === "received" ? "ok" : st === "cancelled" || st === "declined" ? "bad" : ""),
+    text: { new: "New", accepted: "Accepted", delivering: "Out for delivery", received: "Received by store", cancelled: "Cancelled by store", declined: "Declined" }[st] || st });
+  /** Super Admin: one supplier order — who, what, how much, its timeline and what to do next. */
+  function viewSupplyOrder(o) {
+    const st = S.stores.find((x) => x.id === o._store), lines = o.lines || [];
+    const step = (label, at) => h("li", {}, h("span", { text: (at ? "✅ " : "⬜ ") + label }), h("span", { class: "muted small", text: at ? when(at) : "—" }));
+    return h("div", { class: "grid", id: "supDetail" },
+      h("div", {}, h("button", { class: "btn sm", onclick: () => go("admin", "orders") }, "‹ All orders")),
+      h("div", { class: "card grid", style: "gap:6px" },
+        h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap" },
+          h("h2", { style: "margin:0", text: supStoreName(o) }), supChip(o.status)),
+        h("div", { class: "muted small", text: [BIZ_LABEL[o.bizType] || "Store", st?.barangay || st?.area || null, o.branch ? "branch order" : null, o.supplier ? "for " + o.supplier : null].filter(Boolean).join(" · ") }),
+        h("div", { class: "muted small", text: `Order ${String(o.id).slice(0, 8)} · sent ${when(o.sentAt)}` })),
+      h("div", { class: "card", style: "padding-block:4px" },
+        h("ul", { class: "list" }, lines.map((l) => h("li", {},
+          h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: l.name }), h("div", { class: "muted small", text: `${l.qty} ${l.unit || "pc"} × ${peso(l.cost || 0)}` })),
+          h("span", { class: "num", style: "font-weight:600", text: peso(Math.round((Number(l.qty) || 0) * (l.cost || 0))) })))),
+        h("div", { class: "total" }, h("span", { class: "muted", text: `${lines.length} item(s) · estimated total` }), h("span", { class: "v num", text: peso(o.total || 0) }))),
+      h("div", { class: "card" }, h("h2", { text: "Timeline", style: "margin-bottom:6px" }),
+        h("ul", { class: "list" }, step("Sent by the store", o.sentAt), step("Accepted", o.acceptedAt), step("Out for delivery", o.deliveringAt),
+          o.status === "cancelled" ? step("Cancelled by the store", o.cancelledAt || o.updatedAt) : o.status === "declined" ? step("Declined", o.declinedAt) : step("Received by the store", o.status === "received" ? o.receivedAt || o.updatedAt : null))),
+      h("div", { class: "pills" },
+        o.status === "new" ? h("button", { class: "btn primary", id: "supAccept", onclick: () => setSupplyStatus(o, "accepted") }, "✅ Accept") : null,
+        o.status === "accepted" ? h("button", { class: "btn primary", id: "supShip", onclick: () => setSupplyStatus(o, "delivering") }, "🚚 Out for delivery") : null,
+        o.status === "new" || o.status === "accepted" ? h("button", { class: "btn danger", onclick: async () => { if (await askYes("Decline this order?", "The store will see it was declined.", "Decline", "Keep it")) setSupplyStatus(o, "declined"); } }, "Decline") : null,
+        h("button", { class: "btn", onclick: async () => { try { await navigator.clipboard.writeText([`${supStoreName(o)} — ${BIZ_LABEL[o.bizType] || "Store"}`, ...lines.map((l) => `• ${l.qty} ${l.unit || "pc"} — ${l.name}`), `Total: ${peso(o.total || 0)}`].join("\n")); toast("Copied the picking list"); } catch { toast("Couldn't copy"); } } }, "📋 Copy picking list")),
+      h("p", { class: "muted small", text: "The store sends only items, quantities and cost — no customer names. The store marks the order received when it arrives." }));
+  }
   function viewSupplyOrders() {
     watchAdminOrders();
     const all = allSupplyOrders(), open = all.filter((o) => o.status === "new" || o.status === "accepted" || o.status === "delivering");
     const byBiz = (k) => all.filter((o) => (BIZ_LABEL[o.bizType] || "Store") === k).length;
-    const chip = (st) => h("span", { class: "chip " + (st === "new" ? "warn" : st === "received" ? "ok" : st === "cancelled" ? "bad" : ""), text: st === "new" ? "New" : st === "accepted" ? "Accepted" : st === "delivering" ? "Out for delivery" : st === "received" ? "Received by store" : "Cancelled" });
+    const chip = supChip;
     return h("div", { class: "grid" },
       h("div", { class: "kpis" }, kpiBox("Open orders", String(open.length), "new, accepted or on the way"), kpiBox("New", String(all.filter((o) => o.status === "new").length), "waiting for you"),
         kpiBox("Sari-sari", String(byBiz("Sari-sari store"))), kpiBox("Grocery", String(byBiz("Grocery"))), kpiBox("Restaurant", String(byBiz("Restaurant")))),
-      all.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list", id: "supList" }, all.map((o) => h("li", { style: "align-items:flex-start;flex-wrap:wrap" },
+      all.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list", id: "supList" }, all.map((o) => h("li", { style: "align-items:flex-start;flex-wrap:wrap;cursor:pointer", onclick: (e) => { if (!e.target.closest("button")) go("admin", "orders-" + o.id); } },
         h("div", { class: "grow", style: "min-width:200px" }, h("div", { style: "font-weight:600", text: `${supStoreName(o)} · ${BIZ_LABEL[o.bizType] || "Store"}` }),
           h("div", { class: "muted small", text: `${(o.lines || []).length} item(s) · ${when(o.sentAt)}${o.supplier ? " · for " + o.supplier : ""}` }),
           h("div", { class: "small", text: (o.lines || []).slice(0, 4).map((l) => `${l.qty} ${l.unit || "pc"} ${l.name}`).join(" · ") + ((o.lines || []).length > 4 ? " …" : "") })),

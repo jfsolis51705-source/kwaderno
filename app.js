@@ -214,6 +214,7 @@
   // ---------- camera ----------
   let stream = null, track = null, running = false, paused = false, starting = false, loopT = 0, tick = 0, busy = false;
   let caps = {}, torchOn = false, last = { text: "", at: 0 }, holdUntil = 0;
+  const GONE_MS = 900; // how long a code must be out of view before the same code counts again
   const video = $("video");
 
   async function startCamera() {
@@ -303,7 +304,9 @@
   let batch = store.get(BATCH_KEY, false), batchCodes = [];
   function found(hit, src) {
     const text = String(hit.text).trim(), now = Date.now();
-    if (text === last.text && now - last.at < 2000) return; // same code still in front of the camera
+    // Counting identical items (10 cans = same barcode 10 times): the same code counts again only after it has
+    // left the camera's view for a moment — a can held still is never counted twice. Scanners/typing always count.
+    if (src === "camera" && text === last.text && now - last.at < GONE_MS) { last.at = now; return; }
     last = { text, at: now };
     const item = { id: now + "-" + Math.random().toString(36).slice(2, 7), value: text, format: fmtName(hit.format), source: src === "hid" ? "Bluetooth/USB scanner" : src === "typed" ? "Typed" : "Camera", timestamp: now };
     addHistory(item); beep(true);
@@ -371,7 +374,7 @@
         }).catch(() => { if (!ctl.signal.aborted) { $("resName").textContent = "Couldn't look it up (offline?)"; } });
     }
   }
-  function closeResult() { $("result").hidden = true; offCtl?.abort(); holdUntil = Date.now() + 600; status(running ? "Scanning…" : "Camera off", running); if (!running) startCamera(); }
+  function closeResult() { $("result").hidden = true; offCtl?.abort(); holdUntil = Date.now() + 600; last.at = Date.now() + 600; /* the code just read is probably still in view */ status(running ? "Scanning…" : "Camera off", running); if (!running) startCamera(); }
 
   /** Draws an EAN-13 / UPC-A / EAN-8 barcode as SVG (like the code on the pack). */
   function eanSvg(code) {
@@ -459,10 +462,15 @@
   // ---------- batch (continuous) ----------
   function renderBatch() {
     $("batch").hidden = !batch; $("batchBtn").setAttribute("aria-pressed", String(batch));
-    $("batchCount").textContent = `${batchCodes.length} scanned` + (KW && opener ? " · sent to KWADERNO" : "");
+    // one line per code with how many times it was scanned (10 cans of the same product = ×10)
+    const groups = new Map(); for (const x of batchCodes) { const g = groups.get(x.value) || { value: x.value, format: x.format, n: 0 }; g.n++; groups.set(x.value, g); }
+    $("batchCount").textContent = `${batchCodes.length} scanned · ${groups.size} product(s)` + (KW && opener ? " · sent to KWADERNO" : "");
     $("batchSend").hidden = !(KW && !opener && batchCodes.length);
     const ul = $("batchList"); ul.replaceChildren();
-    for (const x of batchCodes.slice(0, 50)) { const li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("span"); a.textContent = x.value; b.className = "badge"; b.textContent = x.format; li.append(a, b); ul.append(li); }
+    for (const g of [...groups.values()].slice(0, 50)) {
+      const li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("b"), f = document.createElement("span");
+      a.textContent = g.value + " "; f.className = "badge"; f.textContent = g.format; a.append(f); b.className = "num"; b.textContent = "×" + g.n; li.append(a, b); ul.append(li);
+    }
   }
 
   // ---------- wiring ----------

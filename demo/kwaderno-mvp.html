@@ -132,8 +132,9 @@ nav.bottom { display: none; }
 :root[data-layout="tablet"] nav.bottom .rail-grid { display: flex; flex-direction: column; gap: 2px; }
 :root[data-layout="tablet"].landscape nav.bottom .rail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; }
 :root[data-layout="tablet"].landscape nav#bottom > a { flex-direction: row; justify-content: flex-start; gap: 10px; padding: 0 14px; min-height: 44px; font-size: .86rem; }
-:root[data-layout="tablet"]:not(.landscape) nav#bottom > a { min-height: 56px; }
-:root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 44px; font-size: .64rem; padding: 2px; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom > a { min-height: 50px; gap: 2px; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom { gap: 1px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 8px; }
+:root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 40px; font-size: .64rem; padding: 2px; }
 :root[data-layout="tablet"].landscape nav#bottom a.rail-x { min-height: 46px; }
 :root[data-layout="tablet"] .rail-x .rx-l { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root[data-layout="tablet"] nav.bottom .rail-spacer { display: block; flex: 0 0 auto; height: 1px; background: var(--line); margin: 6px 10px; }

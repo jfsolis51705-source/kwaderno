@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KWADERNO Pay Alert</string>
+    <string name="listener_label">KWADERNO Pay Alert — reads GCash, Maya and bank payment notifications</string>
+</resources>

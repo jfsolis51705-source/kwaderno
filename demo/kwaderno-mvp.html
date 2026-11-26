@@ -136,6 +136,9 @@ nav.bottom { display: none; }
 :root[data-layout="tablet"]:not(.landscape) nav#bottom { gap: 1px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 8px; }
 :root[data-layout="tablet"] nav#bottom a.rail-x { min-height: 40px; font-size: .64rem; padding: 2px; }
 :root[data-layout="tablet"].landscape nav#bottom a.rail-x { min-height: 46px; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom > a { min-height: 46px; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom a.rail-x { min-height: 35px; }
+:root[data-layout="tablet"]:not(.landscape) nav#bottom a.rail-x svg { width: 18px; height: 18px; }
 :root[data-layout="tablet"] .rail-x .rx-l { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 :root[data-layout="tablet"] nav.bottom .rail-spacer { display: block; flex: 0 0 auto; height: 1px; background: var(--line); margin: 6px 10px; }
 :root[data-layout="tablet"] nav.bottom a.rail-x { display: flex; min-height: 52px; font-size: .7rem; text-align: center; line-height: 1.15; }
@@ -169,14 +172,14 @@ nav.bottom { display: none; }
 .list.po li > div > div:first-child { font-weight: 600; line-height: 1.2; }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
-#stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
-#stockAlert .sa { width: 100%; max-width: 380px; max-height: 100%; overflow: auto; background: var(--surface); color: var(--text, inherit); border-radius: 18px; padding: 18px; display: grid; gap: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.35); border-top: 6px solid var(--bad); }
-#stockAlert .sa h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
-#stockAlert .sa ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-#stockAlert .sa li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2, rgba(0,0,0,.04)); }
-#stockAlert .sa li b.out { color: var(--bad); }
-#stockAlert .demo-tag { font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 99px; background: #fff1c2; color: #7a5600; }
-@media (prefers-reduced-motion: no-preference) { #stockAlert .sa { animation: saPop .25s ease-out; } @keyframes saPop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } } }
+#stockAlert, #orderAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
+#stockAlert .sa, #orderAlert .sa { width: 100%; max-width: 380px; max-height: 100%; overflow: auto; background: var(--surface); color: var(--text, inherit); border-radius: 18px; padding: 18px; display: grid; gap: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.35); border-top: 6px solid var(--bad); }
+#stockAlert .sa h2, #orderAlert .sa h2 { margin: 0; display: flex; align-items: center; gap: 8px; }
+#stockAlert .sa ul, #orderAlert .sa ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+#stockAlert .sa li, #orderAlert .sa li { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2, rgba(0,0,0,.04)); }
+#stockAlert .sa li b.out, #orderAlert .sa li b.out { color: var(--bad); }
+#stockAlert .demo-tag, #orderAlert .demo-tag { font-size: .72rem; font-weight: 700; letter-spacing: .04em; padding: 2px 8px; border-radius: 99px; background: #fff1c2; color: #7a5600; }
+@media (prefers-reduced-motion: no-preference) { #stockAlert .sa, #orderAlert .sa { animation: saPop .25s ease-out; } @keyframes saPop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } } }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a { font-size: .66rem; }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a.mid { overflow: visible; }
 :root[data-layout="phone"]:not(.landscape) nav.bottom a.mid svg { width: 26px; height: 26px; padding: 11px; box-sizing: content-box; margin-top: -30px; border-radius: 50%; background: var(--accent); color: #fff; border: 4px solid var(--surface); box-shadow: 0 4px 14px rgba(0,0,0,.22); }
@@ -648,7 +651,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   })();
   // Tests can keep everything in the stub cloud store to check old behaviour; the app itself always uses the device.
   const deviceStore = () => !window.__kwCloudStoreForTests;
-  const SHARED_RE = /^(questions|submissions|pinreset)(\/|$)/; // these go to KELSON on purpose
+  const SHARED_RE = /^(questions|submissions|pinreset|supplyorders)(\/|$)/; // these go to KELSON on purpose (supplyorders: orders sent to the KELSON supplier — items and quantities only)
   const storeDb = (rel) => (deviceStore() && !SHARED_RE.test(rel) ? LDB : S.db);
   const col = (name) => storeDb(name).collection(S.base + name);
   const ref = (path) => storeDb(path).doc(S.base + path);
@@ -701,7 +704,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     document.documentElement.classList.add("lockwait"); setTimeout(() => { if (!S.branchDocLoaded) { S.branchDocLoaded = true; checkOpenLock(); } }, 8000);
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
-    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); try { watchAdminOrders(); } catch { /* later */ } scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/rules").onSnapshot((d) => { S.rules = d.exists ? d.data() : null; render(); }, () => {});
     db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
     rootRef("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
@@ -712,7 +715,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
     await moveToDevice();
-    rootRef("store/branches").onSnapshot((d) => { S.branchDoc = d.exists ? d.data() : {}; S.branches = S.branchDoc.list || []; S.branchDocLoaded = true; checkOpenLock(); render(); }, () => { S.branchDocLoaded = true; checkOpenLock(); });
+    rootRef("store/branches").onSnapshot((d) => { S.branchDoc = d.exists ? d.data() : {}; S.branches = S.branchDoc.list || []; S.branchDocLoaded = true; checkOpenLock(); try { watchAdminOrders(); } catch { /* later */ } render(); }, () => { S.branchDocLoaded = true; checkOpenLock(); });
     rootRef("store/branchsum").onSnapshot((d) => { S.branchSum = d.exists ? d.data() : {}; if (sub === "branches") render(); }, () => {});
     subscribeStore();
   }
@@ -1071,7 +1074,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "bar" }, h("button", { class: "btn", onclick: () => end(null) }, L("Kanselahin", "Cancel")), h("button", { class: "btn", onclick: () => end("__type__") }, L("I-type ang numero", "Type the number"))));
       document.body.append(box);
       const c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
-      let det = null, ZX = null, reader = null;
+      let det = null, ZX = null, reader = null, pass = true;
       const tick = async () => {
         if (stopped) return;
         if (!busy && video.videoWidth) {
@@ -1080,7 +1083,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
             // map the on-screen rectangle to the camera picture (the video fills the screen, cropped like object-fit: cover)
             const vr = video.getBoundingClientRect(), fr = frame.getBoundingClientRect();
             const sc = Math.max(vr.width / video.videoWidth, vr.height / video.videoHeight), ox = (vr.width - video.videoWidth * sc) / 2, oy = (vr.height - video.videoHeight * sc) / 2;
-            const sx = (fr.left - vr.left - ox) / sc, sy = (fr.top - vr.top - oy) / sc, sw = fr.width / sc, sh = fr.height / sc;
+            let sx = (fr.left - vr.left - ox) / sc, sy = (fr.top - vr.top - oy) / sc, sw = fr.width / sc, sh = fr.height / sc;
+            // every other frame: the whole width of the picture across the box, for a barcode held close that sticks out past the box
+            if ((pass = !pass)) { const cy = sy + sh / 2; sh = Math.min(video.videoHeight, sh * 1.3); sy = Math.max(0, cy - sh / 2); sx = 0; sw = video.videoWidth; }
             const k = Math.min(2, 1100 / sw); c.width = Math.round(sw * k); c.height = Math.round(sh * k);
             g.drawImage(video, sx, sy, sw, sh, 0, 0, c.width, c.height);
             let code = null;
@@ -1920,20 +1925,22 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- VOICE: speak a question, hear the answer ----------
   // Listening turns speech into text only (Claude page dictation, or the browser's own speech recognition);
   // the answer still comes from the rule-based analyst. Reading aloud uses the phone's own voices first (free, offline).
-  const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null, auto: true, style: "uk" };
+  const voice = { dict: undefined, tts: undefined, listening: false, speaking: false, said: "", rec: null, auto: true, style: "uk", engine: "claude", claudeVoice: "buttery", ttsTok: 0, ttsStarted: false };
+  const CLAUDE_VOICES = ["buttery", "airy", "glassy", "rounded"];
+  try { voice.engine = localStorage.getItem("kw-voice-engine") === "device" ? "device" : "claude"; const cv = localStorage.getItem("kw-voice-claude"); if (CLAUDE_VOICES.includes(cv)) voice.claudeVoice = cv; } catch { /* defaults */ }
   try { voice.style = localStorage.getItem("kw-voice-style") === "std" ? "std" : "uk"; voice.tlStyle = ["std", "friendly"].includes(localStorage.getItem("kw-voice-tl")) ? localStorage.getItem("kw-voice-tl") : "calm";
     voice.tlGender = localStorage.getItem("kw-voice-tl-g") === "female" ? "female" : "male"; voice.enGender = localStorage.getItem("kw-voice-en-g") === "female" ? "female" : "male"; } catch { voice.tlStyle = "calm"; voice.tlGender = "male"; voice.enGender = "male"; }
   // Some browsers load their voice list late; ask once so the British voice is ready for the first answer.
   try { window.speechSynthesis?.getVoices(); window.speechSynthesis?.addEventListener?.("voiceschanged", () => {}); } catch { /* no speech here */ }
   function voiceInit() {
-    if (voice.dict !== undefined) return;
+    if (voice.dict !== undefined || !window.claude?.use) return;
     voice.dict = null; voice.tts = null;
     window.claude?.use?.("dictation").then((d) => { voice.dict = d; if (!d) return;
       d.onPartial(({ text }) => setDraft((voice.said + " " + text).trim()));
       d.onFinal(({ text }) => { voice.said = (voice.said + " " + text).trim(); setDraft(voice.said); });
       d.onState(({ state }) => { voice.listening = state === "listening"; micState(); if (state === "idle") { const t = voice.said; voice.said = ""; if (t) askNow(t); } });
     }).catch(() => {});
-    window.claude?.use?.("tts").then((t) => { voice.tts = t; t?.onState(({ state }) => { voice.speaking = state === "speaking"; speakState(); }); }).catch(() => {});
+    window.claude?.use?.("tts").then((t) => { voice.tts = t; t?.onState(({ state }) => { if (state === "speaking") voice.ttsStarted = true; voice.speaking = state === "speaking"; speakState(); }); }).catch(() => {});
   }
   const setDraft = (t) => { askState.draft = t; const i = document.getElementById("aiQ"); if (i) i.value = t; };
   const micState = () => { const b = document.getElementById("aiMic"); if (b) { b.setAttribute("aria-pressed", String(voice.listening)); b.classList.toggle("primary", voice.listening); } };
@@ -1997,6 +2004,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function speakNow(r) { withLang(r.lang || lang, () => speakIn(r)); }
   function speakIn(r) {
     window.speechSynthesis?.cancel(); voice.tts?.stop?.();
+    // Claude's own voice first (claude.ai in a browser); the phone's voice where it isn't offered (Claude apps, Safari) or if it fails to start
+    if (voice.engine === "claude" && voice.tts && !r.device) {
+      const tok = ++voice.ttsTok, rl = lang, en0 = lang === "en"; voice.ttsStarted = false;
+      voice.using = "Claude · " + voice.claudeVoice; voice.substitute = false;
+      voice.tts.speak(speechText(r), { voice: voice.claudeVoice, rate: 0.95, ...(en0 ? { language: "en" } : {}) }).catch(() => {
+        if (tok === voice.ttsTok && !voice.ttsStarted && voice.speaking) withLang(rl, () => speakIn({ ...r, device: true }));
+      });
+      voice.speaking = true; speakState(); return;
+    }
     const text = speechText(r), en = lang === "en", want = en ? /^en/i : /^(fil|tl)/i, uk = en && voice.style === "uk", friendly = !en && voice.tlStyle === "friendly", calm = !en && voice.tlStyle === "calm";
     const gender = en ? voice.enGender : voice.tlGender;
     const all = window.speechSynthesis?.getVoices?.() || [];
@@ -2004,7 +2020,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     // No Filipino voice on this device: use the closest-sounding one (Indonesian, Malay, Spanish, then English), never a random default
     if (!en && !v.voice) for (const re of [/^id/i, /^ms/i, /^es/i, /^en[-_]PH/i, /^en/i]) { v = pickVoice(all, re, gender, false); if (v.voice) { v.substitute = true; break; } }
     voice.using = v.voice ? `${v.voice.name} (${v.voice.lang})` : ""; voice.substitute = !!v.substitute;
-    if (window.speechSynthesis && (v.voice || !voice.tts)) {
+    if (window.speechSynthesis && (v.voice || !voice.tts || r.device || voice.engine === "device")) {
       const u = new SpeechSynthesisUtterance(text); try { if (v.voice) u.voice = v.voice; } catch { /* keep the default voice */ }
       u.lang = v.voice?.lang || (en ? (uk ? "en-GB" : "en-PH") : all.length ? "en-US" : "fil-PH");
       // "assistant" delivery: a low, steady male voice that doesn't rush — British for English, calm for Tagalog
@@ -2117,6 +2133,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           h("button", { role: "radio", "aria-checked": String(replyPref === k), "aria-pressed": String(replyPref === k), onclick: () => { replyPref = k; try { localStorage.setItem("kw-reply", k); } catch { /* ignore */ }
             if (askState.res && askState.q) { const rl = replyLangFor(askState.q); askState.res = withLang(rl, () => answerQuestion(askState.q, null)); if (askState.res) askState.res.lang = rl; }
             render(); draw(); } }, l2)))),
+      h("div", { class: "f" }, h("span", { class: "small", style: "font-weight:600", text: L("Boses", "Voice") }),
+        voice.tts ? h("select", { id: "aiVoiceEngine", onchange: (e) => { voice.engine = e.target.value; try { localStorage.setItem("kw-voice-engine", voice.engine); } catch { /* ignore */ } draw(); } },
+          h("option", { value: "claude", text: L("Boses ni Claude", "Claude's voice"), selected: voice.engine === "claude" }), h("option", { value: "device", text: L("Boses ng phone", "Phone's voice"), selected: voice.engine === "device" })) : null,
+        voice.tts && voice.engine === "claude" ? h("div", { class: "row", style: "gap:8px;margin-top:6px" },
+          h("select", { id: "aiVoiceClaude", "aria-label": L("Aling boses ni Claude", "Which Claude voice"), style: "flex:1", onchange: (e) => { voice.claudeVoice = e.target.value; try { localStorage.setItem("kw-voice-claude", voice.claudeVoice); } catch { /* ignore */ } } },
+            CLAUDE_VOICES.map((k) => h("option", { value: k, text: k[0].toUpperCase() + k.slice(1) + (k === "buttery" ? L(" (default)", " (default)") : ""), selected: voice.claudeVoice === k }))),
+          h("button", { class: "btn sm", id: "aiClaudeSample", onclick: () => speakAssistant({ lang: "en", title: "Good day.", lines: ["Your sales today are 250 pesos. Coke Mismo is running low."] }) }, L("▶ Subukan", "▶ Sample"))) : null,
+        h("div", { class: "muted small", style: "margin-top:4px", text: voice.tts ? L("Ang boses ni Claude ay gumagana sa claude.ai sa browser. Kapag hindi ito available, boses ng phone ang gamit.", "Claude's voice works on claude.ai in a browser. Where it isn't available, the phone's voice is used.")
+          : L("Wala ang boses ni Claude dito (Claude app o Safari), kaya boses ng phone ang gamit.", "Claude's voice isn't offered here (Claude app or Safari), so the phone's voice is used.") })),
       h("label", { class: "f" }, L("Boses sa Tagalog", "Tagalog voice"),
         h("select", { id: "aiVoiceTl", onchange: (e) => { voice.tlStyle = e.target.value; try { localStorage.setItem("kw-voice-tl", voice.tlStyle); } catch { /* ignore */ } } },
           h("option", { value: "calm", text: L("Kalmado (assistant)", "Calm (assistant)"), selected: voice.tlStyle === "calm" }), h("option", { value: "friendly", text: L("Masigla (friendly)", "Friendly"), selected: voice.tlStyle === "friendly" }), h("option", { value: "std", text: "Standard", selected: voice.tlStyle === "std" })),
@@ -2507,7 +2532,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const checks = (set, list) => h("div", { style: "display:flex;flex-wrap:wrap;gap:6px 14px" }, list.map((c) => h("label", { class: "small", style: "display:flex;gap:6px;align-items:center" },
       h("input", { type: "checkbox", checked: set.has(c), onchange: (e) => { e.target.checked ? set.add(c) : set.delete(c); } }), c)));
     const bizBox = h("div", { class: "methods", style: "grid-template-columns:repeat(auto-fit,minmax(150px,1fr))", role: "radiogroup" });
-    const drawBiz = () => bizBox.replaceChildren(...[["retail", L("Tingi / sari-sari", "Retail / sari-sari")], ["food-pay", L("Kainan: bayad agad", "Food: pay as you order")], ["food-tab", L("Kainan: open bill", "Food: open billing")]].map(([k, l]) =>
+    const drawBiz = () => bizBox.replaceChildren(...[["retail", L("Tingi / sari-sari", "Retail / sari-sari")], ["grocery", L("Grocery / mini-mart", "Grocery / mini-mart")], ["food-pay", L("Kainan: bayad agad", "Food: pay as you order")], ["food-tab", L("Kainan: open bill", "Food: open billing")]].map(([k, l]) =>
       h("button", { role: "radio", "aria-checked": String(biz === k), onclick: () => { biz = k; drawBiz(); } }, l)));
     drawBiz();
     return h("div", { class: "view" },
@@ -2852,14 +2877,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- LOW-STOCK ALERT: pop-up + sound + voice when an item drops to its reorder level ----------
   // Real sales trigger it as they happen. Demo mode (on by default for the pilot) also shows it 5 s after opening
   // and plays a simulated sale every minute — simulated sales live only on this screen and are never saved.
-  const SA = { known: null, demoSold: new Map(), demoT: null, firstT: null, checkT: null, ctx: null, open: false, lastSale: null, remT: null, remStep: 0, lowI: 0, expI: 0 };
+  const SA = { known: null, demoSold: new Map(), demoT: null, firstT: null, checkT: null, ctx: null, open: false, lastSale: null, remT: null, remStep: 0, lowI: 0, expI: 0, expT: null, expDayT: null, ordT: null };
   const prefOn = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch { return d; } };
   const setPref = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch { /* ignore */ } };
   const alertsOn = () => prefOn("kw-stockalert", true), demoOn = () => prefOn("kw-demoalerts", false), remindersOn = () => prefOn("kw-reminders", true);
   const effStock = (id) => stockOf(id) - (SA.demoSold.get(id) || 0);
   const lowNow = () => activeProducts().filter((p) => (p.reorder || 0) > 0 || stockOf(p.id) > 0).filter((p) => effStock(p.id) <= (p.reorder || 0))
     .sort((a, b) => effStock(a.id) - (a.reorder || 0) - (effStock(b.id) - (b.reorder || 0)));
-  function resetStockAlerts() { SA.known = null; SA.demoSold.clear(); clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); SA.firstT = SA.demoT = SA.remT = null; SA.remStep = 0; document.getElementById("stockAlert")?.remove(); SA.open = false; }
+  function resetStockAlerts() { SA.known = null; SA.demoSold.clear(); clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); clearTimeout(SA.expT); clearInterval(SA.expDayT); SA.firstT = SA.demoT = SA.remT = SA.expT = SA.expDayT = null; SA.remStep = 0; document.getElementById("stockAlert")?.remove(); SA.open = false; }
   // sound: a short two-tone chime, made in the browser (no file). Browsers allow sound only after the first tap.
   function chime() {
     try {
@@ -2922,14 +2947,58 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (fresh.length || why === "demo") showStockAlert(why === "demo" ? low : [...fresh, ...low.filter((p) => !fresh.includes(p))], why);
   }
   function startDemo() {
-    clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); SA.remStep = 0;
+    clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); clearTimeout(SA.expT); clearInterval(SA.expDayT); SA.remStep = 0;
+    try { voiceInit(); } catch { /* voice loads later */ }
+    if (alertsOn() && expAlertOn()) { SA.expT = setTimeout(checkExpiry, 2000); SA.expDayT = setInterval(checkExpiry, 30 * 60000); } // on opening, then twice an hour (catches midnight)
     if (alertsOn() && remindersOn()) scheduleReminder();
     if (alertsOn() && demoOn()) SA.demoT = setInterval(demoSale, 60000);
   }
   // ---------- REMINDERS: one low-stock item and one expiring item, a different one each time ----------
   // first after 5 s, then 30 s later, then 1 minute later, then every minute
   const REM_DELAYS = [5000, 30000, 60000], APP_T0 = Date.now(); // the first one counts from when the app opened
-  const expiringNow = () => activeExpiries().filter((e) => daysLeft(e.date) <= 7).sort((a, b) => a.date.localeCompare(b.date));
+  // ---------- EXPIRY ALERT: warns ahead of time, once at each step (30, 14, 7, 3, 1 day before, on the day, expired) ----------
+  const EXP_LEADS = [30, 14, 7, 3, 1], EXP_MARKS = [30, 14, 7, 3, 1, 0, -1];
+  const expAlertOn = () => prefOn("kw-expalert", true);
+  const expLead = () => { try { const n = +localStorage.getItem("kw-exp-lead"); return EXP_LEADS.includes(n) ? n : 7; } catch { return 7; } };
+  const expMark = (d) => (d < 0 ? -1 : EXP_MARKS.filter((m) => m >= 0 && m >= d).pop()); // the step this batch has reached
+  const expSeen = () => { try { return JSON.parse(localStorage.getItem("kw-exp-alerted") || "{}") || {}; } catch { return {}; } };
+  const expiringNow = () => activeExpiries().filter((e) => daysLeft(e.date) <= expLead()).sort((a, b) => a.date.localeCompare(b.date));
+  function checkExpiry(force) {
+    if (!alertsOn() || !expAlertOn() || !S.ready || view === "admin") return;
+    if (SA.open || dlg.open || document.hidden || document.getElementById("lock") || document.getElementById("liveScan")) { clearTimeout(SA.expT); SA.expT = setTimeout(checkExpiry, 8000); return; }
+    const seen = expSeen(), list = expiringNow();
+    const due = force ? list : list.filter((e) => seen[e.id] !== expMark(daysLeft(e.date)));
+    if (!due.length) return;
+    const next = {}; for (const e of list) next[e.id] = force ? seen[e.id] ?? expMark(daysLeft(e.date)) : expMark(daysLeft(e.date)); // forget batches that are gone
+    if (!force) try { localStorage.setItem("kw-exp-alerted", JSON.stringify(next)); } catch { /* ignore */ }
+    showExpiryAlert(due);
+  }
+  function showExpiryAlert(items) {
+    if (!items.length || view === "admin" || document.getElementById("lock") || dlg.open) return;
+    document.getElementById("stockAlert")?.remove();
+    const close = () => { box.remove(); SA.open = false; window.speechSynthesis?.cancel(); voice.tts?.stop?.(); };
+    const expired = items.filter((e) => daysLeft(e.date) < 0).length;
+    const top = items.slice(0, 3).map((e) => { const p = productById(e.productId); return p ? `${p.name} ${expWhen(e.date, true)}.` : null; }).filter(Boolean);
+    const speech = { lang: "en", title: expired ? "A word on expiry dates." : "A heads-up on expiry dates.",
+      lines: [...top, items.length > 3 ? `And ${items.length - 3} more.` : null, expired ? "Please take expired items off the shelf." : "I'd suggest selling these first, or putting them on promo."].filter(Boolean) };
+    const sound = chime(), say = () => { try { speakAssistant(speech); } catch { /* no voice */ } };
+    const box = h("div", { id: "stockAlert", class: "exp-alert", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "saTitle", onclick: (e) => { if (e.target === box) close(); } },
+      h("div", { class: "sa" },
+        h("h2", { id: "saTitle" }, h("span", { "aria-hidden": "true", text: "⏰" }), expired ? L("May expired na!", "Items have expired!") : L("Malapit nang mag-expire", "Expiring soon")),
+        h("div", { class: "small muted", text: L(`Paalala ${expLead()} araw bago ang expiry date`, `Alert ${expLead()} day${expLead() === 1 ? "" : "s"} before the expiry date`) }),
+        h("ul", {}, items.slice(0, 6).map((e) => { const p = productById(e.productId), d = daysLeft(e.date);
+          return h("li", {}, h("span", { text: (p?.name || "?") + (e.qty ? ` · ${e.qty} ${p?.unit || "pc"}` : "") }), h("b", { class: d <= 1 ? "out" : null, text: `${expWhen(e.date, lang === "en")} (${e.date})` })); })),
+        items.length > 6 ? h("div", { class: "small muted", text: L(`+ ${items.length - 6} pa`, `+ ${items.length - 6} more`) }) : null,
+        h("div", { class: "small muted", text: expired ? L("Alisin sa estante ang expired.", "Take expired items off the shelf.") : L("Unahing ibenta ang mga ito (FIFO) o i-promo.", "Sell these first (FIFO) or put them on promo.") }),
+        sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
+        h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
+          h("button", { class: "btn primary", style: "flex:1", id: "expGo", onclick: () => { close(); go("products", "expiry"); } }, L("⏰ Tingnan ang expiry", "⏰ Open expiry list")),
+          h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
+          h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
+        h("div", { class: "small muted", text: L("Babalik ang alerto sa susunod na hakbang (hal. 3 araw, 1 araw, sa araw mismo). Baguhin sa Settings.", "It alerts again at the next step (e.g. 3 days, 1 day, on the day). Change it in Settings.") })));
+    ($("#screen") || document.body).append(box); SA.open = true;
+    if (voice.auto) setTimeout(say, sound ? 900 : 0);
+  }
   function scheduleReminder(delay) {
     clearTimeout(SA.remT);
     SA.remT = setTimeout(remindTick, delay ?? (SA.remStep === 0 ? Math.max(300, REM_DELAYS[0] - (Date.now() - APP_T0)) : REM_DELAYS[Math.min(SA.remStep, REM_DELAYS.length - 1)]));
@@ -3049,6 +3118,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         L("Paalala sa paubos at expiry: 5 segundo pagbukas, saka 30 segundo, 1 minuto, at bawat minuto — ibang paninda bawat paalala", "Low-stock and expiry reminders: 5 s after opening, then 30 s, 1 minute, then every minute — a different item each time")),
       h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, h("button", { class: "btn", onclick: () => { chime(); const lows = lowNow(), exps = expiringNow(); showReminder(lows[SA.lowI++ % Math.max(1, lows.length)] || null, exps[SA.expI++ % Math.max(1, exps.length)] || null, { lowN: lows.length, lowPos: lows.length ? ((SA.lowI - 1) % lows.length) + 1 : 0, expN: exps.length, expPos: exps.length ? ((SA.expI - 1) % exps.length) + 1 : 0 }); } }, L("Subukan ngayon", "Test now")),
         SA.demoSold.size ? h("button", { class: "btn", onclick: () => { SA.demoSold.clear(); SA.known = null; checkStock("real"); toast(L("Na-reset ang demo", "Demo reset")); render(); } }, L("I-reset ang demo", "Reset demo")) : null),
+      h("div", { class: "card grid", style: "margin:0" }, h("h2", { text: L("⏰ Alerto bago mag-expire", "⏰ Alert before expiry") }),
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "expOn", checked: expAlertOn(), onchange: (e) => { setPref("kw-expalert", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
+          L("Pop-up, tunog at boses bago mag-expire ang isang batch", "Pop-up, sound and voice before a batch expires")),
+        h("label", { class: "f" }, L("Unang alerto", "First alert"),
+          h("select", { id: "expLead", onchange: (e) => { try { localStorage.setItem("kw-exp-lead", e.target.value); localStorage.removeItem("kw-exp-alerted"); } catch { /* ignore */ } } },
+            EXP_LEADS.map((n) => h("option", { value: String(n), text: L(`${n} araw bago`, `${n} day${n === 1 ? "" : "s"} before`), selected: expLead() === n })))),
+        h("div", { class: "muted small", text: L("Inuulit sa 30, 14, 7, 3 at 1 araw bago, sa araw mismo, at kapag expired na — isang beses bawat hakbang.", "Repeats at 30, 14, 7, 3 and 1 day before, on the day, and once expired — once per step.") }),
+        h("button", { class: "btn", id: "expTest", onclick: () => { const l = expiringNow(); if (l.length) showExpiryAlert(l); else toast(L("Walang malapit mag-expire ngayon", "Nothing is near its expiry date")); } }, L("Subukan ngayon", "Test now"))),
       h("div", { class: "muted small", text: L("Nakasunod ang boses sa mute at sa piniling boses sa Ask Kwaderno.", "The voice follows the mute switch and voice choice in Ask Kwaderno.") })));
   }
 
@@ -3821,6 +3898,7 @@ ${catalog}`;
             if (total > 0 && si.pay === "later") { const d = new Date(); d.setDate(d.getDate() + Math.max(0, Math.min(120, parseInt(si.dueDays, 10) || 7))); await write("expenses/" + uid(), { kind: "bill", purchase: true, name: (supplier || "Supplier") + (ref ? " #" + ref : "") + " (stock)", category: "stock", amount: total, due: dayKey(d.toISOString()), repeat: "none", paid: false, deleted: false, at, by: S.me || null, batch }); }
             if (Object.keys(restockDoc.checked || {}).length) { for (const l of stockLines) { delete restockDoc.checked[l.productId]; delete restockDoc.qty[l.productId]; } await saveRestock(); }
             if (si.orderId) { const o = S.porders.find((x) => x.id === si.orderId); if (o) await write("porders/" + o.id, { ...strip(o), status: "received", receivedAt: at, received: stockLines.map((l) => ({ productId: l.productId, qty: Number(l.qty), cost: toCentavos(l.cost) })) }); }
+            if (si.orderId && supOrders.has(si.orderId)) { const o = S.porders.find((x) => x.id === si.orderId); if (o) pushSupplyOrder({ ...o, sentAt: supOrders.get(o.id).sentAt }, "received"); }
             const wasOrder = si.orderId;
             toast(wasOrder ? L("Natanggap ang order — nadagdag ang stock", "Order received — stock added") : `Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; Object.assign(si, { supplier: "", ref: "", unmatched: [], note: "", orderId: null }); go("products", wasOrder ? "orders" : null);
           } catch (err) { e.target.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
@@ -3895,6 +3973,20 @@ ${catalog}`;
 
   // ---------- ORDERS: purchase orders to suppliers (draft → sent → received) ----------
   const ORDER_ST = { draft: ["Draft", "Draft"], sent: ["Naipadala", "Sent"], received: ["Natanggap", "Received"], cancelled: ["Kinansela", "Cancelled"] };
+  // ---------- SUPPLIER ORDERS: a sent order also goes to KELSON (the supplier) and pops up in the Super Admin ----------
+  // Only what the supplier needs: store type, items, quantities, cost — never customer names. Everything else stays on this device.
+  const BIZ_LABEL = { retail: "Sari-sari store", grocery: "Grocery", "food-pay": "Restaurant", "food-tab": "Restaurant" };
+  const SUP_ST = { new: ["Bago — hinihintay ang supplier", "New — waiting for the supplier"], accepted: ["Tinanggap ng supplier", "Accepted by the supplier"], delivering: ["Padating na", "Out for delivery"], received: ["Natanggap", "Received"], cancelled: ["Kinansela", "Cancelled"] };
+  let supOrders = new Map(), supWatching = false;
+  function watchMySupplyOrders() { if (supWatching || !S.db) return; supWatching = true;
+    try { col("supplyorders").onSnapshot((snap) => { supOrders = new Map(snap.docs.map((d) => [d.id, d.data()])); if (view === "products") render(); }, () => {}); } catch { supWatching = false; } }
+  async function pushSupplyOrder(o, status) {
+    const lines = (o.lines || []).filter((l) => Number(l.qty) > 0).map((l) => ({ name: String(l.name || "").slice(0, 80), unit: l.unit || "pc", qty: String(l.qty).slice(0, 12), cost: l.cost || 0 }));
+    const prev = supOrders.get(o.id) || {};
+    const body = { id: o.id, status, bizType: S.store.bizType || "retail", supplier: o.supplier || "", lines, total: orderTotal(o), sentAt: o.sentAt || prev.sentAt || new Date().toISOString(), branch: S.branch || null, updatedAt: new Date().toISOString(),
+      ...(prev.acceptedAt ? { acceptedAt: prev.acceptedAt } : {}), ...(prev.deliveringAt ? { deliveringAt: prev.deliveringAt } : {}) };
+    try { await ref("supplyorders/" + o.id).set(body); supOrders.set(o.id, body); return true; } catch { return false; }
+  }
   const openOrders = () => S.porders.filter((o) => o.status === "draft" || o.status === "sent");
   let ordersTab = "open";
   function lastSupplier(pid) { let best = null; for (const m of S.moves) if (m.productId === pid && m.kind === "stock_in" && m.supplier && (!best || m.at > best.at)) best = m; return best?.supplier || ""; }
@@ -3922,6 +4014,7 @@ ${catalog}`;
       orderTotal(o) ? L(`Tantiyang halaga: ${peso(orderTotal(o))}`, `Estimated amount: ${peso(orderTotal(o))}`) : null, L("Salamat po!", "Thank you!")].filter((x) => x !== null).join("\n");
   }
   function viewOrders() {
+    watchMySupplyOrders();
     const all = [...S.porders].sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
     const list = ordersTab === "open" ? all.filter((o) => o.status === "draft" || o.status === "sent") : ordersTab === "received" ? all.filter((o) => o.status === "received") : all;
     const chip = (st) => h("span", { class: "chip " + (st === "draft" ? "warn" : st === "sent" ? "" : st === "received" ? "ok" : "bad"), text: L(...ORDER_ST[st] || [st, st]) });
@@ -3939,7 +4032,8 @@ ${catalog}`;
   async function newBlankOrder() { const o = { id: uid(), supplier: "", status: "draft", lines: [], createdAt: new Date().toISOString() }; try { await write("porders/" + o.id, o); go("products", "orders-" + o.id); } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } }
   let orderSaveT = null;
   function orderDetail(o) {
-    const edit = o.status === "draft" || o.status === "sent";
+    watchMySupplyOrders();
+    const edit = o.status === "draft" || o.status === "sent", so = supOrders.get(o.id);
     const save = (now) => { clearTimeout(orderSaveT); const run = () => write("porders/" + o.id, { ...strip(o), updatedAt: new Date().toISOString() }).catch(() => toast(L("Hindi na-save", "Could not save"))); if (now) return run(); orderSaveT = setTimeout(run, 500); };
     const setStatus = async (st, extra = {}) => { Object.assign(o, { status: st, ...extra }); await save(true); render(); };
     const pick = h("select", { id: "poPick", onchange: (e) => { const p = productById(e.target.value); if (p && !o.lines.some((l) => l.productId === p.id)) { o.lines.push({ productId: p.id, name: p.name, unit: p.unit || "pc", qty: "1", cost: p.cost || 0 }); save(true); render(); } e.target.value = ""; } },
@@ -3959,13 +4053,15 @@ ${catalog}`;
           edit ? h("button", { class: "btn sm danger", "aria-label": L("Alisin", "Remove"), onclick: () => { o.lines = o.lines.filter((x) => x !== l); save(true); render(); } }, "×") : h("span"))))
           : h("div", { class: "empty", text: L("Wala pang laman ang order.", "This order is empty.") }),
         edit ? pick : null,
+        so ? h("div", { class: "note", id: "poSupSt", style: "display:flex;gap:8px;align-items:center" }, h("span", { "aria-hidden": "true", text: so.status === "delivering" ? "🚚" : so.status === "accepted" ? "✅" : "📨" }),
+          h("span", { text: L("Supplier (KELSON): ", "Supplier (KELSON): ") + L(...(SUP_ST[so.status] || [so.status, so.status])) })) : null,
         h("div", { class: "total" }, h("span", { class: "muted", text: L("Tantiyang halaga", "Estimated amount") }), h("span", { class: "v num", text: peso(orderTotal(o)) }))),
       h("div", { class: "pills" },
-        o.status === "draft" ? h("button", { class: "btn primary", disabled: !o.lines.length, onclick: async () => { await copy(orderText(o)); await setStatus("sent", { sentAt: new Date().toISOString() }); } }, L("📤 Ipadala sa supplier", "📤 Send to supplier")) : null,
+        o.status === "draft" ? h("button", { class: "btn primary", id: "poSend", disabled: !o.lines.length, onclick: async () => { await copy(orderText(o)); await setStatus("sent", { sentAt: new Date().toISOString() }); if (await pushSupplyOrder(o, "new")) toast(L("Naipadala — makikita ito ng supplier (KELSON)", "Sent — the supplier (KELSON) can see it now")); render(); } }, L("📤 Ipadala sa supplier", "📤 Send to supplier")) : null,
         o.status === "sent" ? h("button", { class: "btn primary", onclick: receive }, L("📥 Natanggap na — i-stock-in", "📥 Received — stock in")) : null,
         o.status === "sent" ? h("button", { class: "btn", onclick: () => copy(orderText(o)) }, L("📋 Kopyahin ulit", "📋 Copy again")) : null,
         o.status === "draft" ? h("button", { class: "btn", onclick: () => copy(orderText(o)) }, L("📋 Kopyahin", "📋 Copy")) : null,
-        edit ? h("button", { class: "btn danger", onclick: async () => { if (await askYes(L("Kanselahin ang order?", "Cancel this order?"), "", L("Kanselahin", "Cancel order"), L("Huwag", "Keep it"))) { await setStatus("cancelled", { cancelledAt: new Date().toISOString() }); go("products", "orders"); } } }, L("Kanselahin", "Cancel order")) : null),
+        edit ? h("button", { class: "btn danger", onclick: async () => { if (await askYes(L("Kanselahin ang order?", "Cancel this order?"), "", L("Kanselahin", "Cancel order"), L("Huwag", "Keep it"))) { await setStatus("cancelled", { cancelledAt: new Date().toISOString() }); if (supOrders.has(o.id)) pushSupplyOrder(o, "cancelled"); go("products", "orders"); } } }, L("Kanselahin", "Cancel order")) : null),
       edit ? h("p", { class: "muted small", text: L("Ang \"Ipadala\" ay kumokopya ng mensahe para i-paste sa Messenger, Viber o SMS ng supplier. Pagdating ng paninda, pindutin ang \"Natanggap\" — mapupunta ito sa Stock-in.", "\"Send\" copies a message to paste in the supplier's Messenger, Viber or SMS. When the goods arrive, tap \"Received\" — it opens Stock-in.") }) : null);
   }
 
@@ -4310,6 +4406,7 @@ ${catalog}`;
   const relTime = (iso) => { if (!iso) return "never"; const m = (Date.now() - new Date(iso)) / 6e4; return m < 1 ? "just now" : m < 60 ? Math.floor(m) + " min ago" : m < 1440 ? Math.floor(m / 60) + " h ago" : Math.floor(m / 1440) + " d ago"; };
 
   function viewAdmin() {
+    if (S.owner) { try { watchAdminOrders(); } catch { /* later */ } clearTimeout(SA.ordT); SA.ordT = setTimeout(newOrderCheck, 600); } // new supplier orders pop up here
     if (!S.owner) return h("div", { class: "card" }, h("h2", { text: "Owner only" }), h("p", { class: "muted", text: "The KELSON Super Admin dashboard is visible only to the owner of this app." }));
     if (sub === "visual") return adminPage("visual", "Visual inventory", viewVisual());
     if (sub && sub.startsWith("v-")) { const v = S.visual.find((x) => x.id === sub.slice(2)); if (v) return adminPage("visual", v.name, viewVisualStore(v), true); }
@@ -4317,6 +4414,7 @@ ${catalog}`;
     if (sub === "products") return adminPage("products", "Products across all stores", viewNetworkProducts());
     if (sub === "directory") return adminPage("directory", "Store directory", viewDirectory());
     if (sub === "oos") return adminPage("oos", "Out of stock — all stores", viewOOS());
+    if (sub === "orders") return adminPage("orders", "Supplier orders — all stores", viewSupplyOrders());
     if (sub === "best") return adminPage("best", "Best sellers — all stores", viewBest());
     if (sub === "kb") return adminPage("kb", "Knowledge — questions from stores", viewKnowledge());
     if (sub === "rules") return adminPage("rules", "Discount rules — all stores", viewRules());
@@ -4614,6 +4712,71 @@ ${catalog}`;
       subsByStore.set(st.id, []);
       S.db.collection(`stores/${st.id}/submissions`).onSnapshot((snap) => { subsByStore.set(st.id, snap.docs.map((d) => ({ ...d.data(), _doc: d.id }))); if (view === "admin") render(); }, () => {});
     }
+  }
+  // ---------- SUPER ADMIN: supplier orders from every store, with a pop-up when a new one arrives ----------
+  const adminOrders = new Map(); // storeId -> orders
+  function watchAdminOrders() {
+    if (!S.owner || !S.db) return;
+    const watch = (key, path) => { if (adminOrders.has(key)) return; adminOrders.set(key, []);
+      S.db.collection(path).onSnapshot((snap) => { adminOrders.set(key, snap.docs.map((d) => ({ ...d.data(), _id: d.id, _path: path + "/" + d.id, _store: key }))); newOrderCheck(); if (view === "admin") render(); }, () => {}); };
+    for (const st of S.stores) if (!st.sample && !st.ownerStore) watch(st.id, `stores/${st.id}/supplyorders`);
+    watch("me", "supplyorders"); for (const b of S.branches || []) if (b?.id) watch("me:" + b.id, `branches/${b.id}/supplyorders`); // your own store and its branches (handy for trying it out)
+  }
+  const allSupplyOrders = () => [...adminOrders.values()].flat().sort((a, b) => (b.sentAt || "").localeCompare(a.sentAt || ""));
+  const supStoreName = (o) => (o._store === "me" ? S.store?.name || "Your store" : o._store.startsWith("me:") ? (S.branches.find((b) => "me:" + b.id === o._store)?.name || "Branch") : S.stores.find((x) => x.id === o._store)?.name || "Store");
+  const supSeen = () => { try { return new Set(JSON.parse(localStorage.getItem("kw-admin-orders-seen") || "[]")); } catch { return new Set(); } };
+  function newOrderCheck() {
+    if (!S.owner || view !== "admin" || document.getElementById("orderAlert")) return;
+    const seen = supSeen(), fresh = allSupplyOrders().filter((o) => o.status === "new" && !seen.has(o._path));
+    if (!fresh.length) return;
+    if (document.getElementById("lock") || dlg.open) { clearTimeout(SA.ordT); SA.ordT = setTimeout(newOrderCheck, 5000); return; }
+    showOrderAlert(fresh);
+  }
+  async function setSupplyStatus(o, status) {
+    const at = new Date().toISOString();
+    try { await S.db.doc(o._path).set({ ...Object.fromEntries(Object.entries(o).filter(([k]) => !k.startsWith("_"))), status, [status + "At"]: at, updatedAt: at }); toast(status === "accepted" ? "Order accepted — the store sees it" : status === "delivering" ? "Marked out for delivery" : "Updated"); }
+    catch (e) { toast("Could not update: " + (e?.code || "try again")); }
+  }
+  function showOrderAlert(list) {
+    const seenAll = () => { const s2 = supSeen(); for (const o of list) s2.add(o._path); try { localStorage.setItem("kw-admin-orders-seen", JSON.stringify([...s2].slice(-500))); } catch { /* ignore */ } };
+    const close = () => { seenAll(); box.remove(); window.speechSynthesis?.cancel(); voice.tts?.stop?.(); setTimeout(newOrderCheck, 300); };
+    const o = list[0], name = supStoreName(o), biz = BIZ_LABEL[o.bizType] || "Store", n = (o.lines || []).length;
+    const speech = { lang: "en", title: list.length > 1 ? `You have ${list.length} new supplier orders.` : "A new supplier order has come in.",
+      lines: [`${name}, a ${biz.toLowerCase()}, ordered ${n} item${n === 1 ? "" : "s"}${o.total ? `, about ${Math.round(o.total / 100)} pesos` : ""}.`, "Shall I leave it for you to accept?"] };
+    const sound = chime(), say = () => { try { speakAssistant(speech); } catch { /* no voice */ } };
+    const box = h("div", { id: "orderAlert", class: "exp-alert", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "oaTitle", onclick: (e) => { if (e.target === box) close(); } },
+      h("div", { class: "sa" },
+        h("h2", { id: "oaTitle" }, h("span", { "aria-hidden": "true", text: "📦" }), list.length > 1 ? `${list.length} new supplier orders` : "New supplier order"),
+        h("div", { style: "font-weight:700", text: `${name} · ${biz}` }),
+        h("div", { class: "small muted", text: `${n} item(s) · ${peso(o.total || 0)} · ${when(o.sentAt)}${o.supplier ? " · for " + o.supplier : ""}` }),
+        h("ul", {}, (o.lines || []).slice(0, 6).map((l) => h("li", {}, h("span", { text: l.name }), h("b", { text: `${l.qty} ${l.unit || "pc"}` })))),
+        n > 6 ? h("div", { class: "small muted", text: `+ ${n - 6} more` }) : null,
+        list.length > 1 ? h("div", { class: "small muted", text: `+ ${list.length - 1} more order(s) waiting` }) : null,
+        h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
+          h("button", { class: "btn primary", id: "oaAccept", style: "flex:1", onclick: async () => { await setSupplyStatus(o, "accepted"); close(); } }, "✅ Accept"),
+          h("button", { class: "btn", id: "oaOpen", style: "flex:1", onclick: () => { close(); go("admin", "orders"); } }, "📦 All orders"),
+          h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": "Play sound and voice" }, "🔊"),
+          h("button", { class: "btn", onclick: close }, "Later"))));
+    document.body.append(box);
+    if (voice.auto) setTimeout(say, sound ? 900 : 0);
+  }
+  function viewSupplyOrders() {
+    watchAdminOrders();
+    const all = allSupplyOrders(), open = all.filter((o) => o.status === "new" || o.status === "accepted" || o.status === "delivering");
+    const byBiz = (k) => all.filter((o) => (BIZ_LABEL[o.bizType] || "Store") === k).length;
+    const chip = (st) => h("span", { class: "chip " + (st === "new" ? "warn" : st === "received" ? "ok" : st === "cancelled" ? "bad" : ""), text: st === "new" ? "New" : st === "accepted" ? "Accepted" : st === "delivering" ? "Out for delivery" : st === "received" ? "Received by store" : "Cancelled" });
+    return h("div", { class: "grid" },
+      h("div", { class: "kpis" }, kpiBox("Open orders", String(open.length), "new, accepted or on the way"), kpiBox("New", String(all.filter((o) => o.status === "new").length), "waiting for you"),
+        kpiBox("Sari-sari", String(byBiz("Sari-sari store"))), kpiBox("Grocery", String(byBiz("Grocery"))), kpiBox("Restaurant", String(byBiz("Restaurant")))),
+      all.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list", id: "supList" }, all.map((o) => h("li", { style: "align-items:flex-start;flex-wrap:wrap" },
+        h("div", { class: "grow", style: "min-width:200px" }, h("div", { style: "font-weight:600", text: `${supStoreName(o)} · ${BIZ_LABEL[o.bizType] || "Store"}` }),
+          h("div", { class: "muted small", text: `${(o.lines || []).length} item(s) · ${when(o.sentAt)}${o.supplier ? " · for " + o.supplier : ""}` }),
+          h("div", { class: "small", text: (o.lines || []).slice(0, 4).map((l) => `${l.qty} ${l.unit || "pc"} ${l.name}`).join(" · ") + ((o.lines || []).length > 4 ? " …" : "") })),
+        chip(o.status), h("span", { class: "num", style: "font-weight:600", text: peso(o.total || 0) }),
+        o.status === "new" ? h("button", { class: "btn sm primary", onclick: () => setSupplyStatus(o, "accepted") }, "Accept") : null,
+        o.status === "accepted" ? h("button", { class: "btn sm", onclick: () => setSupplyStatus(o, "delivering") }, "🚚 Out for delivery") : null))))
+        : h("div", { class: "empty", text: "No supplier orders yet. When a store taps \"Send to supplier\", it appears here and pops up." }),
+      h("p", { class: "muted small", text: "Stores send only the items, quantities and cost. Customer names never leave the store's device. The store marks an order received when it arrives." }));
   }
   function dirFor(name) { const n = normName(name); return S.directory.find((d) => normName(d.name) === n) || S.directory.find((d) => normName(d.name).split(" ")[0] === n.split(" ")[0]); }
   /** Every audit photo, with a way to save changes back to where it lives. */
@@ -5383,7 +5546,7 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
   function adminTabs(active) {
     const t = (k, label, to) => h("a", { href: "#admin" + (to ? "-" + to : ""), "aria-current": active === k ? "page" : null, onclick: (e) => { e.preventDefault(); go("admin", to); } }, label);
     return h("nav", { class: "tabs-admin", "aria-label": "Super Admin sections" },
-      t("stores", `Stores (${S.stores.length})`, null), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("dict", "Logbook dictionary", "dict"), t("rules", "Discount rules", "rules"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
+      t("stores", `Stores (${S.stores.length})`, null), t("orders", `Orders${(() => { const n = allSupplyOrders().filter((o) => o.status === "new").length; return n ? ` (${n} new)` : ""; })()}`, "orders"), t("oos", "Out of stock", "oos"), t("best", "Best sellers", "best"), t("kb", "Knowledge", "kb"), t("dict", "Logbook dictionary", "dict"), t("rules", "Discount rules", "rules"), t("audit", "Shelf audit", "audit"), t("directory", `Directory (${S.directory.length})`, "directory"), t("products", "Products", "products"), t("visual", `Visual inventory (${S.visual.length})`, "visual"), t("library", `Photo library (${S.library.length})`, "library"));
   }
   function adminPage(tab, title, body, back) {
     return h("div", { class: "view" },

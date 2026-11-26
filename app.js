@@ -1,37 +1,57 @@
-/* KWADERNO Scan — QR + barcode scanner PWA (Android, iPhone, desktop).
- * Decoding: html5-qrcode 2.3.8 (ZXing; uses the phone's built-in BarcodeDetector when it has one).
- * Everything stays on this device: history is in localStorage. */
+/* KWADERNO Scan — live QR + barcode scanner with auto-capture (Android, iPhone/iPad, Mac/PC).
+ *
+ * Camera: getUserMedia, back lens, 1920×1080, continuous autofocus, torch/zoom when the camera has them.
+ * Decoding, about 10 times a second, QR and 1D at the same time, no mode switch:
+ *   - the phone's own BarcodeDetector when it has one (Android Chrome: very fast, gives the code's corners);
+ *   - otherwise ZXing 0.21.3 ("try harder") on the scan window, the whole picture and the window turned 90°.
+ * A Bluetooth/USB scanner (it types fast and presses Enter) works at the same time.
+ * Opened from KWADERNO (?kw=1&return=…) the code is sent straight back. History stays on this device. */
 (() => {
   "use strict";
-  const L = window.__Html5QrcodeLibrary__ || {};
-  const Qr = L.Html5Qrcode, F = L.Html5QrcodeSupportedFormats;
   const $ = (id) => document.getElementById(id);
-  const HIST_KEY = "kwscan-history", CAM_KEY = "kwscan-camera", KEEP_KEY = "kwscan-keep";
+  const ZX = window.ZXing;
+  const HIST_KEY = "kwscan-history", CAM_KEY = "kwscan-camera", BATCH_KEY = "kwscan-batch";
 
-  const FORMATS = F ? [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.CODE_93, F.ITF, F.CODABAR, F.DATA_MATRIX, F.PDF_417, F.AZTEC] : [];
-  const NAMES = { QR_CODE: "QR", EAN_13: "EAN-13", EAN_8: "EAN-8", UPC_A: "UPC-A", UPC_E: "UPC-E", CODE_128: "Code 128", CODE_39: "Code 39", CODE_93: "Code 93",
-    ITF: "ITF", CODABAR: "Codabar", DATA_MATRIX: "Data Matrix", PDF_417: "PDF417", AZTEC: "Aztec", MAXICODE: "MaxiCode", RSS_14: "GS1", RSS_EXPANDED: "GS1", UPC_EAN_EXTENSION: "EAN ext" };
-  const TWO_D = new Set(["QR", "Data Matrix", "PDF417", "Aztec", "MaxiCode"]);
+  // ---------- formats ----------
+  const WANT = ["qr_code", "ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "code_93", "itf", "codabar", "data_matrix", "pdf417", "aztec"];
+  const NAMES = { qr_code: "QR", QR_CODE: "QR", ean_13: "EAN-13", EAN_13: "EAN-13", ean_8: "EAN-8", EAN_8: "EAN-8", upc_a: "UPC-A", UPC_A: "UPC-A", upc_e: "UPC-E", UPC_E: "UPC-E",
+    code_128: "Code 128", CODE_128: "Code 128", code_39: "Code 39", CODE_39: "Code 39", code_93: "Code 93", CODE_93: "Code 93", itf: "ITF", ITF: "ITF", codabar: "Codabar", CODABAR: "Codabar",
+    data_matrix: "Data Matrix", DATA_MATRIX: "Data Matrix", pdf417: "PDF417", PDF_417: "PDF417", aztec: "Aztec", AZTEC: "Aztec", HID: "Scanner" };
+  const TWO_D = new Set(["QR", "Data Matrix", "PDF417", "Aztec"]);
   const fmtName = (raw) => NAMES[raw] || String(raw || "Code").replace(/_/g, " ");
 
+  /** EAN/UPC check digit: sum odd positions ×3 + even positions (from the right of the payload), mod 10. */
+  function checkDigitOk(code) {
+    if (!/^\d+$/.test(code) || ![8, 12, 13, 14].includes(code.length)) return null;
+    const d = code.split("").map(Number), last = d.pop();
+    const sum = d.reverse().reduce((a, x, i) => a + x * (i % 2 === 0 ? 3 : 1), 0);
+    return (10 - (sum % 10)) % 10 === last;
+  }
+  const GS1 = [[[480, 489], "Philippines"], [[0, 19], "USA / Canada"], [[30, 39], "USA / Canada"], [[60, 139], "USA / Canada"], [[450, 459], "Japan"], [[490, 499], "Japan"],
+    [[690, 699], "China"], [[880, 880], "South Korea"], [[885, 885], "Thailand"], [[888, 888], "Singapore"], [[893, 893], "Vietnam"], [[899, 899], "Indonesia"], [[955, 955], "Malaysia"],
+    [[930, 939], "Australia"], [[400, 440], "Germany"], [[500, 509], "United Kingdom"], [[300, 379], "France"], [[840, 849], "Spain"], [[800, 839], "Italy"], [[870, 879], "Netherlands"]];
+  function gs1Of(code) {
+    if (!/^\d+$/.test(code) || ![12, 13].includes(code.length)) return "";
+    const p = Number((code.length === 12 ? "0" + code : code).slice(0, 3));
+    const hit = GS1.find(([[a, b]]) => p >= a && p <= b);
+    return hit ? hit[1] : "";
+  }
+
   // ---------- small helpers ----------
-  const store = {
-    get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode / full */ } },
-  };
+  const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* full / private */ } } };
   let toastT = 0;
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2200); }
   function status(msg, busy = true) { $("statusText").textContent = msg; $("status").classList.toggle("idle", !busy); }
   let actx = null;
-  function beep() {
+  function beep(ok = true) {
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "square"; o.frequency.value = 1760; g.gain.setValueAtTime(0.0001, actx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.25, actx.currentTime + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, actx.currentTime + 0.12);
-      o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + 0.13);
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+      o.type = "square"; o.frequency.value = ok ? 1760 : 220; g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.22, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+      o.connect(g).connect(actx.destination); o.start(); o.stop(t + 0.13);
     } catch { /* no audio */ }
-    try { navigator.vibrate?.(60); } catch { /* no vibration */ }
+    try { navigator.vibrate?.(ok ? 100 : [40, 60, 40]); } catch { /* no vibration */ }
   }
   async function copyText(text) {
     try { await navigator.clipboard.writeText(text); return true; } catch {
@@ -41,40 +61,95 @@
   }
   const isUrl = (t) => { try { const u = new URL(t); return u.protocol === "https:" || u.protocol === "http:"; } catch { return false; } };
   const when = (ms) => new Date(ms).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit" });
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const inApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Messenger|TikTok|Snapchat|MicroMessenger/i.test(ua);
 
-  // ---------- 1D barcode reader ----------
-  // html5-qrcode's built-in ZXing copy misses many product barcodes (EAN/UPC/Code 128), so camera frames and
-  // photos also go through ZXing 0.21.3 in "try harder" mode. QR codes stay with html5-qrcode.
-  const ZX = window.ZXing;
-  let reader1D = null;
-  if (ZX) {
-    const B = ZX.BarcodeFormat, h = new Map();
-    h.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [B.EAN_13, B.EAN_8, B.UPC_A, B.UPC_E, B.CODE_128, B.CODE_39, B.CODE_93, B.ITF, B.CODABAR]);
-    h.set(ZX.DecodeHintType.TRY_HARDER, true);
-    reader1D = new ZX.MultiFormatReader(); reader1D.setHints(h);
+  // ---------- opened from KWADERNO: where to send the code back ----------
+  const params = new URLSearchParams(location.search);
+  const RETURN = (() => {
+    const r = params.get("return") || "";
+    // only back to the KWADERNO app (or a local test copy) — never to any other site
+    if (/^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+#scan-(sell|stock)-$/.test(r)) return r;
+    if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && /^http:\/\/(localhost|127\.0\.0\.1):\d+\/[^#]*#scan-(sell|stock)-$/.test(r)) return r;
+    return "";
+  })();
+  const KW = !!RETURN, KW_MODE = (RETURN.match(/#scan-(sell|stock)-$/) || [])[1] || "";
+  const opener = (() => { try { return window.opener && !window.opener.closed ? window.opener : null; } catch { return null; } })();
+  function sendToKwaderno(codes) {
+    if (!KW || !codes.length) return false;
+    if (opener) { try { opener.postMessage({ type: "kw-scan", code: codes.join("\n"), mode: KW_MODE }, "*"); return "message"; } catch { /* fall back to the link */ } }
+    location.href = RETURN + encodeURIComponent(codes.join(","));
+    return "link";
   }
-  /** Read a 1D barcode from a canvas; null if none. */
-  function decode1D(c) {
-    if (!reader1D) return null;
+
+  // ---------- environment checks ----------
+  function blockedReason() {
+    if (!window.isSecureContext) return { title: "The camera needs a secure link", text: "Open this page with https:// — browsers only allow the camera on secure pages." };
+    if (!navigator.mediaDevices?.getUserMedia) return inApp ? inAppMsg() : { title: "This browser can't use the camera", text: "Open this page in Chrome (Android, computer) or Safari (iPhone, iPad, Mac)." };
+    try { if (document.permissionsPolicy && !document.permissionsPolicy.allowsFeature("camera")) return { title: "The camera is blocked inside this page", text: "Open the scanner in its own browser tab." }; } catch { /* ignore */ }
+    return null;
+  }
+  function inAppMsg() { return { title: "Open in your browser", text: isIOS ? "This app's built-in browser can't use the camera. Tap ••• or Share → “Open in Safari”." : "This app's built-in browser can't use the camera. Tap ⋮ → “Open in Chrome”." }; }
+  function deniedMsg() {
+    if (isIOS) return { title: "Camera permission is off", text: "Tap “aA” in the address bar → Website Settings → Camera → Allow (or Settings → Safari → Camera → Allow), then Try again." };
+    if (isAndroid) return { title: "Camera permission is off", text: "Tap the icon left of the address (🔒 or ⓘ) → Permissions → Camera → Allow, then Try again." };
+    return { title: "Camera permission is off", text: "Click the camera icon in the address bar → Allow, then Try again." };
+  }
+  function errorInfo(err) {
+    const s = String(err?.name || "") + " " + String(err?.message || err || "");
+    if (/NotAllowed|Permission|denied|SecurityError/i.test(s)) return inApp ? inAppMsg() : deniedMsg();
+    if (/NotFound|DevicesNotFound|Overconstrained|Requested device not found/i.test(s)) return { title: "No camera found", text: "This device has no camera we can use. A Bluetooth/USB scanner or typing the number still works." };
+    if (/NotReadable|TrackStart|Could not start|in use/i.test(s)) return { title: "The camera is busy", text: "Another app or tab is using the camera. Close it, then tap Try again." };
+    if (/NotSupported/i.test(s)) return inApp ? inAppMsg() : { title: "This browser can't open the camera here", text: "Open the page in Chrome (Android, computer) or Safari (iPhone)." };
+    return { title: "Couldn't start the camera", text: "Tap Try again. (" + s.trim().slice(0, 80) + ")" };
+  }
+  function showStageMsg(info, retry = true) {
+    const m = $("stageMsg"); m.hidden = false; m.replaceChildren();
+    const box = document.createElement("div"), b = document.createElement("b"), p = document.createElement("div");
+    b.textContent = info.title; p.textContent = info.text; box.append(b, p);
+    if (retry) { const btn = document.createElement("button"); btn.className = "btn primary"; btn.type = "button"; btn.textContent = "Try again"; btn.onclick = () => startCamera(); box.append(btn); }
+    m.append(box);
+  }
+
+  // ---------- decoders ----------
+  let detector = null, reader = null;
+  async function setupDecoders() {
+    if ("BarcodeDetector" in window && !window.__noNativeDetector) {
+      try { const sup = await window.BarcodeDetector.getSupportedFormats(); const f = WANT.filter((x) => sup.includes(x)); if (f.length) detector = new window.BarcodeDetector({ formats: f }); } catch { detector = null; }
+    }
+    if (ZX && !reader) {
+      const B = ZX.BarcodeFormat, h = new Map();
+      h.set(ZX.DecodeHintType.POSSIBLE_FORMATS, [B.QR_CODE, B.EAN_13, B.EAN_8, B.UPC_A, B.UPC_E, B.CODE_128, B.CODE_39, B.CODE_93, B.ITF, B.CODABAR, B.DATA_MATRIX, B.PDF_417, B.AZTEC]);
+      h.set(ZX.DecodeHintType.TRY_HARDER, true);
+      reader = new ZX.MultiFormatReader(); reader.setHints(h);
+    }
+  }
+  const work = document.createElement("canvas"), wg = work.getContext("2d", { willReadFrequently: true });
+  /** Decode a region of the video with ZXing. Returns { text, format, points (in video pixels) } or null. */
+  function zxRegion(v, sx, sy, sw, sh, turn) {
+    const k = Math.min(1, 1280 / Math.max(sw, sh)), W = Math.round(sw * k), H = Math.round(sh * k);
+    work.width = turn ? H : W; work.height = turn ? W : H;
+    wg.setTransform(1, 0, 0, 1, 0, 0);
+    if (turn) { wg.translate(H, 0); wg.rotate(Math.PI / 2); }
+    wg.drawImage(v, sx, sy, sw, sh, 0, 0, W, H);
     for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) {
-      try { const r = reader1D.decode(new ZX.BinaryBitmap(new Bin(new ZX.HTMLCanvasElementLuminanceSource(c)))); return { text: r.getText(), format: ZX.BarcodeFormat[r.getBarcodeFormat()] }; }
-      catch { /* not found with this binarizer */ } finally { try { reader1D.reset(); } catch { /* ignore */ } }
+      try {
+        const r = reader.decode(new ZX.BinaryBitmap(new Bin(new ZX.HTMLCanvasElementLuminanceSource(work))));
+        const pts = (r.getResultPoints() || []).filter(Boolean).map((p) => {
+          let x = p.getX(), y = p.getY();
+          if (turn) { const cx = x, cy = y; x = cy; y = H - cx; }
+          return { x: x / k + sx, y: y / k + sy };
+        });
+        return { text: r.getText(), format: ZX.BarcodeFormat[r.getBarcodeFormat()], points: pts };
+      } catch { /* not in this region */ } finally { try { reader.reset(); } catch { /* ignore */ } }
     }
     return null;
   }
-  /** Draw part of an image/video onto a canvas: crop (in source pixels), scale to width w, optional 90° turn. */
-  function draw(src, sw, sh, crop, w, turn) {
-    const [x, y, cw, ch] = crop || [0, 0, sw, sh], k = w / cw, c = document.createElement("canvas");
-    const W = Math.max(1, Math.round(cw * k)), H = Math.max(1, Math.round(ch * k));
-    c.width = turn ? H : W; c.height = turn ? W : H;
-    const g = c.getContext("2d", { willReadFrequently: true });
-    if (turn) { g.translate(H, 0); g.rotate(Math.PI / 2); }
-    g.drawImage(src, x, y, cw, ch, 0, 0, W, H);
-    return c;
-  }
-  /** Where in a photo are barcode-like stripes? (strong side-to-side contrast, vertical "v" or turned "h"), best first. */
+  /** Where are barcode-like stripes in the picture? (from KWADERNO's photo reader) best first, boxes in video pixels. */
   function locateBarcodes(bmp) {
-    const W = 400, k = W / bmp.width, H = Math.max(8, Math.round(bmp.height * k)), c = document.createElement("canvas"); c.width = W; c.height = H;
+    const W = 400, k = W / (bmp.videoWidth || bmp.width), H = Math.max(8, Math.round((bmp.videoHeight || bmp.height) * k)), c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(bmp, 0, 0, W, H);
     const px = g.getImageData(0, 0, W, H).data, Lm = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) Lm[i] = px[i * 4] * .3 + px[i * 4 + 1] * .59 + px[i * 4 + 2] * .11;
@@ -99,326 +174,336 @@
     }
     return out.sort((a, b) => b.tot - a.tot).slice(0, 5);
   }
-  /** Cut out a found spot with a margin, zoom so the bars are `target` px long, straighten by `tilt`°, read it. */
-  function readSpot(bmp, cand, target, tilt) {
-    const [x0, y0, x1, y1] = cand.box, w = x1 - x0, hh = y1 - y0, pxm = w * .15, pym = hh * .35;
-    const sx = Math.max(0, x0 - pxm), sy = Math.max(0, y0 - pym), sw = Math.min(bmp.width - sx, w + 2 * pxm), sh = Math.min(bmp.height - sy, hh + 2 * pym);
+  /** Cut out a found spot with a margin, zoom so the bars span ~1000 px, and read it. */
+  function zxSpot(v, cand) {
+    const [x0, y0, x1, y1] = cand.box, w = x1 - x0, hh = y1 - y0, pxm = w * 0.2, pym = hh * 0.4;
+    const sx = Math.max(0, x0 - pxm), sy = Math.max(0, y0 - pym), sw = Math.min(v.videoWidth - sx, w + 2 * pxm), sh = Math.min(v.videoHeight - sy, hh + 2 * pym);
     if (sw < 16 || sh < 8) return null;
-    const along = cand.dir === "v" ? sw : sh, k = target / along, cw = Math.round(sw * k), ch = Math.round(sh * k);
-    if (cw * ch > 6e6) return null;
-    const turn = cand.dir === "h" ? 90 : 0, c = document.createElement("canvas"), g = c.getContext("2d", { willReadFrequently: true });
-    c.width = turn ? ch : cw; c.height = turn ? cw : ch;
-    g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height);
-    g.translate(c.width / 2, c.height / 2); g.rotate((turn + tilt) * Math.PI / 180); g.translate(-cw / 2, -ch / 2);
-    g.imageSmoothingQuality = "high"; g.drawImage(bmp, sx, sy, sw, sh, 0, 0, cw, ch);
-    return decode1D(c);
-  }
-  /** Many tries on a still photo: find the barcode and zoom in (small, far or tilted), then whole picture and pieces. */
-  function decodePhoto1D(img, w, h) {
-    const t0 = performance.now(), cands = locateBarcodes(img);
-    const passes = [[[1000, 0], [1300, 0]], [[900, -6], [900, 6], [1300, -6], [1300, 6], [600, 0]], [[1300, -12], [1300, 12], [900, -12], [900, 12], [600, -6], [600, 6]]];
-    for (const pass of passes) for (const cand of cands) for (const [target, tilt] of pass) {
-      if (performance.now() - t0 > 9000) break;
-      const r = readSpot(img, cand, target, tilt); if (r) return r;
+    const turn = cand.dir === "h", along = turn ? sh : sw, k = Math.min(4, 1000 / along), W = Math.round(sw * k), H = Math.round(sh * k);
+    if (W * H > 4e6) return null;
+    work.width = turn ? H : W; work.height = turn ? W : H;
+    wg.setTransform(1, 0, 0, 1, 0, 0); wg.imageSmoothingQuality = "high";
+    if (turn) { wg.translate(H, 0); wg.rotate(Math.PI / 2); }
+    wg.drawImage(v, sx, sy, sw, sh, 0, 0, W, H);
+    for (const Bin of [ZX.HybridBinarizer, ZX.GlobalHistogramBinarizer]) {
+      try {
+        const r = reader.decode(new ZX.BinaryBitmap(new Bin(new ZX.HTMLCanvasElementLuminanceSource(work))));
+        const pts = (r.getResultPoints() || []).filter(Boolean).map((p) => { let x = p.getX(), y = p.getY(); if (turn) { const cx = x; x = y; y = H - cx; } return { x: x / k + sx, y: y / k + sy }; });
+        return { text: r.getText(), format: ZX.BarcodeFormat[r.getBarcodeFormat()], points: pts };
+      } catch { /* not here */ } finally { try { reader.reset(); } catch { /* ignore */ } }
     }
-    const tries = [[null, Math.min(w, 1600), false], [null, Math.min(h, 1600), true]];
-    for (const z of [2, 3]) { // overlapping pieces, each zoomed to 1200 px wide
-      const cw = w / z * 1.5, ch = h / z * 1.5;
-      for (let iy = 0; iy < z; iy++) for (let ix = 0; ix < z; ix++) {
-        const x = Math.max(0, Math.min(w - cw, (w - cw) * ix / Math.max(1, z - 1))), y = Math.max(0, Math.min(h - ch, (h - ch) * iy / Math.max(1, z - 1)));
-        tries.push([[x, y, Math.min(cw, w), Math.min(ch, h)], 1200, false], [[x, y, Math.min(cw, w), Math.min(ch, h)], 1200, true]);
-      }
-    }
-    for (const [crop, width, turn] of tries) { const r = decode1D(draw(img, w, h, crop, width, turn)); if (r) return r; }
     return null;
   }
-
-  // ---------- environment checks (HTTPS, in-app browsers, iframes) ----------
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/i.test(ua);
-  const inApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Messenger|TikTok|Snapchat|Twitter|MicroMessenger/i.test(ua);
-  function blockedReason() {
-    if (!window.isSecureContext) return { title: "Camera needs a secure link", text: "Open this page with https:// (not http://). Browsers only allow the camera on secure pages." };
-    if (!navigator.mediaDevices?.getUserMedia) return inApp ? inAppMsg() : { title: "This browser can't use the camera", text: "Open this page in Chrome (Android, computer) or Safari (iPhone)." };
-    try { if (document.permissionsPolicy && !document.permissionsPolicy.allowsFeature("camera")) return { title: "The camera is blocked inside this page", text: "This page is shown inside another app or site that doesn't allow the camera. Open it in its own browser tab." }; } catch { /* ignore */ }
-    return null;
+  /** The scan window, in video pixels (the video fills the screen like object-fit: cover). */
+  function windowInVideo(v) {
+    const vr = v.getBoundingClientRect(), fr = $("frame").getBoundingClientRect();
+    const sc = Math.max(vr.width / v.videoWidth, vr.height / v.videoHeight), ox = (vr.width - v.videoWidth * sc) / 2, oy = (vr.height - v.videoHeight * sc) / 2;
+    const pad = 0.12; // a little outside the corners too: barcodes held close stick out
+    let x = (fr.left - vr.left - ox) / sc, y = (fr.top - vr.top - oy) / sc, w = fr.width / sc, h = fr.height / sc;
+    x -= w * pad; y -= h * pad; w *= 1 + 2 * pad; h *= 1 + 2 * pad;
+    x = Math.max(0, x); y = Math.max(0, y); w = Math.min(v.videoWidth - x, w); h = Math.min(v.videoHeight - y, h);
+    return { x, y, w, h, sc, ox, oy };
   }
-  function inAppMsg() {
-    return { title: "Open in your browser", text: isIOS ? "This app's built-in browser can't use the camera. Tap ••• or the share icon, then “Open in Safari”." : "This app's built-in browser can't use the camera. Tap ⋮ then “Open in Chrome”." };
-  }
-  function deniedMsg() {
-    if (isIOS) return { title: "Camera permission is off", text: "On iPhone: tap “aA” in the address bar → Website Settings → Camera → Allow. Or Settings → Safari → Camera → Allow. Then tap Try again." };
-    if (isAndroid) return { title: "Camera permission is off", text: "Tap the icon left of the address (🔒 or ⓘ) → Permissions → Camera → Allow. Then tap Try again." };
-    return { title: "Camera permission is off", text: "Click the camera icon in the address bar → Allow, then tap Try again." };
-  }
-  function errorInfo(err) {
-    const s = String(err?.name || "") + " " + String(err?.message || err || "");
-    if (/NotAllowed|Permission|denied|SecurityError/i.test(s)) return inApp ? inAppMsg() : deniedMsg();
-    if (/NotFound|DevicesNotFound|Overconstrained|no camera|Requested device not found/i.test(s)) return { title: "No camera found", text: "This device has no camera we can use. Use “Scan from a photo” below." };
-    if (/NotReadable|TrackStart|Could not start|in use/i.test(s)) return { title: "The camera is busy", text: "Another app or tab is using the camera. Close it, then tap Try again." };
-    if (/NotSupported|not supported/i.test(s)) return inApp ? inAppMsg() : { title: "This browser can't open the camera here", text: "Open the page in Chrome (Android, computer) or Safari (iPhone), or use “Scan from a photo” below." };
-    if (/Abort/i.test(s)) return { title: "The camera stopped", text: "Tap Try again." };
-    return { title: "Couldn't start the camera", text: "Tap Try again, or use “Scan from a photo”. (" + s.trim().slice(0, 80) + ")" };
-  }
-  function showStageMsg(info, retry = true) {
-    const m = $("stageMsg"); m.hidden = false; m.replaceChildren();
-    const box = document.createElement("div");
-    const b = document.createElement("b"); b.textContent = info.title;
-    const p = document.createElement("div"); p.textContent = info.text;
-    box.append(b, p);
-    if (retry) { const btn = document.createElement("button"); btn.className = "btn primary"; btn.type = "button"; btn.textContent = "Try again"; btn.onclick = () => startCamera(); box.append(btn); }
-    m.append(box); $("stage").classList.add("off");
-  }
-  const hideStageMsg = () => { $("stageMsg").hidden = true; $("stage").classList.remove("off"); };
+  const goodCode = (text, format) => {
+    const t = String(text || "").trim(); if (!t) return false;
+    const f = fmtName(format);
+    if (["EAN-13", "EAN-8", "UPC-A"].includes(f)) return checkDigitOk(t) !== false;
+    return true;
+  };
 
   // ---------- camera ----------
-  let scanner = null, running = false, starting = false, paused = false, track = { torch: null, zoom: null, torchOn: false };
-  let last = { text: "", at: 0 };
-
-  function videoConstraints() {
-    const id = $("cameraSel").value;
-    const base = { width: { ideal: 1280 }, height: { ideal: 720 } }; // enough detail for barcodes, light enough for older phones
-    return id ? { ...base, deviceId: { exact: id } } : { ...base, facingMode: "environment" }; // back lens by default
-  }
+  let stream = null, track = null, running = false, paused = false, starting = false, loopT = 0, tick = 0, busy = false;
+  let caps = {}, torchOn = false, last = { text: "", at: 0 }, holdUntil = 0;
+  const video = $("video");
 
   async function startCamera() {
     if (starting) return;
     const block = blockedReason();
-    if (block) { showStageMsg(block, false); status("Camera not available — scan from a photo instead", false); return; }
-    if (!Qr) { showStageMsg({ title: "Scanner didn't load", text: "Check the connection and reload the page." }); return; }
-    starting = true; hideStageMsg(); status("Starting camera…");
+    if (block) { showStageMsg(block, false); status("Camera not available — a Bluetooth/USB scanner or typing still works", false); return; }
+    starting = true; $("stageMsg").hidden = true; status("Starting camera…");
     try {
-      await stopCamera();
-      scanner = scanner || new Qr("reader", { formatsToSupport: FORMATS, verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-      const cfg = { fps: 12, disableFlip: false, videoConstraints: videoConstraints() }; // no box: read a code anywhere in the picture, as fast as possible
-      try {
-        await scanner.start({ facingMode: "environment" }, cfg, onScan, () => {});
-      } catch (e) {
-        // the remembered lens is gone, or the size isn't supported: fall back to any camera
-        if (/Overconstrained|NotFound|NotReadable/i.test(String(e?.name || e)) || $("cameraSel").value) {
-          $("cameraSel").value = ""; store.set(CAM_KEY, "");
-          await scanner.start({ facingMode: "environment" }, { fps: 12 }, onScan, () => {});
-        } else throw e;
-      }
-      running = true; paused = false;
-      fitStage(); loop1D();
-      status("Scanning…");
-      $("pauseBtn").textContent = "⏸"; $("pauseBtn").title = "Pause camera";
-      await listCameras();
-      setupTrackFeatures();
+      stopCamera();
+      await setupDecoders();
+      const id = store.get(CAM_KEY, "");
+      const base = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: id ? { ...base, deviceId: { exact: id } } : { ...base, facingMode: { ideal: "environment" } }, audio: false }); }
+      catch (e) { if (id && /Overconstrained|NotFound|NotReadable/i.test(String(e?.name || e))) { store.set(CAM_KEY, ""); stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }); } else throw e; }
+      video.srcObject = stream; video.muted = true; video.setAttribute("playsinline", ""); await video.play().catch(() => {});
+      track = stream.getVideoTracks()[0];
+      caps = (track.getCapabilities && track.getCapabilities()) || {};
+      // close-up barcodes need the lens to keep refocusing
+      if ((caps.focusMode || []).includes("continuous")) { try { await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch { /* ignore */ } }
+      setupControls();
+      running = true; paused = false; $("pauseBtn").classList.remove("paused"); $("pauseBtn").setAttribute("aria-label", "Pause scanning");
+      status(detector ? "Scanning… (fast reader)" : "Scanning…");
+      listCameras();
+      loop();
     } catch (e) {
-      running = false;
-      showStageMsg(errorInfo(e));
-      status("Camera off", false);
+      running = false; showStageMsg(errorInfo(e)); status("Camera off", false);
     } finally { starting = false; }
   }
-
-  /** Every ~1/4 s: look for a 1D barcode in the camera picture (middle band, and every 3rd time turned sideways). */
-  let loopT = 0, tick = 0;
-  function loop1D() {
-    clearTimeout(loopT);
-    loopT = setTimeout(() => {
-      if (!running) return;
-      const v = document.querySelector("#reader video");
-      if (!paused && !document.hidden && v?.videoWidth && reader1D) {
-        const w = v.videoWidth, h = v.videoHeight, turn = ++tick % 3 === 0;
-        const crop = turn ? [w * 0.2, 0, w * 0.6, h] : [0, h * 0.2, w, h * 0.6];
-        const r = decode1D(draw(v, w, h, crop, Math.min(turn ? crop[2] : crop[2], 1280), turn));
-        if (r) onScan(r.text, { result: { format: { formatName: r.format } } });
-      }
-      loop1D();
-    }, 260);
+  function stopCamera() {
+    clearTimeout(loopT); running = false;
+    if (stream) stream.getTracks().forEach((t) => t.stop()); // frees the camera (iPhone needs this)
+    stream = null; track = null; torchOn = false; video.srcObject = null;
   }
-
-  /** Give the view the camera picture's own shape (no stretching), no taller than 62% of the screen. */
-  function fitStage() {
-    const v = document.querySelector("#reader video"), st = $("stage");
-    const go = () => { if (!v?.videoWidth) return; const r = v.videoWidth / v.videoHeight; st.style.aspectRatio = `${v.videoWidth} / ${v.videoHeight}`; st.style.width = `min(100%, calc(62vh * ${r.toFixed(4)}))`; };
-    if (v?.videoWidth) go(); else v?.addEventListener("loadedmetadata", go, { once: true });
+  function setupControls() {
+    $("torchBtn").hidden = !caps.torch; $("torchBtn").setAttribute("aria-pressed", "false");
+    if (caps.zoom && caps.zoom.max > caps.zoom.min) {
+      const z = $("zoom"); z.min = caps.zoom.min; z.max = Math.min(caps.zoom.max, 10); z.step = caps.zoom.step || 0.1;
+      z.value = (track.getSettings?.().zoom) || caps.zoom.min; $("zoomRow").hidden = false;
+    } else $("zoomRow").hidden = true;
   }
-
-  async function stopCamera() {
-    clearTimeout(loopT);
-    if (scanner && (running || scanner.isScanning)) { try { await scanner.stop(); } catch { /* already stopped */ } }
-    running = false; paused = false;
-    $("torchBtn").hidden = true; $("zoomRow").hidden = true; track = { torch: null, zoom: null, torchOn: false };
+  async function setZoom(v) {
+    if (!track || !caps.zoom) return;
+    const z = Math.max(caps.zoom.min, Math.min(Math.min(caps.zoom.max, 10), v)); $("zoom").value = z;
+    try { await track.applyConstraints({ advanced: [{ zoom: z }] }); } catch { /* ignore */ }
   }
-
   async function listCameras() {
     let cams = [];
-    // the camera is already allowed, so the browser gives names without opening a second camera
-    try { cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput").map((d) => ({ id: d.deviceId, label: d.label })); } catch { return; }
-    const sel = $("cameraSel");
-    sel.replaceChildren(new Option("Back camera (auto)", ""));
-    cams.forEach((c, i) => sel.append(new Option(c.label || `Camera ${i + 1}`, c.id)));
-    const want = store.get(CAM_KEY, "");
-    sel.value = cams.some((c) => c.id === want) ? want : "";
-    sel.closest(".controls").querySelector(".sel").hidden = cams.length < 1;
-  }
-  function currentDeviceId() {
-    try { const v = document.querySelector("#reader video"); return v?.srcObject?.getVideoTracks?.()[0]?.getSettings?.().deviceId || ""; } catch { return ""; }
+    try { cams = (await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === "videoinput"); } catch { return; }
+    const sel = $("cameraSel"); sel.replaceChildren(new Option("Back camera (auto)", ""));
+    cams.forEach((c, i) => sel.append(new Option(c.label || `Camera ${i + 1}`, c.deviceId)));
+    sel.value = store.get(CAM_KEY, "") || "";
+    $("lensBtn").hidden = cams.length < 2;
   }
 
-  function setupTrackFeatures() {
-    let caps = null;
-    try { caps = scanner.getRunningTrackCameraCapabilities(); } catch { return; }
-    try { const t = caps.torchFeature(); if (t.isSupported()) { track.torch = t; $("torchBtn").hidden = false; $("torchBtn").setAttribute("aria-pressed", "false"); } } catch { /* no torch */ }
-    try {
-      const z = caps.zoomFeature();
-      if (z.isSupported() && z.max() > z.min()) {
-        track.zoom = z; const r = $("zoom"); r.min = z.min(); r.max = Math.min(z.max(), 8); r.step = z.step() || 0.1; r.value = z.value() || z.min(); $("zoomRow").hidden = false;
+  // ---------- the scanning loop: ~10 tries a second ----------
+  function loop() {
+    clearTimeout(loopT);
+    loopT = setTimeout(async () => {
+      if (!running) return;
+      if (!paused && !busy && !document.hidden && video.videoWidth && Date.now() > holdUntil) {
+        busy = true;
+        try {
+          let hit = null;
+          if (detector) {
+            try {
+              const r = await detector.detect(video);
+              const x = r.find((c) => goodCode(c.rawValue, c.format));
+              if (x) hit = { text: x.rawValue, format: x.format, points: (x.cornerPoints || []).map((p) => ({ x: p.x, y: p.y })) };
+            } catch { detector = null; }
+          }
+          if (!hit && reader) {
+            const v = video, w = windowInVideo(v), t = tick++ % 5;
+            // scan window most of the time; the window turned sideways, the whole picture, and "find the stripes and zoom in" in between
+            let r = null;
+            if (t === 4) { for (const c of locateBarcodes(v).slice(0, 2)) { r = zxSpot(v, c); if (r) break; } }
+            else r = t === 3 ? zxRegion(v, 0, 0, v.videoWidth, v.videoHeight, false) : t === 2 ? zxRegion(v, w.x, w.y, w.w, w.h, true) : zxRegion(v, w.x, w.y, w.w, w.h, false);
+            if (r && goodCode(r.text, r.format)) hit = r;
+          }
+          if (hit) found(hit, "camera");
+        } finally { busy = false; }
       }
-    } catch { /* no zoom */ }
+      loop();
+    }, 100);
   }
 
-  function onScan(text, res) {
-    const now = Date.now();
-    if (!text || (text === last.text && now - last.at < 4000)) return; // same code still in view
+  // ---------- a code was found ----------
+  let batch = store.get(BATCH_KEY, false), batchCodes = [];
+  function found(hit, src) {
+    const text = String(hit.text).trim(), now = Date.now();
+    if (text === last.text && now - last.at < 2000) return; // same code still in front of the camera
     last = { text, at: now };
-    const format = fmtName(res?.result?.format?.formatName);
-    const item = { text, format, at: now, src: "camera" };
-    addHistory(item); beep();
-    const fr = $("frame"); fr.classList.add("hit"); setTimeout(() => fr.classList.remove("hit"), 600);
-    if ($("keepGoing").checked) { toast(`${format}: ${text.length > 40 ? text.slice(0, 40) + "…" : text}`); return; }
-    try { scanner.pause(true); paused = true; } catch { /* ignore */ }
+    const item = { id: now + "-" + Math.random().toString(36).slice(2, 7), value: text, format: fmtName(hit.format), source: src === "hid" ? "Bluetooth/USB scanner" : src === "typed" ? "Typed" : "Camera", timestamp: now };
+    addHistory(item); beep(true);
+    if (hit.points?.length) drawHit(hit.points);
+    const fr = $("frame"); fr.classList.add("hit"); setTimeout(() => fr.classList.remove("hit"), 700);
+    if (batch) {
+      batchCodes.unshift(item); renderBatch();
+      if (KW && opener) sendToKwaderno([text]);
+      toast(`${item.format}: ${text.length > 34 ? text.slice(0, 34) + "…" : text}`);
+      return;
+    }
+    holdUntil = now + 10 * 60 * 1000; // hold until the person goes back to scanning
     status("Found it", false);
-    showResult(item);
+    setTimeout(() => {
+      if (KW) { const how = sendToKwaderno([text]); if (how === "message") { showResult(item, true); toast("Sent to KWADERNO ✓"); } return; }
+      showResult(item);
+    }, 350);
+  }
+  /** Green outline around the code where the camera saw it. */
+  function drawHit(points) {
+    const c = $("overlay"), r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(r.width * dpr); c.height = Math.round(r.height * dpr);
+    const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, r.width, r.height);
+    const sc = Math.max(r.width / video.videoWidth, r.height / video.videoHeight), ox = (r.width - video.videoWidth * sc) / 2, oy = (r.height - video.videoHeight * sc) / 2;
+    let pts = points.map((p) => ({ x: p.x * sc + ox, y: p.y * sc + oy }));
+    if (pts.length === 2) { // a 1D barcode gives the two ends of its scan line: draw a box around it
+      const [a, b] = pts, dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len, hh = len * 0.28, ex = dx / len * len * 0.08, ey = dy / len * len * 0.08;
+      pts = [{ x: a.x - ex + nx * hh, y: a.y - ey + ny * hh }, { x: b.x + ex + nx * hh, y: b.y + ey + ny * hh }, { x: b.x + ex - nx * hh, y: b.y + ey - ny * hh }, { x: a.x - ex - nx * hh, y: a.y - ey - ny * hh }];
+    }
+    g.strokeStyle = "#22c55e"; g.lineWidth = 4; g.fillStyle = "rgba(34,197,94,.18)"; g.lineJoin = "round";
+    g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.closePath(); g.fill(); g.stroke();
+    setTimeout(() => g.clearRect(0, 0, r.width, r.height), 900);
   }
 
-  function showResult(item) {
+  // ---------- result page ----------
+  let offCtl = null;
+  function showResult(item, sent) {
     $("result").hidden = false;
-    const b = $("resFormat"); b.textContent = item.format; b.className = "badge " + (TWO_D.has(item.format) ? "qr" : "bar");
-    $("resTime").textContent = when(item.at) + (item.src === "photo" ? " · photo" : "");
-    $("resText").textContent = item.text;
-    const url = isUrl(item.text);
-    $("openBtn").hidden = !url; $("linkWarn").hidden = !url;
-    if (url) $("openBtn").href = item.text; else $("openBtn").removeAttribute("href");
-    $("copyBtn").onclick = async () => toast((await copyText(item.text)) ? "Copied" : "Couldn't copy — press and hold the text");
-    $("result").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const code = item.value, num = /^\d+$/.test(code), ck = checkDigitOk(code), gs = gs1Of(code);
+    $("resFormat").textContent = item.format;
+    $("resCode").textContent = code;
+    $("resCheck").textContent = ck === true ? "✓ Check digit OK" + (gs ? ` · GS1 ${gs}` : "") : ck === false ? "✗ Check digit doesn't match — scan again" : gs ? `GS1 ${gs}` : "";
+    $("resCheck").classList.toggle("bad", ck === false);
+    $("resSource").textContent = `${item.source} · ${when(item.timestamp)}`;
+    const url = isUrl(code);
+    $("openBtn").hidden = !url; $("linkWarn").hidden = !url; if (url) $("openBtn").href = code;
+    $("webBtn").href = "https://www.google.com/search?q=" + encodeURIComponent(code);
+    $("kwBack").hidden = !KW; if (KW) $("kwBack").href = RETURN + encodeURIComponent(code);
+    $("resArt").replaceChildren(); const art = eanSvg(code); if (art) $("resArt").append(art); $("resArt").hidden = !art;
+    $("resImg").replaceChildren(document.createTextNode(TWO_D.has(item.format) ? "▦" : "▥"));
+    $("resName").textContent = sent ? "Sent to KWADERNO ✓" : num ? "Looking up the product…" : TWO_D.has(item.format) ? "QR code" : "Code";
+    $("resBrand").textContent = sent ? "Go back to the KWADERNO tab — the item is there." : "";
+    $("againBtn").focus();
+    // product name and photo from Open Food Facts (only the barcode number is sent)
+    offCtl?.abort();
+    if (num && code.length >= 8 && !sent) {
+      offCtl = new AbortController(); const ctl = offCtl;
+      fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,image_front_small_url,quantity`, { signal: ctl.signal })
+        .then((r) => (r.ok ? r.json() : null)).then((d) => {
+          if (ctl.signal.aborted) return;
+          const p = d && d.status === 1 ? d.product : null;
+          $("resName").textContent = p?.product_name ? p.product_name + (p.quantity ? ` ${p.quantity}` : "") : "Product not in the public list";
+          $("resBrand").textContent = p?.brands || (p ? "" : "Add it in KWADERNO with this barcode.");
+          if (p?.image_front_small_url && /^https:\/\//.test(p.image_front_small_url)) { const im = new Image(); im.alt = ""; im.referrerPolicy = "no-referrer"; im.src = p.image_front_small_url; $("resImg").replaceChildren(im); }
+        }).catch(() => { if (!ctl.signal.aborted) { $("resName").textContent = "Couldn't look it up (offline?)"; } });
+    }
+  }
+  function closeResult() { $("result").hidden = true; offCtl?.abort(); holdUntil = Date.now() + 600; status(running ? "Scanning…" : "Camera off", running); if (!running) startCamera(); }
+
+  /** Draws an EAN-13 / UPC-A / EAN-8 barcode as SVG (like the code on the pack). */
+  function eanSvg(code) {
+    if (!/^\d+$/.test(code) || checkDigitOk(code) !== true) return null;
+    const Lp = ["0001101", "0011001", "0010011", "0111101", "0100011", "0110001", "0101111", "0111011", "0110111", "0001011"];
+    const G = Lp.map((p) => p.split("").map((b) => (b === "0" ? "1" : "0")).reverse().join("")), R = Lp.map((p) => p.split("").map((b) => (b === "0" ? "1" : "0")).join(""));
+    const PAR = ["LLLLLL", "LLGLGG", "LLGGLG", "LLGGGL", "LGLLGG", "LGGLLG", "LGGGLL", "LGLGLG", "LGLGGL", "LGGLGL"];
+    let bits = "";
+    if (code.length === 8) { bits = "101" + code.slice(0, 4).split("").map((d) => Lp[d]).join("") + "01010" + code.slice(4).split("").map((d) => R[d]).join("") + "101"; }
+    else { const c = code.length === 12 ? "0" + code : code; if (c.length !== 13) return null; const par = PAR[c[0]];
+      bits = "101" + c.slice(1, 7).split("").map((d, i) => (par[i] === "L" ? Lp[d] : G[d])).join("") + "01010" + c.slice(7).split("").map((d) => R[d]).join("") + "101"; }
+    const ns = "http://www.w3.org/2000/svg", svg = document.createElementNS(ns, "svg"), W = bits.length + 18;
+    svg.setAttribute("viewBox", `0 0 ${W} 60`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", "Barcode " + code);
+    for (let i = 0; i < bits.length; i++) if (bits[i] === "1") { const r = document.createElementNS(ns, "rect"); r.setAttribute("x", 9 + i); r.setAttribute("y", 2); r.setAttribute("width", 1); r.setAttribute("height", 46); r.setAttribute("fill", "#000"); svg.append(r); }
+    const t = document.createElementNS(ns, "text"); t.setAttribute("x", W / 2); t.setAttribute("y", 58); t.setAttribute("text-anchor", "middle"); t.setAttribute("font-size", "8"); t.setAttribute("font-family", "monospace"); t.setAttribute("fill", "#000"); t.textContent = code; svg.append(t);
+    return svg;
   }
 
-  function scanAgain() {
-    $("result").hidden = true; last.at = Date.now(); // the code just read is probably still in view: don't take it again right away
-    if (scanner && paused) { try { scanner.resume(); paused = false; status("Scanning…"); return; } catch { /* restart below */ } }
-    startCamera();
-  }
+  // ---------- Bluetooth / USB scanners (keyboard wedge) ----------
+  // They type a whole code in a burst (< 50 ms between keys) and press Enter. Caught anywhere on the page,
+  // so no text box has to be focused (iPhone/iPad hide the keyboard when a scanner is paired).
+  const hid = { buf: "", last: 0 };
+  window.addEventListener("keydown", (e) => {
+    const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    if (typing || e.ctrlKey || e.metaKey || e.altKey) { hid.buf = ""; return; }
+    const now = performance.now();
+    if (e.key === "Enter") { const code = hid.buf; hid.buf = ""; if (code.length >= 4 && now - hid.last < 120) { e.preventDefault(); if (!$("result").hidden) closeResult(); found({ text: code, format: "HID" }, "hid"); } return; }
+    if (e.key.length !== 1) return;
+    if (now - hid.last > 60) hid.buf = ""; // a person typing is slower: start over
+    hid.buf += e.key; hid.last = now;
+  }, true);
 
-  // ---------- photo / file fallback ----------
-  let fileScanner = null;
-  async function scanFile(file) {
-    if (!file) return;
-    status("Reading the photo…");
-    let res = null;
+  // ---------- touch: tap to focus, pinch to zoom ----------
+  const stage = $("stage"); let pinch = null;
+  stage.addEventListener("pointerdown", async (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const ring = $("focusRing"), r = stage.getBoundingClientRect(); ring.style.left = e.clientX - r.left + "px"; ring.style.top = e.clientY - r.top + "px";
+    ring.classList.add("on"); setTimeout(() => ring.classList.remove("on"), 700);
+    if (!track) return;
     try {
-      if (!document.getElementById("fileReader")) { const d = document.createElement("div"); d.id = "fileReader"; d.hidden = true; document.body.append(d); }
-      fileScanner = fileScanner || new Qr("fileReader", { formatsToSupport: FORMATS, verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } });
-      res = await fileScanner.scanFileV2(file, false);
-    } catch {
-      // try again on a smaller copy: very large phone photos sometimes fail
-      try { const small = await shrink(file, 1600); if (small) res = await fileScanner.scanFileV2(small, false); } catch { res = null; }
-    }
-    if (!res?.decodedText) {
-      try { const bmp = await createImageBitmap(file); const r = decodePhoto1D(bmp, bmp.width, bmp.height); if (r) res = { decodedText: r.text, result: { format: { formatName: r.format } } }; } catch { /* not an image */ }
-    }
-    if (res?.decodedText) {
-      const item = { text: res.decodedText, format: fmtName(res.result?.format?.formatName), at: Date.now(), src: "photo" };
-      addHistory(item); beep(); showResult(item); status("Found it in the photo", false);
-      try { if (running && !paused) { scanner.pause(true); paused = true; } } catch { /* ignore */ }
-    } else {
-      status(running ? "Scanning…" : "Camera off", running);
-      toast("No code found in the photo — take it closer, sharp and straight");
-    }
-  }
-  async function shrink(file, max) {
-    const bmp = await createImageBitmap(file); const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-    if (k >= 1) return null;
-    const c = document.createElement("canvas"); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-    const blob = await new Promise((r) => c.toBlob(r, "image/jpeg", 0.92));
-    return blob ? new File([blob], "photo.jpg", { type: "image/jpeg" }) : null;
-  }
+      const modes = caps.focusMode || [];
+      const adv = {}; if (modes.includes("single-shot")) adv.focusMode = "single-shot"; else if (modes.includes("manual")) adv.focusMode = "continuous";
+      if (caps.pointsOfInterest !== undefined) adv.pointsOfInterest = [{ x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }];
+      if (Object.keys(adv).length) await track.applyConstraints({ advanced: [adv] });
+      if (modes.includes("continuous")) setTimeout(() => track?.applyConstraints({ advanced: [{ focusMode: "continuous" }] }).catch(() => {}), 1500);
+    } catch { /* focus not adjustable here */ }
+  });
+  stage.addEventListener("touchstart", (e) => { if (e.touches.length === 2 && caps.zoom) { const [a, b] = e.touches; pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: Number($("zoom").value) }; } }, { passive: true });
+  stage.addEventListener("touchmove", (e) => { if (pinch && e.touches.length === 2) { const [a, b] = e.touches; const d = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY); setZoom(pinch.z * (d / pinch.d)); } }, { passive: true });
+  stage.addEventListener("touchend", () => { pinch = null; });
+
+  // rotating tips, like a native scanner
+  const HINTS = ["Point the camera at a barcode or QR code", "Tap the code in the frame to focus", "Pinch or use the slider to zoom", "Tilt a little to avoid glare and reflections", "Hold about a hand's length away"];
+  let hintI = 0; setInterval(() => { if (!document.hidden && $("result").hidden) $("hint").textContent = HINTS[++hintI % HINTS.length]; }, 3500);
 
   // ---------- history ----------
   const history = () => store.get(HIST_KEY, []);
-  function addHistory(item) { const h = history(); h.unshift(item); store.set(HIST_KEY, h.slice(0, 1000)); renderHistory(); }
+  function addHistory(item) { const h = history(); h.unshift(item); store.set(HIST_KEY, h.slice(0, 1000)); }
   function renderHistory() {
-    const q = $("histSearch").value.trim().toLowerCase();
-    const all = history(), list = q ? all.filter((x) => (x.text + " " + x.format).toLowerCase().includes(q)) : all;
+    const q = $("histSearch").value.trim().toLowerCase(), all = history();
+    const list = q ? all.filter((x) => (x.value + " " + x.format + " " + x.source).toLowerCase().includes(q)) : all;
     $("histCount").textContent = all.length ? `${list.length} of ${all.length} scan(s)` : "";
     const ul = $("histList"); ul.replaceChildren();
     if (!list.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = all.length ? "No match." : "No scans yet."; ul.append(li); return; }
     for (const x of list.slice(0, 300)) {
-      const li = document.createElement("li");
-      const t = document.createElement("div"); t.className = "t"; t.textContent = x.text;
-      const m = document.createElement("div"); m.className = "m";
-      const b = document.createElement("span"); b.className = "badge " + (TWO_D.has(x.format) ? "qr" : "bar"); b.textContent = x.format;
-      const tm = document.createElement("span"); tm.className = "time"; tm.textContent = when(x.at) + (x.src === "photo" ? " · photo" : "");
-      m.append(b, tm);
-      const a = document.createElement("div"); a.className = "a";
-      const cp = document.createElement("button"); cp.type = "button"; cp.textContent = "📋"; cp.title = "Copy"; cp.setAttribute("aria-label", "Copy " + x.text.slice(0, 40));
-      cp.onclick = async () => toast((await copyText(x.text)) ? "Copied" : "Couldn't copy");
-      const del = document.createElement("button"); del.type = "button"; del.textContent = "✕"; del.title = "Delete"; del.setAttribute("aria-label", "Delete");
-      del.onclick = () => { store.set(HIST_KEY, history().filter((y) => !(y.at === x.at && y.text === x.text))); renderHistory(); };
+      const li = document.createElement("li"), t = document.createElement("div"), m = document.createElement("div"), a = document.createElement("div");
+      t.className = "t"; t.textContent = x.value; m.className = "m";
+      const b = document.createElement("span"); b.className = "badge"; b.textContent = x.format;
+      const s = document.createElement("span"); s.textContent = `${x.source} · ${when(x.timestamp)}`; m.append(b, s);
+      a.className = "a";
+      const cp = document.createElement("button"); cp.type = "button"; cp.textContent = "⧉"; cp.setAttribute("aria-label", "Copy"); cp.onclick = async () => toast((await copyText(x.value)) ? "Copied" : "Couldn't copy");
+      const del = document.createElement("button"); del.type = "button"; del.textContent = "✕"; del.setAttribute("aria-label", "Delete"); del.onclick = () => { store.set(HIST_KEY, history().filter((y) => y.id !== x.id)); renderHistory(); };
       a.append(cp, del); li.append(t, m, a); ul.append(li);
     }
   }
-  // CSV: quotes escaped; cells starting with = + - @ are prefixed so spreadsheets don't run them as formulas
   const csvCell = (v) => { let s = String(v ?? ""); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return '"' + s.replace(/"/g, '""') + '"'; };
   function exportCsv() {
     const h = history(); if (!h.length) return toast("Nothing to export yet");
-    const rows = [["Time", "Format", "Code", "Source"], ...h.map((x) => [new Date(x.at).toISOString(), x.format, x.text, x.src || "camera"])];
-    const csv = "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), name = `scans-${new Date().toISOString().slice(0, 10)}.csv`;
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast("Saved " + name);
+    const rows = [["id", "value", "format", "source", "timestamp"], ...h.map((x) => [x.id, x.value, x.format, x.source, new Date(x.timestamp).toISOString()])];
+    const blob = new Blob(["﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a"), name = `scans-${new Date().toISOString().slice(0, 10)}.csv`; a.href = URL.createObjectURL(blob); a.download = name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("Saved " + name);
   }
 
-  // ---------- tabs, wiring ----------
-  let tab = "scan";
-  function showTab(t) {
-    tab = t;
-    document.querySelectorAll(".tabs button").forEach((b) => (b.dataset.tab === t ? b.setAttribute("aria-current", "page") : b.removeAttribute("aria-current")));
-    $("tab-scan").hidden = t !== "scan"; $("tab-history").hidden = t !== "history";
-    if (t === "history") { renderHistory(); stopCamera().then(() => status("Camera off", false)); }
-    else if ($("result").hidden) startCamera(); else status("Found it", false);
+  // ---------- batch (continuous) ----------
+  function renderBatch() {
+    $("batch").hidden = !batch; $("batchBtn").setAttribute("aria-pressed", String(batch));
+    $("batchCount").textContent = `${batchCodes.length} scanned` + (KW && opener ? " · sent to KWADERNO" : "");
+    $("batchSend").hidden = !(KW && !opener && batchCodes.length);
+    const ul = $("batchList"); ul.replaceChildren();
+    for (const x of batchCodes.slice(0, 50)) { const li = document.createElement("li"), a = document.createElement("span"), b = document.createElement("span"); a.textContent = x.value; b.className = "badge"; b.textContent = x.format; li.append(a, b); ul.append(li); }
   }
 
-  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-  $("againBtn").addEventListener("click", scanAgain);
-  $("fileIn").addEventListener("change", (e) => { scanFile(e.target.files?.[0]); e.target.value = ""; });
-  $("cameraSel").addEventListener("change", () => { store.set(CAM_KEY, $("cameraSel").value); $("result").hidden = true; startCamera(); });
-  $("torchBtn").addEventListener("click", async () => {
-    if (!track.torch) return;
-    try { await track.torch.apply(!track.torchOn); track.torchOn = !track.torchOn; $("torchBtn").setAttribute("aria-pressed", String(track.torchOn)); }
-    catch { toast("This camera's light can't be switched on here"); }
-  });
-  $("zoom").addEventListener("input", (e) => { try { track.zoom?.apply(Number(e.target.value)); } catch { /* ignore */ } });
-  $("pauseBtn").addEventListener("click", () => {
+  // ---------- wiring ----------
+  $("againBtn").onclick = closeResult; $("resBack").onclick = closeResult;
+  $("copyBtn").onclick = async () => toast((await copyText($("resCode").textContent)) ? "Copied" : "Couldn't copy — press and hold the number");
+  $("histBtn").onclick = () => { $("history").hidden = false; renderHistory(); };
+  $("histBack").onclick = () => { $("history").hidden = true; };
+  $("histSearch").oninput = renderHistory; $("csvBtn").onclick = exportCsv;
+  $("clearBtn").onclick = () => { if (history().length && window.confirm("Delete all saved scans on this device?")) { store.set(HIST_KEY, []); renderHistory(); } };
+  $("torchBtn").onclick = async () => { if (!track) return; try { await track.applyConstraints({ advanced: [{ torch: !torchOn }] }); torchOn = !torchOn; $("torchBtn").setAttribute("aria-pressed", String(torchOn)); } catch { toast("The light can't be switched on here"); } };
+  $("lensBtn").onclick = () => { const sel = $("cameraSel"), opts = [...sel.options].map((o) => o.value); const next = opts[(opts.indexOf(sel.value) + 1) % opts.length]; store.set(CAM_KEY, next); sel.value = next; const o = sel.selectedOptions[0]; toast(o ? o.text : "Camera"); startCamera(); };
+  $("cameraSel").onchange = () => { store.set(CAM_KEY, $("cameraSel").value); startCamera(); };
+  $("zoom").oninput = (e) => setZoom(Number(e.target.value));
+  $("zoomIn").onclick = () => setZoom(Number($("zoom").value) + Math.max(0.2, (caps.zoom?.max - caps.zoom?.min) / 10 || 0.5));
+  $("zoomOut").onclick = () => setZoom(Number($("zoom").value) - Math.max(0.2, (caps.zoom?.max - caps.zoom?.min) / 10 || 0.5));
+  $("pauseBtn").onclick = () => {
     if (!running) return startCamera();
-    if (paused) { scanAgain(); $("pauseBtn").textContent = "⏸"; }
-    else { try { scanner.pause(true); paused = true; status("Paused", false); $("pauseBtn").textContent = "▶"; $("pauseBtn").title = "Resume camera"; } catch { /* ignore */ } }
+    paused = !paused; $("pauseBtn").classList.toggle("paused", paused);
+    $("pauseBtn").setAttribute("aria-label", paused ? "Resume scanning" : "Pause scanning"); $("pauseBtn").firstElementChild.textContent = paused ? "▶" : "▮▮";
+    if (paused) video.pause(); else video.play().catch(() => {});
+    status(paused ? "Paused — tap ▶ to scan" : "Scanning…", !paused);
+  };
+  $("batchBtn").onclick = () => { batch = !batch; store.set(BATCH_KEY, batch); renderBatch(); toast(batch ? "Batch: keeps scanning, one after another" : "Single: stops at each code"); };
+  $("batchDone").onclick = () => { batch = false; store.set(BATCH_KEY, false); renderBatch(); };
+  $("batchSend").onclick = () => sendToKwaderno(batchCodes.map((x) => x.value).reverse());
+  $("typeBtn").onclick = () => { $("typeIn").value = ""; $("typeWarn").textContent = ""; $("typeDlg").showModal(); setTimeout(() => $("typeIn").focus(), 50); };
+  $("typeForm").addEventListener("submit", (e) => {
+    if (e.submitter?.value !== "ok") return;
+    const v = $("typeIn").value.replace(/\s+/g, "");
+    if (!v) { e.preventDefault(); return; }
+    if (checkDigitOk(v) === false || (/^\d+$/.test(v) && v.length >= 9 && v.length <= 11)) { e.preventDefault(); beep(false); $("typeWarn").textContent = v.length >= 9 && v.length <= 11 ? `Only ${v.length} digits — product barcodes have 8, 12 or 13.` : "The last digit (check digit) doesn't match — check the number."; return; }
+    setTimeout(() => found({ text: v, format: /^\d{13}$/.test(v) ? "EAN_13" : /^\d{12}$/.test(v) ? "UPC_A" : /^\d{8}$/.test(v) ? "EAN_8" : "Typed" }, "typed"), 0);
   });
-  $("keepGoing").checked = !!store.get(KEEP_KEY, false);
-  $("keepGoing").addEventListener("change", (e) => store.set(KEEP_KEY, e.target.checked));
-  $("histSearch").addEventListener("input", renderHistory);
-  $("csvBtn").addEventListener("click", exportCsv);
-  $("clearBtn").addEventListener("click", () => {
-    if (!history().length) return;
-    if (window.confirm("Delete all saved scans on this device?")) { store.set(HIST_KEY, []); renderHistory(); }
-  });
+  if (KW) { $("kwBadge").hidden = false; document.title = "Scan → KWADERNO"; }
 
-  // free the camera when the app goes to the background (iPhone needs this), start again when back
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) { if (running) stopCamera(); }
-    else if (tab === "scan" && $("result").hidden && !starting) startCamera();
-  });
-
-  // offline support
+  // free the camera in the background, start again when back
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stopCamera(); else if ($("result").hidden && !starting) startCamera(); });
+  window.addEventListener("pagehide", stopCamera);
   if ("serviceWorker" in navigator && window.isSecureContext) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 
-  window.__kwscan = { startCamera, stopCamera, history, scanFile }; // for tests
-  renderHistory();
+  window.__kwscan = { history, startCamera, stopCamera, found, get detector() { return !!detector; } }; // for tests
+  renderBatch();
   startCamera();
 })();

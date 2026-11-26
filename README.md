@@ -4,35 +4,40 @@ One web app that scans **QR codes and product barcodes** with the phone or compu
 
 ## What it does
 
-- **Live scan, no button to press.** It uses the back camera by default (`facingMode: "environment"`) and reads a code anywhere in the picture. A beep and vibration confirm each scan.
-- **Formats:**
-  - 2D: QR, Data Matrix, PDF417 and Aztec.
-  - 1D: EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, Code 93, ITF and Codabar.
-- **Camera / lens picker** (wide, ultra-wide, front …), plus a **flashlight** button and **zoom** slider on cameras that support them.
-- **Scan from a photo** for when the camera can't be used.
-  - For photos, it first finds where the barcode is, then zooms and straightens it. Small, far or tilted barcodes still read.
-- **"Keep scanning" mode** for scanning many items in a row. Otherwise it pauses on each result and shows Copy / Open link / Scan again.
-- **History** is kept on the device (`localStorage`, up to 1,000 scans), with a format badge, time, copy, delete and search.
-  - **Export CSV**: quotes are escaped, and cells starting with `= + - @` get a leading `'` so spreadsheets don't run them as formulas.
-- **Clear error messages** for each case:
-  - page not on HTTPS
-  - camera permission refused (with steps for iPhone, Android and desktop)
-  - no camera
-  - camera busy in another app
-  - in-app browsers (Facebook, Messenger, Instagram …), which can't use the camera
-  - pages embedded without camera access
-- **Offline:** a service worker keeps the app's files on the device, so it opens without internet after the first visit.
+- **Live and automatic.** The camera opens with the page, using the back lens (1920×1080, continuous autofocus). About 10 times a second it looks for a QR code or barcode, and captures the moment it recognizes one. There's no button to press and no QR/barcode mode switch.
+- **The green box.** Every capture draws a green box around the code, plays a beep and vibrates (`navigator.vibrate(100)`), then shows the product page. In **Batch** mode it keeps scanning and adds to a list, skipping the same code within 2 s.
+- **Formats.** QR, Data Matrix, PDF417 and Aztec, plus EAN-13, EAN-8, UPC-A, UPC-E, Code 128, Code 39, Code 93, ITF and Codabar. EAN/UPC codes must pass the check digit.
+- **Viewfinder.** A wide 16:10 scan window, so a retail barcode fits with its quiet zones; a dark mask around it; corner brackets; a scan line; and rotating tips (tap to focus, pinch to zoom, tilt against glare).
+- **Camera controls.** Tap to focus, pinch or slider to zoom, and a flashlight, each shown only when `track.getCapabilities()` says the camera has it. A lens switch appears when there's more than one camera.
+- **Bluetooth / USB scanners.** These "keyboard wedge" scanners type a code in a burst (under 50 ms per key) and press Enter. They're caught anywhere on the page, so no text box needs focus (on iPhone/iPad a paired scanner hides the keyboard). Normal typing is ignored. Each scan is tagged with its source.
+- **Product page.** Shows the code, format, check digit result, the GS1 prefix country (480–489 = Philippines) and the barcode drawn again. Name and photo come from Open Food Facts; only the barcode number is sent. Also Copy, Web search, and Open link for QR links (with a warning to check the address).
+- **Type the number.** A fallback with a check: 9–11 digits or a wrong check digit is flagged before use.
+- **History.** Kept on the device (`localStorage`: id, value, format, source, timestamp), with search, delete, Clear all and **Export CSV** (formula-safe).
+- **Error messages** for: not HTTPS, permission refused (steps for iPhone, Android and desktop), no camera, camera busy, in-app browsers (Facebook, Messenger…). The camera is released when the app goes to the background (`track.stop()`).
+
+## Used from KWADERNO
+
+KWADERNO runs inside claude.ai, which doesn't allow the live camera there. Its **Scan** button therefore opens this scanner in a new tab:
+
+```
+https://<pages-host>/kwaderno/?kw=1&return=https://claude.ai/artifact/<id>#scan-sell-
+```
+
+The code is sent back in one of two ways:
+
+1. **Message.** `postMessage({ type: "kw-scan", code, mode })` to the KWADERNO tab that opened the scanner. KWADERNO only accepts messages from the scanner's origin.
+2. **Link.** If there's no opener, the scanner opens `…#scan-sell-<code>`. KWADERNO reads it and adds the item.
+
+`return` must be a `https://claude.ai/artifact/…#scan-(sell|stock)-` link, so the scanner can't be used to redirect to other sites.
 
 ## Decoding
 
-| Part | Library |
+| | |
 |---|---|
-| Camera, lens, flashlight, zoom, QR and 2D codes | [`html5-qrcode`](https://github.com/mebjas/html5-qrcode) 2.3.8 (Apache-2.0). Uses the phone's built-in `BarcodeDetector` when it has one. |
-| 1D product barcodes | [`@zxing/library`](https://github.com/zxing-js/library) 0.21.3 (MIT) in "try harder" mode, on the middle band of each frame (every third frame turned 90°) and on photos |
+| Android Chrome (and other browsers that have it) | The phone's built-in `BarcodeDetector`: fast, and gives the code's corners for the green box |
+| iPhone / iPad / Mac Safari, Firefox, older phones | [`@zxing/library`](https://github.com/zxing-js/library) 0.21.3 (MIT), with `TRY_HARDER`, on the scan window (plus 12% margin) at full camera resolution. It also tries the window turned 90°, the whole picture, and a "find the stripes and zoom in" pass for small or far barcodes |
 
-Why two libraries: the ZXing copy inside `html5-qrcode` 2.3.8 turns "try harder" off and missed even clean, computer-generated EAN-13 codes in testing. Both libraries are bundled in `vendor/` unchanged, so nothing loads from a CDN.
-
-**Why the camera box is drawn 2.5× bigger:** `html5-qrcode` decodes each frame at the on-screen size of its container. On a phone that is only about 360 px wide, which loses detail. Here the container is laid out 2.5× bigger and shown scaled down, so the decoder sees more pixels.
+`html5-qrcode` was removed. Its bundled ZXing copy turns "try harder" off and missed even clean EAN-13s in testing.
 
 ## Hosting (HTTPS is required for the camera)
 
@@ -57,12 +62,12 @@ The app is then at `https://<owner>.github.io/<repo>/`.
 
 ```
 index.html            page
-styles.css            dark scan screen with red corners and scan line
-app.js                camera, decoding, history, CSV, errors
+styles.css            full-screen camera, wide scan window, result and history sheets
+app.js                camera, auto-capture, Bluetooth/USB scanner, KWADERNO return, history, CSV, errors
 sw.js                 offline cache
 manifest.webmanifest  PWA manifest (192, 512, maskable icons)
 icons/                app icons
-vendor/               html5-qrcode 2.3.8, @zxing/library 0.21.3 (+ licences)
+vendor/               @zxing/library 0.21.3 (+ licence)
 ```
 
 ## Privacy

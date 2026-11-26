@@ -192,3 +192,27 @@ body.paused .radar b { animation-play-state: paused; opacity: .25; }
 
 /* no pause button; zoom only where the camera picture is shown */
 #pauseBtn, #typeBtn, #zoomRow, .actions { display: none !important; } /* removed: pause, Type and − / + (pinch to zoom still works in QR / Camera) */
+
+/* ===== Grocery mode as a checkout screen: list of items with qty, total, remove last scan ===== */
+body.grocery .hud { grid-template-rows: auto 1fr auto; justify-items: stretch; align-content: stretch; gap: 10px;
+  padding: calc(76px + env(safe-area-inset-top)) 14px calc(110px + env(safe-area-inset-bottom)); background: #05090f; }
+.hud-last { margin: 0; text-align: center; color: #bfefff; font-size: .9rem; min-height: 1.3em; }
+.receipt { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; border-radius: 16px; overflow: hidden;
+  background: #0b141e; border: 1px solid rgba(25, 240, 255, .25); box-shadow: 0 0 24px rgba(25, 240, 255, .08) inset; }
+.rc-head, .rc-total { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; font: 700 .78rem ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; color: #8fe9f2; }
+.rc-head { border-bottom: 1px dashed rgba(25, 240, 255, .25); }
+.rc-total { border-top: 1px dashed rgba(25, 240, 255, .25); font-size: .85rem; }
+.rc-total b { font: 800 1.9rem/1 ui-monospace, Menlo, Consolas, monospace; color: #e8fdff; text-shadow: 0 0 10px rgba(25, 240, 255, .6); letter-spacing: 0; }
+.receipt .hud-list { width: auto; overflow: auto; gap: 0; padding: 4px 0; }
+.receipt .hud-list li { grid-template-columns: 1fr auto; border: 0; border-radius: 0; background: none; padding: 9px 14px; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+.receipt .hud-list li .x { font-size: 1.25rem; }
+.receipt .hud-list li.fresh { background: rgba(61, 255, 154, .10); box-shadow: inset 4px 0 0 var(--ok2); }
+.receipt .hud-list li.gone { opacity: .35; text-decoration: line-through; }
+.receipt .empty-row { padding: 26px 14px; text-align: center; color: #6c8a95; list-style: none; }
+.hud-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hud-actions .undo { grid-column: 1 / -1; min-height: 52px; font-size: 1rem; background: #2a1414; border-color: #ff6b6b; color: #ffd6d6; }
+.hud-actions .undo:disabled { opacity: .4; }
+.hud-actions #hudSend { grid-column: 1 / -1; }
+.modes button { display: inline-flex; align-items: center; gap: 6px; }
+.modes .bc-ic { width: 22px; height: 15px; }
+.modes .qr-ic { width: 16px; height: 16px; }

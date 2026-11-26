@@ -367,7 +367,7 @@
     document.body.classList.toggle("grocery", grocery); document.body.classList.remove("peek"); $("hudPeek").setAttribute("aria-pressed", "false");
     $("modeGrocery").setAttribute("aria-selected", String(grocery)); $("modeCamera").setAttribute("aria-selected", String(!grocery));
     renderHud(); renderBatch();
-    if (!quiet) toast(grocery ? "Grocery: no camera picture — point and it counts" : "QR / Camera: camera picture on screen");
+    if (!quiet) toast(grocery ? "Barcode: no camera picture — point and it counts" : "QR Camera: camera picture on screen");
   }
   /** Loud two-tone chirp (louder than the normal beep). */
   function chirp() {
@@ -396,24 +396,35 @@
     $("popTotal").textContent = `×${same} · ${total} item${total === 1 ? "" : "s"}`;
     p.hidden = false; p.classList.remove("show"); void p.offsetWidth; p.classList.add("show");
     clearTimeout(popT); popT = setTimeout(() => { p.hidden = true; p.classList.remove("show"); }, 900);
-    const r = $("radar"); r.classList.add("hit"); setTimeout(() => r.classList.remove("hit"), 500);
     renderHud(item.value);
   }
   function renderHud(fresh) {
     if (!$("hud")) return;
-    const groups = new Map(); for (const x of batchCodes) { const g = groups.get(x.value) || { value: x.value, format: x.format, n: 0, at: x.timestamp }; g.n++; groups.set(x.value, g); }
+    // one row per product, the most recently scanned on top
+    const groups = new Map(); for (const x of batchCodes) { const g = groups.get(x.value) || { value: x.value, format: x.format, n: 0 }; g.n++; groups.set(x.value, g); }
     $("hudCount").textContent = String(batchCodes.length);
-    $("hudCountLbl").textContent = `item${batchCodes.length === 1 ? "" : "s"} scanned · ${groups.size} product${groups.size === 1 ? "" : "s"}`;
+    $("hudCountLbl").textContent = `TOTAL · ${groups.size} PRODUCT${groups.size === 1 ? "" : "S"}`;
     const last = batchCodes[0];
     $("hudLast").textContent = last ? `Last: ${names.get(last.value) || last.value}` : "Point the back of the phone at a barcode";
     const ul = $("hudList"); ul.replaceChildren();
+    if (!groups.size) { const li = document.createElement("li"); li.className = "empty-row"; li.textContent = "No items yet — scan a barcode"; ul.append(li); }
     for (const g of groups.values()) {
       const li = document.createElement("li"), n = document.createElement("span"), c = document.createElement("span"), x = document.createElement("span");
       n.className = "n"; n.textContent = names.get(g.value) || g.format; c.className = "c"; c.textContent = g.value; x.className = "x"; x.textContent = "×" + g.n;
-      if (g.value === fresh) li.className = "fresh"; li.append(n, x, c); ul.append(li);
+      if (g.value === fresh || (!fresh && last && g.value === last.value)) li.className = "fresh"; li.append(n, x, c); ul.append(li);
     }
+    $("hudUndo").disabled = !batchCodes.length;
+    $("hudUndo").textContent = last ? `↶ Remove last scan (${names.get(last.value) || last.value})` : "↶ Remove last scan";
     const send = $("hudSend"); send.hidden = !(KW && !opener && batchCodes.length);
     if (!send.hidden) { send.href = RETURN + encodeURIComponent(batchCodes.map((x) => x.value).reverse().join(",")); send.textContent = `Send ${batchCodes.length} to KWADERNO`; }
+  }
+  /** A mistake: take back the most recent scan (again and again, newest first). Also takes 1 off the KWADERNO sale. */
+  function undoLast() {
+    const x = batchCodes.shift(); if (!x) return;
+    store.set(HIST_KEY, history().filter((y) => y.id !== x.id));
+    if (KW && opener) { try { opener.postMessage({ type: "kw-unscan", code: x.value, mode: KW_MODE }, "*"); } catch { /* KWADERNO tab closed */ } }
+    beep(false); renderHud(); renderBatch();
+    toast(`Removed 1 × ${names.get(x.value) || x.value}`);
   }
 
   // ---------- result page ----------
@@ -590,6 +601,7 @@
   $("modeGrocery").onclick = () => setMode("grocery");
   $("modeCamera").onclick = () => setMode("camera");
   $("hudPeek").onclick = () => { const on = !document.body.classList.contains("peek"); document.body.classList.toggle("peek", on); $("hudPeek").setAttribute("aria-pressed", String(on)); $("hudPeek").textContent = on ? "👁 Hide camera" : "👁 Show camera"; };
+  $("hudUndo").onclick = undoLast;
   $("hudClear").onclick = () => { if (!batchCodes.length) return; batchCodes = []; renderHud(); renderBatch(); toast("New count"); };
   setMode(grocery ? "grocery" : "camera", true);
 

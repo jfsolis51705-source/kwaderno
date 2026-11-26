@@ -1216,9 +1216,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     } else if (hit) { scanBeep(true); go("products", "p-" + hit.id); } else unknownBarcode(code, (np) => go("products", "p-" + np.id));
   }
   window.addEventListener("message", (e) => {
-    const d = e.data; if (!d || d.type !== "kw-scan" || typeof d.code !== "string") return;
+    const d = e.data; if (!d || (d.type !== "kw-scan" && d.type !== "kw-unscan") || typeof d.code !== "string") return;
     let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin; } catch { ok = false; }
     if (!ok) return;
+    if (d.type === "kw-unscan") { // the scanner took back its last scan (a mistake): one less in the sale
+      const p = byBarcode(d.code.trim()); if (!p) return;
+      const i = cart.lines.findIndex((l) => l.productId === p.id); if (i < 0) return;
+      const q = (Number(cart.lines[i].qty) || 0) - 1; if (q > 0) cart.lines[i].qty = String(q); else cart.lines.splice(i, 1);
+      scanBeep(false); toast(`−1 ${p.name} · ${inSale(p)} ${L("sa benta", "in the sale")}`); render(); return;
+    }
     const codes = d.code.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 50);
     if (scanWait) return scanWait.resolve(codes[0]);
     for (const c of codes) incomingCode(c, d.mode);

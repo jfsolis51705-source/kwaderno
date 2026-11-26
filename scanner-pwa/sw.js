@@ -1,5 +1,5 @@
 // Offline support: keep the app's own files on the device. Scans never go through here.
-const CACHE = "kwscan-v3";
+const CACHE = "kwscan-v4";
 const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "vendor/zxing-library-0.21.3.min.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
 

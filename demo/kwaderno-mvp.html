@@ -756,8 +756,12 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   // ---------- routing ----------
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
+  var pendingScan = null; // codes from a #scan-… link, handled once the products are loaded
   function readHash() {
-    const raw = location.hash.slice(1);
+    let raw = location.hash.slice(1);
+    // #scan-sell-<codes> / #scan-stock-<codes>: codes sent back by the live scanner (comma = several)
+    const sm = raw.match(/^scan-(sell|stock)-(.+)$/);
+    if (sm) { const codes = decodeURIComponent(sm[2]).split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50); pendingScan = { mode: sm[1], codes }; raw = sm[1] === "sell" ? "sell" : "products"; history.replaceState(null, "", "#" + raw); }
     if (raw === "phone" || raw === "phone-land" || raw === "tablet" || raw === "tablet-land" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
     if (raw === "admin-phone" || raw === "admin-desktop") { setAdminLayout(raw.slice(6)); history.replaceState(null, "", "#admin"); view = "admin"; sub = null; return; }
     if (raw === "admin" || raw.startsWith("admin-")) { view = "admin"; sub = raw.length > 5 ? raw.slice(6) : null; return; }
@@ -868,6 +872,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const langBtn = $("#langToggle");
   langBtn.addEventListener("click", () => { lang = lang === "en" ? "tl" : "en"; try { localStorage.setItem("kw-lang", lang); } catch { /* ignore */ } lastRoute = ""; render(); });
   function render() {
+    if (pendingScan && S.ready) setTimeout(takePendingScan, 0);
     applyLayout();
     document.documentElement.lang = lang === "en" ? "en" : "fil";
     langBtn.replaceChildren(...[["en", "English"], ["tl", "Tagalog"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
@@ -1161,17 +1166,74 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const got = code === "__type__" || code === "__photo__" ? await scanBarcode({ ask: true, title, note: code === "__photo__" ? pickerStuckMsg(true) : "" }) : code;
       if (got) onCode(got);
     } }, ...kids);
-    const i = fileInput(true); let stop = () => {};
-    i.addEventListener("change", async () => { stop(); const f = i.files?.[0]; i.value = ""; if (!f) return; const code = await scanBarcode({ file: f, title }); if (code) onCode(code); });
-    i.addEventListener("cancel", () => stop());
-    return h("label", { class: cls, role: "button", tabindex: 0,
-      onclick: () => { stop(); stop = watchPicker(async () => { const code = await scanBarcode({ ask: true, title, note: pickerStuckMsg(true) }); if (code) onCode(code); }); },
-      onkeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); i.click(); } } }, i, ...kids);
+    // the live camera is blocked inside claude.ai: open the KWADERNO live scanner (auto-capture) and take the code back
+    return h("button", { class: cls, onclick: async () => { const code = await externalScan(title); if (code) onCode(code); } }, ...kids);
   }
+  // ---------- LIVE SCANNER APP: auto-capture in its own tab, the code comes back here ----------
+  const SCANNER_URL = () => { try { return localStorage.getItem("kw-scanner-url") || "https://jfsolis51705-source.github.io/kwaderno/"; } catch { return "https://jfsolis51705-source.github.io/kwaderno/"; } };
+  const APP_URL = "https://claude.ai/artifact/8JVsaCApj6gs8P2kSzpASY";
+  let scanWait = null; // { resolve } while the scanner tab is open
+  /** Opens the live scanner; resolves with the code (sent back by the scanner tab, a Bluetooth/USB scanner, or typed). */
+  function externalScan(title) {
+    return new Promise((resolve) => {
+      let done = false; const finish = (v) => { if (done) return; done = true; scanWait = null; if (dlg.open && dlg.contains(box)) dlg.close(); resolve(v); };
+      const mode = view === "sell" ? "sell" : "stock";
+      const url = SCANNER_URL() + "?kw=1&return=" + encodeURIComponent(APP_URL + "#scan-" + mode + "-");
+      const open = () => { const w = window.open(url, "kwscanner"); if (!w) { msg.textContent = L("Hindi nabuksan — pindutin ang link sa ibaba.", "It didn't open — tap the link below."); link.hidden = false; } };
+      const typed = h("input", { type: "text", inputmode: "numeric", autocomplete: "off", id: "xsTyped", placeholder: L("hal. 4800016644290", "e.g. 4800016644290"), maxlength: 48 });
+      const msg = h("div", { class: "small", role: "status" });
+      const use = () => { const v = typed.value.replace(/\s+/g, ""); if (!v) return; const bad = codeIssue(v); if (bad) { scanBeep(false); msg.style.color = "var(--bad)"; msg.textContent = bad; return; } scanBeep(true); finish(v); };
+      typed.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); use(); } });
+      const link = h("a", { class: "btn", href: url, target: "kwscanner", rel: "opener", hidden: true }, L("Buksan ang scanner", "Open the scanner"));
+      const box = h("div", { class: "grid", id: "xsWait" },
+        h("div", { style: "display:flex;gap:10px;align-items:center" }, h("span", { class: "spin", "aria-hidden": "true" }), h("b", { text: L("Bukas ang scanner sa bagong tab — itapat ang camera sa barcode o QR.", "The scanner is open in a new tab — point the camera at the barcode or QR.") })),
+        h("p", { class: "muted small", style: "margin:0", text: L("Kusa itong babasa at babalik dito ang numero. Gumagana rin ang Bluetooth/USB scanner ngayon.", "It reads by itself and the number comes back here. A Bluetooth/USB scanner works right now too.") }),
+        h("button", { class: "btn primary", id: "xsOpen", onclick: open }, L("📷 Buksan ulit ang scanner", "📷 Open the scanner again")), link,
+        h("label", { class: "f" }, L("O i-type ang numero", "Or type the number"), typed), h("button", { class: "btn", onclick: use }, L("Gamitin ang numerong ito", "Use this number")), msg,
+        h("button", { class: "btn", onclick: () => finish(null) }, L("Kanselahin", "Cancel")));
+      scanWait = { resolve: finish };
+      openDialog(title || L("I-scan", "Scan"), box);
+      dlg.addEventListener("close", () => finish(null), { once: true });
+      open();
+    });
+  }
+  /** A code from outside: the scanner tab, a Bluetooth/USB scanner, or a #scan- link. */
+  function incomingCode(code, mode) {
+    code = String(code || "").trim().slice(0, 128); if (!code) return;
+    if (scanWait) return scanWait.resolve(code);
+    const hit = byBarcode(code);
+    if ((mode || (view === "sell" ? "sell" : "")) === "sell") {
+      if (view !== "sell") go("sell");
+      if (hit) { scanBeep(true); addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); });
+    } else if (hit) { scanBeep(true); go("products", "p-" + hit.id); } else unknownBarcode(code, (np) => go("products", "p-" + np.id));
+  }
+  window.addEventListener("message", (e) => {
+    const d = e.data; if (!d || d.type !== "kw-scan" || typeof d.code !== "string") return;
+    let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin; } catch { ok = false; }
+    if (!ok) return;
+    const codes = d.code.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 50);
+    if (scanWait) return scanWait.resolve(codes[0]);
+    for (const c of codes) incomingCode(c, d.mode);
+  });
+  // Bluetooth / USB barcode scanners type fast and press Enter: catch that anywhere, without a text box in focus
+  const hid = { buf: "", last: 0 };
+  window.addEventListener("keydown", (e) => {
+    const t = e.target, typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable);
+    if (typing || e.ctrlKey || e.metaKey || e.altKey) { hid.buf = ""; return; }
+    const now = performance.now();
+    if (e.key === "Enter") { const code = hid.buf; hid.buf = ""; if (code.length >= 4 && now - hid.last < 120) { e.preventDefault(); e.stopPropagation(); incomingCode(code); } return; }
+    if (e.key.length !== 1) return;
+    if (now - hid.last > 80) hid.buf = "";
+    hid.buf += e.key; hid.last = now;
+  }, true);
+  function takePendingScan() { if (!pendingScan || !S.ready) return; const { mode, codes } = pendingScan; pendingScan = null; setTimeout(() => codes.forEach((c, i) => setTimeout(() => incomingCode(c, mode), i * 50)), 100); }
   function scanBarcode(opts = {}) {
     return new Promise((resolve) => {
       let done = false;
-      const finish = (v) => { if (done) return; done = true; resolve(v); };
+      let handOff = false; // closing this box to open the live scanner is not a cancel
+      const prevWait = scanWait; // a Bluetooth/USB scanner used while this box is open fills it
+      scanWait = { resolve: (c) => { if (dlg.open) dlg.close(); finish(c); } };
+      const finish = (v) => { if (done) return; done = true; scanWait = prevWait && prevWait !== scanWait ? prevWait : null; resolve(v); };
       const status = h("div", { class: "small", role: "status", style: "min-height:1.3em" });
       const thumb = h("img", { alt: "", hidden: true, style: "max-height:140px;border-radius:10px;justify-self:start" });
       const typed = h("input", { type: "text", inputmode: "numeric", autocomplete: "off", id: "bcTyped", placeholder: L("hal. 4800016644290", "e.g. 4800016644290"), maxlength: 48 });
@@ -1179,7 +1241,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const useTyped = () => {
         const v = typed.value.replace(/\s+/g, "");
         if (!v) return status.textContent = L("I-type ang numero sa ilalim ng barcode.", "Type the number under the barcode.");
-        if (!eanOk(v)) { scanBeep(false); return status.textContent = L("Mukhang mali ang isang numero — pakisuri ulit.", "One digit looks wrong — please check the number again."); }
+        if (codeIssue(v)) { scanBeep(false); return status.textContent = codeIssue(v); }
         scanBeep(true); dlg.close(); finish(v);
       };
       const pickSlot = h("div", { class: "grid", style: "gap:6px" });
@@ -1216,28 +1278,66 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       const showChoices = () => {
         openDialog(opts.title || L("Magdagdag ng barcode", "Add barcode"), h("div", { class: "grid" },
           liveCameraAllowed() ? h("button", { class: "btn primary big", onclick: async () => { const code = await liveScan(opts.title); if (code && code !== "__type__" && code !== "__photo__") { dlg.close(); finish(code); } else if (code === "__photo__") { status.style.color = "var(--bad)"; status.textContent = pickerStuckMsg(true); } else setTimeout(() => typed.focus(), 50); } }, camIcon(), L("Buksan ang scanner", "Open the scanner")) : null,
-          pickLabel(true, liveCameraAllowed() ? "btn" : "btn primary big", [camIcon(), L("Kunan ng litrato ang barcode", "Take a photo of the barcode")]),
-          pickLabel(false, "btn", [L("🖼️ Pumili sa gallery", "🖼️ Choose from gallery")]),
+          liveCameraAllowed() ? null : h("button", { class: "btn primary big", id: "bcLive", onclick: async () => { handOff = true; dlg.close(); await new Promise((r) => setTimeout(r, 60)); /* let the old box's "close" event pass first */ const code = await externalScan(opts.title); finish(code); } }, camIcon(), L("I-scan gamit ang camera", "Scan with the camera")),
           thumb, pickSlot, status,
           h("label", { class: "f" }, L("O i-type ang numero sa ilalim ng barcode", "Or type the number under the barcode"), typed),
           h("button", { class: "btn", onclick: useTyped }, L("Gamitin ang numerong ito", "Use this number")),
-          h("p", { class: "muted small", style: "margin:0", text: L("Tip: punuin ng barcode ang gitna ng litrato, maliwanag at hindi malabo.", "Tip: fill the middle of the photo with the barcode, well lit and sharp.") }), detail));
+          h("p", { class: "muted small", style: "margin:0", text: L("Gumagana rin ang Bluetooth/USB barcode scanner — i-scan lang.", "A Bluetooth/USB barcode scanner works too — just scan.") }), detail));
         typed.addEventListener("keydown", (e) => { if (e.key === "Enter") useTyped(); });
-        dlg.addEventListener("close", () => finish(null), { once: true });
+        dlg.addEventListener("close", () => { if (!handOff) finish(null); }, { once: true });
       };
       if (opts.file) return tryFile(opts.file);          // a photo already taken with a scan button
       if (opts.ask) { showChoices(); if (opts.note) { status.style.color = "var(--bad)"; status.textContent = opts.note; } return; }
       pickPhoto(true).then((f) => (f ? tryFile(f) : finish(null)));
     });
   }
-  const byBarcode = (code) => S.products.find((p) => !p.archived && (p.barcodes || []).includes(code));
-  function unknownBarcode(code) {
+  /** Same barcode written two ways (UPC-A 12 digits vs EAN-13 with a leading 0, spaces) counts as the same. */
+  const normCode = (c) => { const t = String(c || "").replace(/\s+/g, ""); return /^\d+$/.test(t) ? t.replace(/^0+(?=\d)/, "") : t; };
+  const byBarcode = (code) => { const n = normCode(code); return n ? S.products.find((p) => !p.archived && (p.barcodes || []).some((b) => normCode(b) === n)) : undefined; };
+  /** One digit added, missing or different (a typing slip when the barcode was saved). */
+  function oneEditApart(a, b) {
+    if (a === b || Math.abs(a.length - b.length) > 1) return false;
+    let i = 0, j = 0, diff = 0;
+    while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++diff > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } }
+    return diff + (a.length - i) + (b.length - j) <= 1;
+  }
+  const nearBarcode = (code) => { const n = normCode(code); if (!/^\d{8,}$/.test(n)) return [];
+    return S.products.filter((p) => !p.archived).map((p) => ({ p, old: (p.barcodes || []).find((b) => /^\d+$/.test(normCode(b)) && oneEditApart(normCode(b), n)) })).filter((x) => x.old); };
+  /** A typed barcode that can't be right (wrong check digit, or 9–11 digits). */
+  function codeIssue(code) {
+    const t = String(code || "").replace(/\s+/g, "");
+    if (!/^\d+$/.test(t)) return "";
+    if ([8, 12, 13].includes(t.length) && !eanOk(t)) return L("Mali ang huling numero (check digit) — may maling na-type.", "The last digit (check digit) doesn't match — a digit was typed wrong.");
+    if (t.length >= 9 && t.length <= 11) return L(`${t.length} numero lang — ang barcode ng paninda ay 8, 12 o 13 numero. Baka may kulang.`, `Only ${t.length} digits — product barcodes have 8, 12 or 13. A digit may be missing.`);
+    return "";
+  }
+  async function attachBarcode(p, code, replace) {
+    const cur = productById(p.id) || p, list = (cur.barcodes || []).filter((b) => normCode(b) !== normCode(code) && b !== replace);
+    await write("products/" + p.id, { ...strip(cur), barcodes: [code, ...list].slice(0, 10) });
+    scanBeep(true); toast(L(`Naidagdag ang barcode sa ${cur.name}`, `Barcode saved to ${cur.name}`));
+    return productById(p.id) || { ...cur, barcodes: [code, ...list] };
+  }
+  /** A code that isn't in the products: fix a near-miss, add it to an existing product, or make a new one. then(product) continues the scan. */
+  function unknownBarcode(code, then) {
     setTimeout(() => scanBeep(false), 180);
-    const qr = !/^\d+$/.test(code);
-    openDialog(qr ? L("Bagong QR code", "New QR code") : "New barcode", h("div", { class: "grid" },
-      h("p", { style: "overflow-wrap:anywhere", text: qr ? L(`Wala pa sa paninda mo ang QR code na ito: ${code.slice(0, 120)}`, `This QR code isn't in your products yet: ${code.slice(0, 120)}`) : `Barcode ${code} is not in your products yet.` }),
-      h("button", { class: "btn primary big", onclick: () => { pendingBarcode = code; dlg.close(); go("products", "new"); } }, "Add as a new product"),
-      h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel")));
+    const qr = !/^\d+$/.test(code), near = nearBarcode(code);
+    const list = h("div", { class: "grid", style: "gap:6px;max-height:40vh;overflow:auto" });
+    const q = h("input", { type: "search", id: "ubSearch", placeholder: L("Hanapin ang paninda…", "Search your products…"), autocomplete: "off" });
+    const pick = async (p, replace) => { try { const np = await attachBarcode(p, code, replace); dlg.close(); then?.(np); render(); } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } };
+    const draw = () => { const t = q.value.trim().toLowerCase();
+      const ps = activeProducts().filter((p) => !t || p.name.toLowerCase().includes(t)).slice(0, 8);
+      list.replaceChildren(...ps.map((p) => h("button", { class: "btn", style: "justify-content:space-between;text-align:left", onclick: () => pick(p) }, h("span", { text: p.name }), h("span", { class: "muted small", text: (p.barcodes || []).length ? (p.barcodes || [])[0] : L("walang barcode", "no barcode") }))),
+        ...(ps.length ? [] : [h("div", { class: "muted small", text: L("Walang tugma.", "No match.") })])); };
+    q.addEventListener("input", draw); draw();
+    openDialog(qr ? L("Bagong QR code", "New QR code") : L("Bagong barcode", "New barcode"), h("div", { class: "grid", id: "unknownCode" },
+      h("p", { style: "overflow-wrap:anywhere;margin:0", text: qr ? L(`Wala pa sa paninda mo ang QR code na ito: ${code.slice(0, 120)}`, `This QR code isn't in your products yet: ${code.slice(0, 120)}`) : L(`Wala pa sa paninda mo ang barcode ${code}.`, `Barcode ${code} is not in your products yet.`) }),
+      ...near.slice(0, 3).map(({ p, old }) => h("div", { class: "note", style: "display:grid;gap:6px;margin:0" },
+        h("b", { text: L(`Ito ba ang ${p.name}?`, `Is this ${p.name}?`) }),
+        h("span", { class: "small", text: L(`Naka-save dito ang ${old} — isang numero lang ang iba. Malamang mali ang pagka-type.`, `It was saved with ${old} — only one digit different, probably a typing slip.`) }),
+        h("button", { class: "btn primary", id: "ubFix", onclick: () => pick(p, old) }, L("Oo — ayusin ang barcode", "Yes — fix its barcode")))),
+      h("b", { class: "small", text: L("Idagdag sa paninda na nasa listahan mo:", "Add it to a product you already have:") }), q, list,
+      h("button", { class: near.length ? "btn" : "btn primary", onclick: () => { pendingBarcode = code; dlg.close(); go("products", "new"); } }, L("+ Gawing bagong paninda", "+ Add as a new product")),
+      h("button", { class: "btn", onclick: () => dlg.close() }, L("Kanselahin", "Cancel"))));
   }
   // Product photo or a colored initials placeholder (hue from the name, stable per product).
   function productImage(p) {
@@ -3530,15 +3630,15 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     // sideways phone: the photos get the whole screen; title, buttons and search live in a side panel (swipe left)
     const drawerMode = sellDrawerLayout();
     const posButtons = () => [
-            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+            scanButton("btn primary", [svgIcon(IC.scan), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
       h("button", { class: "btn", onclick: customItem }, svgIcon(IC.tag), "Custom item"),
       h("button", { class: "btn" + (storeCfg().tabs ? " primary" : ""), onclick: tabsDialog }, "🧾 " + L(`Bills (${openTabs().length})`, `Bills (${openTabs().length})`)),
       h("button", { class: "btn", onclick: () => go("products", "new") }, svgIcon(IC.add), "Product")];
-    const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code); };
+    const onScan = (code) => { const hit = byBarcode(code); if (hit) { addToCart(hit); toast(`+1 ${hit.name}`); render(); } else unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); };
     const openCart = () => openDialog("Current sale", checkoutDialog());
     const searchBox = () => h("input", { type: "search", id: "sellSearch", placeholder: L("Hanapin o i-type ang barcode", "Search product or type barcode"), value: search, "aria-label": "Search products",
       oninput: (e) => { search = e.target.value; render(); }, onkeydown: sellSearchKey });
-    function sellSearchKey(e) { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = prods.find((p) => (p.barcodes || []).includes(code)) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) unknownBarcode(code); else if (code) toast("No product with that name"); } }
+    function sellSearchKey(e) { if (e.key === "Enter") { e.preventDefault(); /* a scanner's Enter must not also press a button in the dialog it opens */ const code = search.trim(); const hit = byBarcode(code) || (shown.length === 1 ? shown[0] : null); if (hit) { scanBeep(true); addToCart(hit); search = ""; toast(`+1 ${hit.name}`); render(); } else if (code && /^\d{6,}$/.test(code)) { search = ""; unknownBarcode(code, (np) => { addToCart(np); toast(`+1 ${np.name}`); }); } else if (code) toast("No product with that name"); } }
     const items = c.lines.reduce((a, l) => a + (Number(l.qty) || 0), 0);
     function sellDrawer() {
       const close = () => { sellDrawerOpen = false; render(); };
@@ -3692,7 +3792,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (productFilter === "out") list = list.filter((p) => stockOf(p.id) <= 0);
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("h1", { text: "Products & stock" }), h("div", { class: "pills" },
-        scanButton("btn", [camIcon(), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
+        scanButton("btn", [camIcon(), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code, (np) => go("products", "p-" + np.id)); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
         h("button", { class: "btn" + (lowCount() ? " cartchip" : ""), onclick: () => go("products", "checklist") }, "📋 " + L("Bibilhin", "Restock list"), lowCount() ? h("b", { class: "num", text: String(lowCount()) }) : null),
         h("button", { class: "btn" + (openOrders().length ? " cartchip" : ""), onclick: () => go("products", "orders") }, "🛒 " + L("Mga order", "Orders"), openOrders().length ? h("b", { class: "num", text: String(openOrders().length) }) : null),
         h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"),
@@ -3739,7 +3839,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       if (!name) return toast("Enter the product name");
       if (price == null) return toast("Enter a valid selling price, e.g. 16.00");
       if (cost == null) return toast("Enter a valid cost");
-      if (code && S.products.some((x) => x.id !== p?.id && (x.barcodes || []).includes(code))) return toast("That barcode is already used by another product");
+      if (code && S.products.some((x) => x.id !== p?.id && !x.archived && (x.barcodes || []).some((b) => normCode(b) === normCode(code)))) return toast("That barcode is already used by another product");
+      if (code && codeIssue(code) && !(await askYes(L("Mukhang mali ang barcode", "This barcode looks wrong"), codeIssue(code) + " " + L("Mas mabuting i-scan ito.", "Scanning it is safer."), L("I-save pa rin", "Save anyway"), L("Ayusin", "Fix it")))) return;
       const id = p?.id || uid();
       const body = { name, unit: $("#pf-unit").value.trim() || "pc", price, cost, reorder: Math.max(0, reorder), category: $("#pf-cat").value.trim() || null, barcodes: code ? [code] : [], archived: p?.archived || false, createdAt: p?.createdAt || new Date().toISOString(), };
       const oldPhoto = p ? productById(p.id)?.photo : null;
@@ -3764,8 +3865,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         i("pf-cost", "Cost / puhunan (₱)", (v.cost / 100).toFixed(2), { inputmode: "decimal" }),
         i("pf-reorder", "Low-stock alert at", v.reorder, { inputmode: "decimal" }),
         h("label", { class: "f" }, "Barcode (optional)", h("div", { style: "display:flex;gap:6px" },
-          h("input", { type: "text", id: "pf-code", value: (v.barcodes || [])[0] || (p ? "" : pendingBarcode), inputmode: "numeric" }),
-          h("button", { class: "btn", type: "button", "aria-label": "Scan barcode", onclick: async () => { const code = await scanBarcode({ ask: true }); if (code) $("#pf-code").value = code; } }, camIcon()))),
+          h("input", { type: "text", id: "pf-code", value: (v.barcodes || [])[0] || (p ? "" : pendingBarcode), inputmode: "numeric", oninput: (e) => { const w = document.getElementById("pf-code-warn"); if (w) w.textContent = codeIssue(e.target.value); } }),
+          h("button", { class: "btn", type: "button", "aria-label": "Scan barcode", onclick: async () => { const code = await scanBarcode({ ask: true }); if (code) { $("#pf-code").value = code; const w = document.getElementById("pf-code-warn"); if (w) w.textContent = ""; } } }, camIcon())),
+          h("div", { class: "small", id: "pf-code-warn", role: "status", style: "color:var(--bad)", text: codeIssue((v.barcodes || [])[0] || "") })),
         p ? null : i("pf-open", "Stock on hand now", "0", { inputmode: "decimal" })),
       h("div", { class: "pills" }, h("button", { class: "btn primary", type: "submit" }, p ? "Save changes" : "Add product"), h("button", { class: "btn", type: "button", onclick: () => go("products", p ? "p-" + p.id : null) }, "Cancel")));
     return h("div", { class: "view" }, h("h1", { text: p ? "Edit product" : "Add product" }), form);

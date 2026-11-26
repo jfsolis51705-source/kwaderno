@@ -196,6 +196,7 @@
   }
   /** The scan window, in video pixels (the video fills the screen like object-fit: cover). */
   function windowInVideo(v) {
+    if (grocery) { const vw = v.videoWidth, vh = v.videoHeight; return { x: vw * 0.05, y: vh * 0.12, w: vw * 0.9, h: vh * 0.76 }; } // no frame on screen: the middle of the picture
     const vr = v.getBoundingClientRect(), fr = $("frame").getBoundingClientRect();
     const sc = Math.max(vr.width / v.videoWidth, vr.height / v.videoHeight), ox = (vr.width - v.videoWidth * sc) / 2, oy = (vr.height - v.videoHeight * sc) / 2;
     const pad = 0.12; // a little outside the corners too: barcodes held close stick out
@@ -214,7 +215,8 @@
   // ---------- camera ----------
   let stream = null, track = null, running = false, paused = false, starting = false, loopT = 0, tick = 0, busy = false;
   let caps = {}, torchOn = false, last = { text: "", at: 0 }, holdUntil = 0;
-  const GONE_MS = 900; // how long a code must be out of view before the same code counts again
+  const GONE_MS = 1000; // how long a code must be out of view before the same code counts again
+  let lastPhase = -1; // which way of looking found the last code
   const video = $("video");
 
   async function startCamera() {
@@ -286,12 +288,14 @@
             } catch { detector = null; }
           }
           if (!hit && reader) {
-            const v = video, w = windowInVideo(v), t = tick++ % 5;
+            const v = video, w = windowInVideo(v);
+            // while a code is in view, keep looking the way that found it (so "gone" really means gone); otherwise rotate
+            const tracking = lastPhase >= 0 && Date.now() - last.at < 2000, t = tracking && tick++ % 4 !== 3 ? lastPhase : tick++ % 5;
             // scan window most of the time; the window turned sideways, the whole picture, and "find the stripes and zoom in" in between
             let r = null;
             if (t === 4) { for (const c of locateBarcodes(v).slice(0, 2)) { r = zxSpot(v, c); if (r) break; } }
             else r = t === 3 ? zxRegion(v, 0, 0, v.videoWidth, v.videoHeight, false) : t === 2 ? zxRegion(v, w.x, w.y, w.w, w.h, true) : zxRegion(v, w.x, w.y, w.w, w.h, false);
-            if (r && goodCode(r.text, r.format)) hit = r;
+            if (r && goodCode(r.text, r.format)) { hit = r; lastPhase = t; }
           }
           if (hit) found(hit, "camera");
         } finally { busy = false; }
@@ -309,7 +313,15 @@
     if (src === "camera" && text === last.text && now - last.at < GONE_MS) { last.at = now; return; }
     last = { text, at: now };
     const item = { id: now + "-" + Math.random().toString(36).slice(2, 7), value: text, format: fmtName(hit.format), source: src === "hid" ? "Bluetooth/USB scanner" : src === "typed" ? "Typed" : "Camera", timestamp: now };
-    addHistory(item); beep(true);
+    addHistory(item);
+    if (grocery) {
+      // a QR code needs the screen (link, text…): show the camera screen and the result
+      if (TWO_D.has(item.format)) { setMode("camera", true); qrDetour = true; beep(true); holdUntil = now + 10 * 60 * 1000; status("Found it", false); setTimeout(() => (KW ? (sendToKwaderno([text]) === "message" && showResult(item, true)) : showResult(item)), 300); return; }
+      batchCodes.unshift(item); groceryHit(item);
+      if (KW && opener) sendToKwaderno([text]);
+      return;
+    }
+    beep(true);
     if (hit.points?.length) drawHit(hit.points);
     const fr = $("frame"); fr.classList.add("hit"); setTimeout(() => fr.classList.remove("hit"), 700);
     if (batch) {
@@ -339,6 +351,69 @@
     g.strokeStyle = "#22c55e"; g.lineWidth = 4; g.fillStyle = "rgba(34,197,94,.18)"; g.lineJoin = "round";
     g.beginPath(); pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y))); g.closePath(); g.fill(); g.stroke();
     setTimeout(() => g.clearRect(0, 0, r.width, r.height), 900);
+  }
+
+  // ---------- GROCERY MODE ----------
+  let grocery = store.get("kwscan-mode", "grocery") !== "camera", qrDetour = false; // qrDetour: switched to the camera only for a QR code
+  const names = new Map(); // code → product name (Open Food Facts), looked up once
+  function lookupName(code) {
+    if (names.has(code) || !/^\d{8,14}$/.test(code)) return;
+    names.set(code, "");
+    fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,quantity`).then((r) => (r.ok ? r.json() : null))
+      .then((d) => { const p = d && d.status === 1 ? d.product : null; if (p?.product_name) { names.set(code, p.product_name + (p.quantity ? " " + p.quantity : "")); renderHud(); if ($("popCode").textContent === code) $("popName").textContent = names.get(code); } }).catch(() => {});
+  }
+  function setMode(m, quiet) {
+    grocery = m !== "camera"; store.set("kwscan-mode", grocery ? "grocery" : "camera");
+    document.body.classList.toggle("grocery", grocery); document.body.classList.remove("peek"); $("hudPeek").setAttribute("aria-pressed", "false");
+    $("modeGrocery").setAttribute("aria-selected", String(grocery)); $("modeCamera").setAttribute("aria-selected", String(!grocery));
+    renderHud(); renderBatch();
+    if (!quiet) toast(grocery ? "Grocery: no camera picture — point and it counts" : "QR / Camera: camera picture on screen");
+  }
+  /** Loud two-tone chirp (louder than the normal beep). */
+  function chirp() {
+    try {
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const t = actx.currentTime;
+      for (const [f, at] of [[1800, 0], [2600, 0.07]]) {
+        const o = actx.createOscillator(), g = actx.createGain(); o.type = "square"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t + at); g.gain.exponentialRampToValueAtTime(0.9, t + at + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.09);
+        o.connect(g).connect(actx.destination); o.start(t + at); o.stop(t + at + 0.1);
+      }
+    } catch { /* no audio */ }
+    try { navigator.vibrate?.(120); } catch { /* no vibration */ }
+  }
+  /** Quick flash of the phone's flashlight on every scan (Android; iPhone doesn't let websites use it), plus a white wash on screen. */
+  async function torchFlash() {
+    const w = document.querySelector(".flashwash") || document.body.appendChild(Object.assign(document.createElement("div"), { className: "flashwash" }));
+    w.classList.remove("on"); void w.offsetWidth; w.classList.add("on");
+    if (!track || !caps.torch || torchOn) return;
+    try { await track.applyConstraints({ advanced: [{ torch: true }] }); setTimeout(() => { track?.applyConstraints({ advanced: [{ torch: false }] }).catch(() => {}); }, 150); } catch { /* no flashlight here */ }
+  }
+  let popT = 0;
+  function groceryHit(item) {
+    chirp(); torchFlash(); lookupName(item.value);
+    const total = batchCodes.length, same = batchCodes.filter((x) => x.value === item.value).length;
+    const p = $("pop"); $("popName").textContent = names.get(item.value) || item.format; $("popCode").textContent = item.value;
+    $("popTotal").textContent = `×${same} · ${total} item${total === 1 ? "" : "s"}`;
+    p.hidden = false; p.classList.remove("show"); void p.offsetWidth; p.classList.add("show");
+    clearTimeout(popT); popT = setTimeout(() => { p.hidden = true; p.classList.remove("show"); }, 900);
+    const r = $("radar"); r.classList.add("hit"); setTimeout(() => r.classList.remove("hit"), 500);
+    renderHud(item.value);
+  }
+  function renderHud(fresh) {
+    if (!$("hud")) return;
+    const groups = new Map(); for (const x of batchCodes) { const g = groups.get(x.value) || { value: x.value, format: x.format, n: 0, at: x.timestamp }; g.n++; groups.set(x.value, g); }
+    $("hudCount").textContent = String(batchCodes.length);
+    $("hudCountLbl").textContent = `item${batchCodes.length === 1 ? "" : "s"} scanned · ${groups.size} product${groups.size === 1 ? "" : "s"}`;
+    const last = batchCodes[0];
+    $("hudLast").textContent = last ? `Last: ${names.get(last.value) || last.value}` : "Point the back of the phone at a barcode";
+    const ul = $("hudList"); ul.replaceChildren();
+    for (const g of groups.values()) {
+      const li = document.createElement("li"), n = document.createElement("span"), c = document.createElement("span"), x = document.createElement("span");
+      n.className = "n"; n.textContent = names.get(g.value) || g.format; c.className = "c"; c.textContent = g.value; x.className = "x"; x.textContent = "×" + g.n;
+      if (g.value === fresh) li.className = "fresh"; li.append(n, x, c); ul.append(li);
+    }
+    const send = $("hudSend"); send.hidden = !(KW && !opener && batchCodes.length);
+    if (!send.hidden) { send.href = RETURN + encodeURIComponent(batchCodes.map((x) => x.value).reverse().join(",")); send.textContent = `Send ${batchCodes.length} to KWADERNO`; }
   }
 
   // ---------- result page ----------
@@ -374,7 +449,7 @@
         }).catch(() => { if (!ctl.signal.aborted) { $("resName").textContent = "Couldn't look it up (offline?)"; } });
     }
   }
-  function closeResult() { $("result").hidden = true; offCtl?.abort(); holdUntil = Date.now() + 600; last.at = Date.now() + 600; /* the code just read is probably still in view */ status(running ? "Scanning…" : "Camera off", running); if (!running) startCamera(); }
+  function closeResult() { if (qrDetour) { qrDetour = false; setMode("grocery", true); } $("result").hidden = true; offCtl?.abort(); holdUntil = Date.now() + 600; last.at = Date.now() + 600; /* the code just read is probably still in view */ status(running ? "Scanning…" : "Camera off", running); if (!running) startCamera(); }
 
   /** Draws an EAN-13 / UPC-A / EAN-8 barcode as SVG (like the code on the pack). */
   function eanSvg(code) {
@@ -491,6 +566,7 @@
     paused = !paused; $("pauseBtn").classList.toggle("paused", paused);
     $("pauseBtn").setAttribute("aria-label", paused ? "Resume scanning" : "Pause scanning"); $("pauseBtn").firstElementChild.textContent = paused ? "▶" : "▮▮";
     if (paused) video.pause(); else video.play().catch(() => {});
+    document.body.classList.toggle("paused", paused);
     status(paused ? "Paused — tap ▶ to scan" : "Scanning…", !paused);
   };
   $("batchBtn").onclick = () => { batch = !batch; store.set(BATCH_KEY, batch); renderBatch(); toast(batch ? "Batch: keeps scanning, one after another" : "Single: stops at each code"); };
@@ -510,6 +586,12 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) stopCamera(); else if ($("result").hidden && !starting) startCamera(); });
   window.addEventListener("pagehide", stopCamera);
   if ("serviceWorker" in navigator && window.isSecureContext) window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+
+  $("modeGrocery").onclick = () => setMode("grocery");
+  $("modeCamera").onclick = () => setMode("camera");
+  $("hudPeek").onclick = () => { const on = !document.body.classList.contains("peek"); document.body.classList.toggle("peek", on); $("hudPeek").setAttribute("aria-pressed", String(on)); $("hudPeek").textContent = on ? "👁 Hide camera" : "👁 Show camera"; };
+  $("hudClear").onclick = () => { if (!batchCodes.length) return; batchCodes = []; renderHud(); renderBatch(); toast("New count"); };
+  setMode(grocery ? "grocery" : "camera", true);
 
   window.__kwscan = { history, startCamera, stopCamera, found, get detector() { return !!detector; } }; // for tests
   renderBatch();

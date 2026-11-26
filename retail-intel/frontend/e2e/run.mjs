@@ -265,6 +265,25 @@ try {
   await d.getByText(/Duplicate of #/).first().waitFor();
   check(true, "verification log shows duplicate flags");
   await d.screenshot({ path: join(shots, "portal-audit.png") });
+  // ---------- live camera scanning (fake camera showing a code): reads by itself, barcode and QR ----------
+  for (const [label, file] of [["Code 128 barcode", "cam-code128.mjpeg"], ["QR code", "cam-qr.mjpeg"]]) {
+    const cb = await chromium.launch({ ...(exe ? { executablePath: exe } : {}), args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", `--use-file-for-fake-video-capture=${fx(file)}`] });
+    const cc = await cb.newContext({ ...devices["Pixel 7"], permissions: ["camera"] });
+    const cp = await cc.newPage(); cp.on("pageerror", (e) => errors.push(e.message)); globalThis.__page = cp;
+    await cp.goto(`${BASE}/store/capture`); await loginAs(cp, "nena@demo.kwaderno.ph"); await cp.waitForURL(/\/store\//);
+    await cp.goto(`${BASE}/store/capture`); await cp.getByRole("tab", { name: /Barcode/ }).click();
+    await cp.getByTestId("scan-result").filter({ hasText: "Coca-Cola" }).waitFor({ timeout: 15000 });
+    check(true, `${label}: the camera opens as soon as the Barcode tab opens and reads it by itself`);
+    if (label === "QR code") await cp.screenshot({ path: join(shots, "phone-live-scan.png") });
+    await cp.getByTestId("camera-toggle").click(); // Stop camera
+    await cp.reload(); await cp.getByRole("tab", { name: /Barcode/ }).click(); await cp.waitForTimeout(800);
+    check((await cp.getByTestId("camera-toggle").innerText()).includes("Scan barcode or QR"), `${label}: after "Stop camera" it stays off`);
+    await cp.getByTestId("camera-toggle").click();
+    await cp.getByTestId("scan-result").filter({ hasText: "Coca-Cola" }).waitFor({ timeout: 15000 });
+    check(true, `${label}: turning it back on scans again`);
+    await cb.close();
+  }
+  globalThis.__page = m;
   check(errors.length === 0, `no page errors ${errors.length ? JSON.stringify(errors) : ""}`);
   await browser.close();
 } catch (e) {

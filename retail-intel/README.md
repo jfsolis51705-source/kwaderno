@@ -52,6 +52,12 @@ New merchants register at `/register`; that creates their store with them as own
 | **Business score** (owners) | A **cash-flow readiness score** (0–100, banded Building / Fair / Strong) built only from the store's own records. Five weighted factors, each with its points and a plain explanation: sales recorded regularly 35, stock vs sales 20, wholesale restocks 15, clear original photos 15, time on KWADERNO 15. Shows how to raise it, with a disclaimer that it is **not a credit decision**. |
 | **Sync** | Offline queue with pending and failed items, plus **Sync now**. |
 
+### Live scanner (barcode and QR, like a QR scanner app)
+- The **Barcode** tab opens the back camera as soon as it is opened and reads any barcode (EAN/UPC, Code 128, Code 39, ITF) or QR code inside the box by itself — no button to press. It beeps, vibrates and shows the product; it keeps scanning for the next item.
+- The browser asks for camera permission once; after that it opens straight away. "Stop camera" keeps it off until turned on again.
+- Uses the phone's own detector when it has one (Chrome/Android) and the bundled ZXing reader everywhere else (iPhone Safari, Firefox, desktop). Retail barcodes are checked with their check digit so a misread is never used.
+- e2e covers it with a fake camera (Code 128 and QR fixtures).
+
 ### Online ordering (store link, `/shop/<link-name>`)
 - **Online** tab: the owner picks a link name, turns on pickup and/or delivery, sets a delivery fee, minimum order and a note, then shares the link (Facebook, group chat, QR).
 - Customers open the link **without an account**: a photo menu of items in stock, a cart that survives a reload, checkout for pickup or delivery, then an order code with a live status page.

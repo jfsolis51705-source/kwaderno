@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type InputHTMLAttributes } from "react";
 import { api, ApiError } from "../../lib/api";
-import { hasBarcodeDetector, startScanner } from "../../lib/barcode";
+import { hasCamera, rememberCamera, shouldAutoStart, startScanner } from "../../lib/barcode";
 import { ISSUE_TEXT, peso, when } from "../../lib/format";
 import type { Capture, CaptureItem, CaptureKind, Checkins, Product } from "../../lib/types";
 import { useApp } from "../../state/AppContext";
@@ -162,6 +162,7 @@ function BarcodeCapture() {
   const [unknown, setUnknown] = useState<string | null>(null);
   const [camera, setCamera] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
   const stopRef = useRef<() => void>();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -178,27 +179,32 @@ function BarcodeCapture() {
     try { const p = await adjustStock({ sku: found.sku }, delta, "barcode"); if (p) { setFound(p); toast(`${p.name}: ${p.qty_on_hand} on hand${online ? "" : " (queued)"}`); } }
     catch (e) { toast((e as Error).message, "err"); }
   };
-  useEffect(() => () => stopRef.current?.(), []);
+  const lookupRef = useRef(lookup); lookupRef.current = lookup;
+  const openCamera = async (quiet = false) => {
+    try { setCamera(true); stopRef.current?.(); stopRef.current = await startScanner(videoRef.current!, (v) => { setCode(v); void lookupRef.current(v); }, frameRef.current); }
+    catch { setCamera(false); if (!quiet) toast("Camera not available — type the code or use a USB/Bluetooth scanner", "warn"); }
+  };
+  // like a QR scanner app: once the camera was allowed, it opens by itself and keeps reading
+  useEffect(() => { let alive = true; if (hasCamera()) void shouldAutoStart().then((ok) => { if (ok && alive) void openCamera(true); }); return () => { alive = false; stopRef.current?.(); }; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleCamera = async () => {
-    if (camera) { stopRef.current?.(); setCamera(false); return; }
-    try { setCamera(true); stopRef.current = await startScanner(videoRef.current!, (v) => { setCode(v); lookup(v); }); }
-    catch { setCamera(false); toast("Camera not available — type the code or use a USB/Bluetooth scanner", "warn"); }
+    if (camera) { stopRef.current?.(); stopRef.current = undefined; setCamera(false); rememberCamera(false); return; }
+    rememberCamera(true); await openCamera();
   };
   return (
     <div className="grid gap-4">
       <div className="card grid gap-3">
-        {hasBarcodeDetector() ? <button className="btn" onClick={toggleCamera}>{camera ? "Stop camera" : "📷 Scan with camera"}</button> : <p className="text-xs text-slate-500">Camera scanning needs Chrome/Edge/Android. Type the code, or use a barcode scanner (it types and presses Enter).</p>}
+        {hasCamera() ? <button className={camera ? "btn" : "btn-primary"} onClick={toggleCamera} data-testid="camera-toggle">{camera ? "Stop camera" : "📷 Scan barcode or QR with camera"}</button> : <p className="text-xs text-slate-500">No camera here. Type the code, or use a barcode scanner (it types and presses Enter).</p>}
         <div className={camera ? "relative overflow-hidden rounded-lg bg-black" : "hidden"}>
           <video ref={videoRef} className="h-64 w-full object-cover" muted playsInline />
           {/* scan rectangle: corner brackets, a dimmed outside and a moving line */}
           <div className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden>
-            <div className="scan-frame relative aspect-[2.2/1] w-[78%] max-w-sm rounded-xl" style={{ boxShadow: "0 0 0 100vmax rgb(0 0 0 / .5)" }}>
+            <div ref={frameRef} className="scan-frame relative aspect-[1.45/1] w-[70%] max-w-sm rounded-xl" style={{ boxShadow: "0 0 0 100vmax rgb(0 0 0 / .5)" }}>
               <i className="absolute -left-0.5 -top-0.5 h-6 w-6 rounded-tl-xl border-l-4 border-t-4 border-white" /><i className="absolute -right-0.5 -top-0.5 h-6 w-6 rounded-tr-xl border-r-4 border-t-4 border-white" />
               <i className="absolute -bottom-0.5 -left-0.5 h-6 w-6 rounded-bl-xl border-b-4 border-l-4 border-white" /><i className="absolute -bottom-0.5 -right-0.5 h-6 w-6 rounded-br-xl border-b-4 border-r-4 border-white" />
               <b className="scan-line absolute inset-x-[6%] top-1/2 h-0.5 bg-red-500 shadow-[0_0_8px_#ef4444]" />
             </div>
           </div>
-          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs font-semibold text-white drop-shadow">Fit the barcode inside the box</p>
+          <p className="pointer-events-none absolute inset-x-0 bottom-2 text-center text-xs font-semibold text-white drop-shadow">Fit the barcode or QR code inside the box — it reads by itself</p>
         </div>
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); lookup(code); }}>
           <input ref={inputRef} autoFocus aria-label="Barcode or SKU" inputMode="numeric" className="input" placeholder="Scan or type barcode / SKU, then Enter" value={code} onChange={(e) => setCode(e.target.value)} />

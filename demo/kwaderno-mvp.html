@@ -162,6 +162,10 @@ nav.bottom { display: none; }
 :root[data-layout="tablet"]:not(.landscape) .view.selling.has-cart { padding-bottom: 264px; }
 :root[data-layout="tablet"]:not(.landscape) .view.selling .sell { grid-template-columns: minmax(0, 1fr) !important; }
 :root[data-layout="tablet"]:not(.landscape) .view.selling .cart.desktop { display: none !important; }
+.list.po li { display: grid; grid-template-columns: minmax(0, 1fr) 64px 86px 38px; gap: 8px; align-items: end; }
+.list.po li .f { font-size: .72rem; gap: 2px; }
+.list.po li input { padding: 8px 6px; text-align: center; min-height: 40px; }
+.list.po li > div > div:first-child { font-weight: 600; line-height: 1.2; }
 .file-hide { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
 label.btn { cursor: pointer; position: relative; }
 #stockAlert { position: fixed; inset: 0; z-index: 55; display: grid; place-items: center; padding: 20px; background: rgba(8, 20, 22, .55); }
@@ -563,7 +567,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- state ----------
   // Append-only model: stock = Σ moves − Σ sold (non-voided); utang = Σ credit sales − Σ payments.
   let insightsT = null;
-  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], staff: [], attendance: [], rules: null, branchDoc: {}, branchDocLoaded: false, branches: [], branchSum: {}, branch: "", rootBase: "", kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
+  const S = { db: null, me: null, owner: false, base: "", stores: [], visual: [], library: [], insights: null, directory: [], msl: { items: [] }, profileLoaded: false, hasProfile: false, pilot: null, expiries: [], expenses: [], questions: [], tabs: [], staff: [], attendance: [], porders: [], rules: null, branchDoc: {}, branchDocLoaded: false, branches: [], branchSum: {}, branch: "", rootBase: "", kbDb: [], ocrDict: { entries: [] }, ocrLearn: { pairs: [] }, kbMeta: { dismissed: [] }, ready: false, error: null, products: [], moves: [], sales: [], customers: [], payments: [], store: { name: "My sari-sari store" } };
   const cart = { lines: [], method: "cash", tendered: "", ref: "", discount: "", customerId: "", disc: { type: "none" }, tabId: "", tabLabel: "" };
   let lastRoute = "", formPhoto = null; // formPhoto: photo chosen in the product form, saved with the form
   let view = "home", sub = null, productFilter = "all", search = "", sellCat = "all", hideMoney = false, histFilter = "all";
@@ -713,7 +717,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }
   // Load one branch's data (products, sales, stock, staff …). Each branch lives under branches/<id>/ in the owner's space.
   let storeUnsubs = [];
-  const STORE_COLS = ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance"];
+  const STORE_COLS = ["products", "moves", "sales", "customers", "payments", "expiries", "expenses", "questions", "tabs", "staff", "attendance", "porders"];
   function subscribeStore() {
     storeUnsubs.forEach((u) => { try { typeof u === "function" && u(); } catch { /* already closed */ } }); storeUnsubs = [];
     S.base = S.rootBase + (S.branch ? `branches/${S.branch}/` : "");
@@ -827,6 +831,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         x("products", L("Paubos", "Low stock"), IC.low, low, at("products") && productFilter === "low", () => { productFilter = "low"; go("products"); }),
         x("products-checklist", L("Bibilhin", "Restock list"), "M9 3h6v3H9zM7 4.5H5V21h14V4.5h-2M8.5 12l2 2 4-4M8.5 17h7", toBuy, at("products", "checklist"), () => go("products", "checklist")),
         x("products-expiry", "Expiry", IC.expiry, exp, at("products", "expiry"), () => go("products", "expiry")),
+        x("products-orders", L("Mga order", "Orders"), "M3 4h2l2.4 11h10.2L20 7H6.2M9 20a1 1 0 1 0 0 .1M17 20a1 1 0 1 0 0 .1M12 9v4M10 11h4", openOrders().length, at("products", "orders") || (view === "products" && sub?.startsWith("orders-")), () => go("products", "orders")),
         x("home-history", L("Huling benta", "Recent sales"), IC.history, 0, at("home", "history"), () => go("home", "history")),
         x("home-cash", L("Kaha", "Cash ledger"), IC.cash, 0, at("home", "cash"), () => go("home", "cash")),
         x("home-expenses", L("Gastos", "Expenses"), IC.expense, 0, at("home", "expenses"), () => go("home", "expenses")),
@@ -2219,6 +2224,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         appTile("Logbook photo", IC.logbook, "var(--s2)", () => go("home", "logbook")),
         appTile("Products", IC.products, "var(--s3)", () => { productFilter = "all"; go("products"); }),
         appTile("Low stock", IC.low, "var(--bad)", () => go("products", "checklist"), low.length),
+        appTile(L("Mga order", "Orders"), "M3 4h2l2.4 11h10.2L20 7H6.2M9 20a1 1 0 1 0 0 .1M17 20a1 1 0 1 0 0 .1M12 9v4M10 11h4", "var(--s2)", () => go("products", "orders"), openOrders().length),
         appTile("Credit", IC.utang, "var(--bad)", () => go("utang"), owed.length),
         appTile("Cash ledger", IC.cash, "var(--good)", () => go("home", "cash")),
         appTile("Expenses", IC.expense, "var(--warn)", () => go("home", "expenses")),
@@ -2896,7 +2902,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         items.length > 6 ? h("div", { class: "small muted", text: L(`+ ${items.length - 6} pa`, `+ ${items.length - 6} more`) }) : null,
         sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
         h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
-          h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Listahan ng bibilhin", "📋 Restock list")),
+          h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); addToOrder(items); } }, L("🛒 I-order lahat", "🛒 Order all")),
+          h("button", { class: "btn", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Bibilhin", "📋 Restock list")),
           h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
           h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
         why === "demo" ? h("div", { class: "small muted", text: L("Demo lang ang bentang ito — hindi naka-save. Patayin sa Settings.", "This sale is a demo and isn't saved. Turn demo off in Settings.") }) : null));
@@ -2959,7 +2966,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         ex && exP ? row("⏰", L("Expiry", "Expiry"), pos.expN > 1 ? `${pos.expPos} / ${pos.expN}` : "", exP.name + (ex.qty ? ` · ${ex.qty} ${exP.unit || "pc"}` : ""), expWhen(ex.date, lang === "en") + ` (${ex.date})`, daysLeft(ex.date) < 0) : null,
         sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
         h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
-          low ? h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Bibilhin", "📋 Restock list")) : null,
+          low ? h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); addToOrder([low]); } }, L("🛒 I-order", "🛒 Order it")) : null,
+          low ? h("button", { class: "btn", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Bibilhin", "📋 Restock list")) : null,
           ex ? h("button", { class: "btn" + (low ? "" : " primary"), style: "flex:1", onclick: () => { close(); go("products", "expiry"); } }, L("⏰ Expiry", "⏰ Expiry list")) : null,
           h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
           h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
@@ -3584,6 +3592,8 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (sub === "expiry") return expiryView();
     if (sub === "photos") return photoMode();
     if (sub === "checklist") return restockChecklist();
+    if (sub === "orders") return viewOrders();
+    if (sub && sub.startsWith("orders-")) { const o = S.porders.find((x) => x.id === sub.slice(7)); if (o) return orderDetail(o); }
     if (sub && sub.startsWith("p-")) { const p = productById(sub.slice(2)); if (p) return productDetail(p); }
     const f = search.trim().toLowerCase();
     let list = activeProducts().filter((p) => !f || p.name.toLowerCase().includes(f) || (p.category || "").toLowerCase().includes(f) || (p.barcodes || []).includes(search.trim()));
@@ -3593,6 +3603,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "head" }, h("h1", { text: "Products & stock" }), h("div", { class: "pills" },
         scanButton("btn", [camIcon(), tx("Scan")], (code) => { const hit = byBarcode(code); if (hit) go("products", "p-" + hit.id); else unknownBarcode(code); }, L("I-scan ang barcode o QR code", "Scan a barcode or QR code")),
         h("button", { class: "btn" + (lowCount() ? " cartchip" : ""), onclick: () => go("products", "checklist") }, "📋 " + L("Bibilhin", "Restock list"), lowCount() ? h("b", { class: "num", text: String(lowCount()) }) : null),
+        h("button", { class: "btn" + (openOrders().length ? " cartchip" : ""), onclick: () => go("products", "orders") }, "🛒 " + L("Mga order", "Orders"), openOrders().length ? h("b", { class: "num", text: String(openOrders().length) }) : null),
         h("button", { class: "btn", onclick: () => go("products", "stockin") }, "Stock-in"),
         h("button", { class: "btn", onclick: () => go("products", "expiry") }, "Expiry"),
         h("button", { class: "btn", onclick: () => go("products", "photos") }, camIcon(), "Add photos"),
@@ -3717,7 +3728,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     openDialog("Adjust stock — " + p.name, h("div", { class: "grid" }, h("label", { class: "f" }, "What happened?", sel), h("label", { class: "f" }, "Quantity", qty), h("label", { class: "f" }, "Reason", reason), hint, btn));
   }
   const stockLines = [];
-  const si = { supplier: "", ref: "", unmatched: [], reading: false, note: "", pay: "cash", dueDays: "7" };
+  const si = { supplier: "", ref: "", unmatched: [], reading: false, note: "", pay: "cash", dueDays: "7", orderId: null };
   async function readReceipt() {
     const file = await pickPhoto(true);
     if (!file) return;
@@ -3774,6 +3785,8 @@ ${catalog}`;
     const ok = stockLines.length && stockLines.every((l) => Number(l.qty) > 0 && toCentavos(l.cost) != null);
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: "Stock-in", style: "margin-top:8px" }), h("div", { class: "muted small", text: "Record a delivery. Stock increases when you confirm." }))),
+      si.orderId ? h("div", { class: "note", style: "display:flex;gap:8px;align-items:center;justify-content:space-between;background:var(--accent-soft);color:var(--fg)" }, h("b", { text: L("📥 Tinatanggap ang order — ayusin ang dami kung kulang ang dumating.", "📥 Receiving an order — change amounts if less arrived.") }),
+        h("button", { class: "btn sm", onclick: () => { si.orderId = null; stockLines.length = 0; go("products", "orders"); } }, L("Kanselahin", "Cancel"))) : null,
       h("div", { class: "card grid", style: "gap:12px" },
         h("button", { class: "btn primary", disabled: si.reading, onclick: readReceipt }, camIcon(), si.reading ? "Claude is reading the receipt…" : "Read receipt photo"),
         si.note ? h("div", { class: "banner", text: si.note }) : null,
@@ -3806,7 +3819,9 @@ ${catalog}`;
             if (total > 0 && (si.pay === "cash" || si.pay === "gcash")) await write("expenses/" + uid(), { kind: "purchase", amount: total, category: "stock", method: si.pay, note: [supplier, ref && "#" + ref].filter(Boolean).join(" ") || "Stock purchase", date: todayKey(), at, by: S.me || null, deleted: false, batch });
             if (total > 0 && si.pay === "later") { const d = new Date(); d.setDate(d.getDate() + Math.max(0, Math.min(120, parseInt(si.dueDays, 10) || 7))); await write("expenses/" + uid(), { kind: "bill", purchase: true, name: (supplier || "Supplier") + (ref ? " #" + ref : "") + " (stock)", category: "stock", amount: total, due: dayKey(d.toISOString()), repeat: "none", paid: false, deleted: false, at, by: S.me || null, batch }); }
             if (Object.keys(restockDoc.checked || {}).length) { for (const l of stockLines) { delete restockDoc.checked[l.productId]; delete restockDoc.qty[l.productId]; } await saveRestock(); }
-            toast(`Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; Object.assign(si, { supplier: "", ref: "", unmatched: [], note: "" }); go("products");
+            if (si.orderId) { const o = S.porders.find((x) => x.id === si.orderId); if (o) await write("porders/" + o.id, { ...strip(o), status: "received", receivedAt: at, received: stockLines.map((l) => ({ productId: l.productId, qty: Number(l.qty), cost: toCentavos(l.cost) })) }); }
+            const wasOrder = si.orderId;
+            toast(wasOrder ? L("Natanggap ang order — nadagdag ang stock", "Order received — stock added") : `Stock-in saved: ${stockLines.length} item(s)`); stockLines.length = 0; Object.assign(si, { supplier: "", ref: "", unmatched: [], note: "", orderId: null }); go("products", wasOrder ? "orders" : null);
           } catch (err) { e.target.disabled = false; toast("Could not save: " + (err?.code || "try again")); }
         } }, "Confirm stock-in")));
   }
@@ -3866,6 +3881,7 @@ ${catalog}`;
         h("span", { class: "kpi" }, L("tantiyang gastos ", "est. cost "), h("b", { class: "num", text: peso(cost(todo) + cost(done)) }))) : null,
       items.length ? h("div", { class: "pills" },
         h("button", { class: "btn primary", disabled: !done.length, onclick: toStockIn }, "✅ " + L(`I-stock-in ang may tsek (${done.length})`, `Stock in ticked items (${done.length})`)),
+        h("button", { class: "btn", disabled: !todo.length, onclick: () => addToOrder(todo.map((x) => x.p)) }, "🛒 " + L(`Gawing order (${todo.length})`, `Make an order (${todo.length})`)),
         h("button", { class: "btn", onclick: async () => { const t = listText(); try { await navigator.clipboard.writeText(t); toast(L("Nakopya — i-paste sa Messenger o SMS", "Copied — paste it in Messenger or SMS")); } catch { openDialog(L("Listahan", "List"), h("textarea", { class: "input", rows: 12, style: "width:100%", text: t })); } } }, "📋 " + L("Kopyahin ang listahan", "Copy list")),
         h("button", { class: "btn", disabled: !todo.length, onclick: () => { for (const x of todo) restockDoc.checked[x.p.id] = new Date().toISOString(); saveRestock(); render(); } }, L("Tsek lahat", "Tick all")),
         done.length ? h("button", { class: "btn", onclick: () => { restockDoc.checked = {}; saveRestock(); render(); } }, L("Alisin ang tsek", "Untick all")) : null) : null,
@@ -3874,6 +3890,83 @@ ${catalog}`;
       h("p", { class: "muted small", text: L("Ang mungkahing dami ay para sa mga 2 linggong benta (hindi bababa sa doble ng reorder level). Puwedeng palitan.", "Suggested amounts cover about two weeks of sales (at least twice the reorder level). You can change them.") }));
   }
   let restockT = null;
+
+
+  // ---------- ORDERS: purchase orders to suppliers (draft → sent → received) ----------
+  const ORDER_ST = { draft: ["Draft", "Draft"], sent: ["Naipadala", "Sent"], received: ["Natanggap", "Received"], cancelled: ["Kinansela", "Cancelled"] };
+  const openOrders = () => S.porders.filter((o) => o.status === "draft" || o.status === "sent");
+  let ordersTab = "open";
+  function lastSupplier(pid) { let best = null; for (const m of S.moves) if (m.productId === pid && m.kind === "stock_in" && m.supplier && (!best || m.at > best.at)) best = m; return best?.supplier || ""; }
+  const orderTotal = (o) => (o.lines || []).reduce((a, l) => a + Math.round((Number(l.qty) || 0) * (l.cost || 0)), 0);
+  /** Put products on a draft order for their usual supplier (one draft per supplier), then open it. */
+  async function addToOrder(products) {
+    if (!products.length) return;
+    const sugg = new Map(); try { for (const x of restockItems()) sugg.set(x.p.id, Number(x.qty) || x.suggest); } catch { /* no suggestion */ }
+    const touched = new Set(); const now = new Date().toISOString();
+    for (const p of products) {
+      const sup = lastSupplier(p.id), key = sup.trim().toLowerCase();
+      let o = S.porders.find((x) => x.status === "draft" && (x.supplier || "").trim().toLowerCase() === key);
+      if (!o) { o = { id: uid(), supplier: sup, status: "draft", lines: [], createdAt: now }; S.porders.push(o); }
+      if (!o.lines.some((l) => l.productId === p.id)) o.lines.push({ productId: p.id, name: p.name, unit: p.unit || "pc", qty: String(sugg.get(p.id) || Math.max(1, (p.reorder || 1) * 2 - Math.max(0, stockOf(p.id)))), cost: p.cost || 0 });
+      touched.add(o);
+    }
+    try { for (const o of touched) await write("porders/" + o.id, { ...strip(o), updatedAt: now }); } catch (e) { return toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); }
+    toast(L(`Naidagdag sa order: ${products.length} paninda`, `Added to order: ${products.length} item(s)`));
+    const list = [...touched]; go("products", list.length === 1 ? "orders-" + list[0].id : "orders");
+  }
+  function orderText(o) {
+    const lines = (o.lines || []).filter((l) => Number(l.qty) > 0);
+    return [L(`Order mula sa ${S.store.name || "aming tindahan"} — ${todayKey()}`, `Order from ${S.store.name || "our store"} — ${todayKey()}`), o.supplier ? L(`Para kay: ${o.supplier}`, `To: ${o.supplier}`) : null, "",
+      ...lines.map((l) => `• ${l.qty} ${l.unit || "pc"} — ${l.name}`), "",
+      orderTotal(o) ? L(`Tantiyang halaga: ${peso(orderTotal(o))}`, `Estimated amount: ${peso(orderTotal(o))}`) : null, L("Salamat po!", "Thank you!")].filter((x) => x !== null).join("\n");
+  }
+  function viewOrders() {
+    const all = [...S.porders].sort((a, b) => (b.updatedAt || b.createdAt || "").localeCompare(a.updatedAt || a.createdAt || ""));
+    const list = ordersTab === "open" ? all.filter((o) => o.status === "draft" || o.status === "sent") : ordersTab === "received" ? all.filter((o) => o.status === "received") : all;
+    const chip = (st) => h("span", { class: "chip " + (st === "draft" ? "warn" : st === "sent" ? "" : st === "received" ? "ok" : "bad"), text: L(...ORDER_ST[st] || [st, st]) });
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products") }, "‹ Products"), h("h1", { text: L("🛒 Mga order", "🛒 Orders"), style: "margin-top:8px" }),
+        h("div", { class: "muted small", text: L("Order sa supplier: Draft → Naipadala → Natanggap (nadadagdag ang stock).", "Supplier orders: Draft → Sent → Received (stock is added).") })),
+        h("div", { class: "pills" }, h("button", { class: "btn primary", onclick: () => addToOrder(lowNow()) }, L("+ Order para sa paubos", "+ Order low stock")), h("button", { class: "btn", onclick: newBlankOrder }, L("+ Bagong order", "+ New order")))),
+      h("div", { class: "pills", role: "tablist" }, [["open", L(`Bukas (${openOrders().length})`, `Open (${openOrders().length})`)], ["received", L("Natanggap", "Received")], ["all", L("Lahat", "All")]].map(([k, l]) => h("button", { "aria-pressed": String(ordersTab === k), onclick: () => { ordersTab = k; render(); } }, l))),
+      list.length ? h("div", { class: "card", style: "padding-block:4px" }, h("ul", { class: "list" }, list.map((o) => h("li", { style: "cursor:pointer", onclick: () => go("products", "orders-" + o.id) },
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: o.supplier || L("Walang supplier", "No supplier") }),
+          h("div", { class: "muted small", text: `${(o.lines || []).length} ${L("paninda", "item(s)")} · ${when(o.sentAt || o.createdAt)}${o.receivedAt ? " · " + L("natanggap ", "received ") + when(o.receivedAt) : ""}` })),
+        chip(o.status), h("span", { class: "num", style: "font-weight:600", text: peso(orderTotal(o)) })))))
+        : h("div", { class: "empty", text: ordersTab === "open" ? L("Walang bukas na order. Pindutin ang \"+ Order para sa paubos\".", "No open orders. Tap \"+ Order low stock\".") : L("Wala pa.", "None yet.") }));
+  }
+  async function newBlankOrder() { const o = { id: uid(), supplier: "", status: "draft", lines: [], createdAt: new Date().toISOString() }; try { await write("porders/" + o.id, o); go("products", "orders-" + o.id); } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } }
+  let orderSaveT = null;
+  function orderDetail(o) {
+    const edit = o.status === "draft" || o.status === "sent";
+    const save = (now) => { clearTimeout(orderSaveT); const run = () => write("porders/" + o.id, { ...strip(o), updatedAt: new Date().toISOString() }).catch(() => toast(L("Hindi na-save", "Could not save"))); if (now) return run(); orderSaveT = setTimeout(run, 500); };
+    const setStatus = async (st, extra = {}) => { Object.assign(o, { status: st, ...extra }); await save(true); render(); };
+    const pick = h("select", { id: "poPick", onchange: (e) => { const p = productById(e.target.value); if (p && !o.lines.some((l) => l.productId === p.id)) { o.lines.push({ productId: p.id, name: p.name, unit: p.unit || "pc", qty: "1", cost: p.cost || 0 }); save(true); render(); } e.target.value = ""; } },
+      h("option", { value: "", text: L("+ Magdagdag ng paninda…", "+ Add a product…") }), activeProducts().map((p) => h("option", { value: p.id, text: `${p.name} (${qtyFmt(Math.max(0, stockOf(p.id)))} ${L("natitira", "left")})` })));
+    const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast(L("Nakopya — i-paste sa Messenger, Viber o SMS", "Copied — paste it in Messenger, Viber or SMS")); return true; } catch { openDialog(L("I-kopya ang order", "Copy the order"), h("textarea", { class: "input", rows: 12, style: "width:100%", text: t })); return false; } };
+    const receive = () => { stockLines.length = 0; for (const l of o.lines) if (Number(l.qty) > 0 && productById(l.productId)) stockLines.push({ productId: l.productId, qty: String(l.qty), cost: ((l.cost || 0) / 100).toFixed(2), fromOrder: true }); Object.assign(si, { supplier: o.supplier || "", orderId: o.id }); go("products", "stockin"); };
+    return h("div", { class: "view" },
+      h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("products", "orders") }, "‹ " + L("Mga order", "Orders")),
+        h("h1", { text: (o.supplier || L("Order", "Order")) + " · " + L(...ORDER_ST[o.status]), style: "margin-top:8px" }),
+        h("div", { class: "muted small", text: [L("Ginawa ", "Created ") + when(o.createdAt), o.sentAt ? L("naipadala ", "sent ") + when(o.sentAt) : null, o.receivedAt ? L("natanggap ", "received ") + when(o.receivedAt) : null].filter(Boolean).join(" · ") }))),
+      h("div", { class: "card grid", style: "gap:10px" },
+        h("label", { class: "f" }, L("Supplier", "Supplier"), h("input", { type: "text", id: "poSup", value: o.supplier || "", disabled: !edit, placeholder: L("hal. Super8, Suy Sing, ahente ng Coke", "e.g. Super8, Suy Sing, Coke agent"), oninput: (e) => { o.supplier = e.target.value; save(); } })),
+        o.lines.length ? h("ul", { class: "list po" }, o.lines.map((l) => h("li", {},
+          h("div", { style: "min-width:0" }, h("div", { style: "font-weight:600", text: l.name }), h("div", { class: "muted small", text: L(`Stock ngayon: ${qtyFmt(Math.max(0, stockOf(l.productId)))}`, `In stock now: ${qtyFmt(Math.max(0, stockOf(l.productId)))}`) })),
+          h("label", { class: "f" }, L("Dami", "Qty"), h("input", { type: "text", inputmode: "decimal", id: "poq-" + l.productId, value: l.qty, disabled: !edit, oninput: (e) => { l.qty = e.target.value; save(); } })),
+          h("label", { class: "f" }, L("Halaga ₱", "Cost ₱"), h("input", { type: "text", inputmode: "decimal", id: "poc-" + l.productId, value: ((l.cost || 0) / 100).toFixed(2), disabled: !edit, oninput: (e) => { l.cost = toCentavos(e.target.value) || 0; save(); } })),
+          edit ? h("button", { class: "btn sm danger", "aria-label": L("Alisin", "Remove"), onclick: () => { o.lines = o.lines.filter((x) => x !== l); save(true); render(); } }, "×") : h("span"))))
+          : h("div", { class: "empty", text: L("Wala pang laman ang order.", "This order is empty.") }),
+        edit ? pick : null,
+        h("div", { class: "total" }, h("span", { class: "muted", text: L("Tantiyang halaga", "Estimated amount") }), h("span", { class: "v num", text: peso(orderTotal(o)) }))),
+      h("div", { class: "pills" },
+        o.status === "draft" ? h("button", { class: "btn primary", disabled: !o.lines.length, onclick: async () => { await copy(orderText(o)); await setStatus("sent", { sentAt: new Date().toISOString() }); } }, L("📤 Ipadala sa supplier", "📤 Send to supplier")) : null,
+        o.status === "sent" ? h("button", { class: "btn primary", onclick: receive }, L("📥 Natanggap na — i-stock-in", "📥 Received — stock in")) : null,
+        o.status === "sent" ? h("button", { class: "btn", onclick: () => copy(orderText(o)) }, L("📋 Kopyahin ulit", "📋 Copy again")) : null,
+        o.status === "draft" ? h("button", { class: "btn", onclick: () => copy(orderText(o)) }, L("📋 Kopyahin", "📋 Copy")) : null,
+        edit ? h("button", { class: "btn danger", onclick: async () => { if (await askYes(L("Kanselahin ang order?", "Cancel this order?"), "", L("Kanselahin", "Cancel order"), L("Huwag", "Keep it"))) { await setStatus("cancelled", { cancelledAt: new Date().toISOString() }); go("products", "orders"); } } }, L("Kanselahin", "Cancel order")) : null),
+      edit ? h("p", { class: "muted small", text: L("Ang \"Ipadala\" ay kumokopya ng mensahe para i-paste sa Messenger, Viber o SMS ng supplier. Pagdating ng paninda, pindutin ang \"Natanggap\" — mapupunta ito sa Stock-in.", "\"Send\" copies a message to paste in the supplier's Messenger, Viber or SMS. When the goods arrive, tap \"Received\" — it opens Stock-in.") }) : null);
+  }
 
   // ---------- PHOTO MODE: walk the shelf and snap each product ----------
   function photoMode() {

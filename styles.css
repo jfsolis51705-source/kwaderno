@@ -189,3 +189,8 @@ body.paused .radar b { animation-play-state: paused; opacity: .25; }
 }
 .flashwash { position: fixed; inset: 0; z-index: 29; background: #fff; opacity: 0; pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) { .flashwash.on { animation: wash .18s ease-out; } @keyframes wash { 0% { opacity: .55; } 100% { opacity: 0; } } }
+
+/* no pause button; zoom only where the camera picture is shown */
+#pauseBtn { display: none !important; }
+.actions { display: flex; justify-content: center; gap: 28px; }
+body.grocery #zoomRow { display: none !important; }

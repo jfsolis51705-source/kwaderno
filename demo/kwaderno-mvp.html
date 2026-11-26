@@ -2845,14 +2845,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   // ---------- LOW-STOCK ALERT: pop-up + sound + voice when an item drops to its reorder level ----------
   // Real sales trigger it as they happen. Demo mode (on by default for the pilot) also shows it 5 s after opening
   // and plays a simulated sale every minute — simulated sales live only on this screen and are never saved.
-  const SA = { known: null, demoSold: new Map(), demoT: null, firstT: null, checkT: null, ctx: null, open: false, lastSale: null };
+  const SA = { known: null, demoSold: new Map(), demoT: null, firstT: null, checkT: null, ctx: null, open: false, lastSale: null, remT: null, remStep: 0, lowI: 0, expI: 0 };
   const prefOn = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v === "1"; } catch { return d; } };
   const setPref = (k, on) => { try { localStorage.setItem(k, on ? "1" : "0"); } catch { /* ignore */ } };
-  const alertsOn = () => prefOn("kw-stockalert", true), demoOn = () => prefOn("kw-demoalerts", true);
+  const alertsOn = () => prefOn("kw-stockalert", true), demoOn = () => prefOn("kw-demoalerts", false), remindersOn = () => prefOn("kw-reminders", true);
   const effStock = (id) => stockOf(id) - (SA.demoSold.get(id) || 0);
   const lowNow = () => activeProducts().filter((p) => (p.reorder || 0) > 0 || stockOf(p.id) > 0).filter((p) => effStock(p.id) <= (p.reorder || 0))
     .sort((a, b) => effStock(a.id) - (a.reorder || 0) - (effStock(b.id) - (b.reorder || 0)));
-  function resetStockAlerts() { SA.known = null; SA.demoSold.clear(); clearTimeout(SA.firstT); clearInterval(SA.demoT); SA.firstT = SA.demoT = null; document.getElementById("stockAlert")?.remove(); SA.open = false; }
+  function resetStockAlerts() { SA.known = null; SA.demoSold.clear(); clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); SA.firstT = SA.demoT = SA.remT = null; SA.remStep = 0; document.getElementById("stockAlert")?.remove(); SA.open = false; }
   // sound: a short two-tone chime, made in the browser (no file). Browsers allow sound only after the first tap.
   function chime() {
     try {
@@ -2914,10 +2914,58 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (fresh.length || why === "demo") showStockAlert(why === "demo" ? low : [...fresh, ...low.filter((p) => !fresh.includes(p))], why);
   }
   function startDemo() {
-    clearTimeout(SA.firstT); clearInterval(SA.demoT);
-    if (!demoOn() || !alertsOn()) return;
-    SA.firstT = setTimeout(() => showStockAlert(lowNow(), "open"), 5000);
-    SA.demoT = setInterval(demoSale, 60000);
+    clearTimeout(SA.firstT); clearInterval(SA.demoT); clearTimeout(SA.remT); SA.remStep = 0;
+    if (alertsOn() && remindersOn()) scheduleReminder();
+    if (alertsOn() && demoOn()) SA.demoT = setInterval(demoSale, 60000);
+  }
+  // ---------- REMINDERS: one low-stock item and one expiring item, a different one each time ----------
+  // first after 5 s, then 30 s later, then 1 minute later, then every minute
+  const REM_DELAYS = [5000, 30000, 60000], APP_T0 = Date.now(); // the first one counts from when the app opened
+  const expiringNow = () => activeExpiries().filter((e) => daysLeft(e.date) <= 7).sort((a, b) => a.date.localeCompare(b.date));
+  function scheduleReminder(delay) {
+    clearTimeout(SA.remT);
+    SA.remT = setTimeout(remindTick, delay ?? (SA.remStep === 0 ? Math.max(300, REM_DELAYS[0] - (Date.now() - APP_T0)) : REM_DELAYS[Math.min(SA.remStep, REM_DELAYS.length - 1)]));
+  }
+  function remindTick() {
+    if (!alertsOn() || !remindersOn()) return;
+    // busy (a pop-up or dialog is open, screen locked, app in the background): try again shortly, don't pile up
+    if (document.hidden || SA.open || dlg.open || !S.ready || view === "admin" || document.getElementById("lock") || document.getElementById("liveScan")) return scheduleReminder(10000);
+    const lows = lowNow(), exps = expiringNow();
+    if (lows.length || exps.length) {
+      const low = lows.length ? lows[SA.lowI++ % lows.length] : null, ex = exps.length ? exps[SA.expI++ % exps.length] : null;
+      showReminder(low, ex, { lowN: lows.length, lowPos: low ? lows.indexOf(low) + 1 : 0, expN: exps.length, expPos: ex ? exps.indexOf(ex) + 1 : 0 });
+    }
+    SA.remStep++; scheduleReminder();
+  }
+  const expWhen = (d, en) => { const n = daysLeft(d); return en ? (n < 0 ? `expired ${-n} day${n === -1 ? "" : "s"} ago` : n === 0 ? "expires today" : `expires in ${n} day${n === 1 ? "" : "s"}`)
+    : (n < 0 ? `expired na ${-n} araw na` : n === 0 ? "mag-e-expire ngayon" : `mag-e-expire sa ${n} araw`); };
+  function showReminder(low, ex, pos) {
+    if (!alertsOn() || view === "admin" || document.getElementById("lock") || dlg.open) return;
+    document.getElementById("stockAlert")?.remove();
+    const close = () => { box.remove(); SA.open = false; window.speechSynthesis?.cancel(); voice.tts?.stop?.(); };
+    const lowLeft = low ? Math.max(0, Math.round(effStock(low.id))) : 0, exP = ex ? productById(ex.productId) : null;
+    const speech = { title: "Pardon the interruption.", lang: "en", lines: [
+      low ? (lowLeft <= 0 ? `${low.name} is out of stock.` : `${low.name} is running low, only ${lowLeft} left.`) : null,
+      ex && exP ? `${exP.name}${ex.qty ? `, ${ex.qty} ${exP.unit || "pieces"},` : ""} ${expWhen(ex.date, true)}.` : null,
+      low && ex ? "I'd suggest restocking and checking the expiry soon." : low ? "I'd suggest restocking soon." : "Please check it soon."].filter(Boolean) };
+    const sound = chime(), say = () => { try { speakAssistant(speech); } catch { /* no voice */ } };
+    const row = (icon, title, count, name, detail, bad) => h("div", { style: "display:grid;gap:4px" },
+      h("div", { class: "small", style: "display:flex;justify-content:space-between;gap:8px;font-weight:700" }, h("span", { text: `${icon} ${title}` }), count ? h("span", { class: "muted num", text: count }) : null),
+      h("ul", {}, h("li", {}, h("span", { text: name }), h("b", { class: bad ? "out" : null, text: detail }))));
+    const box = h("div", { id: "stockAlert", role: "alertdialog", "aria-modal": "true", "aria-labelledby": "saTitle", onclick: (e) => { if (e.target === box) close(); } },
+      h("div", { class: "sa" },
+        h("h2", { id: "saTitle" }, h("span", { "aria-hidden": "true", text: "🔔" }), L("Paalala", "Reminder")),
+        low ? row("⚠️", L("Paubos na", "Running low"), pos.lowN > 1 ? `${pos.lowPos} / ${pos.lowN}` : "", low.name, lowLeft <= 0 ? L("UBOS", "OUT") : L(`${qtyWord(low, lowLeft)} na lang`, `${qtyWord(low, lowLeft)} left`), lowLeft <= 0) : null,
+        ex && exP ? row("⏰", L("Expiry", "Expiry"), pos.expN > 1 ? `${pos.expPos} / ${pos.expN}` : "", exP.name + (ex.qty ? ` · ${ex.qty} ${exP.unit || "pc"}` : ""), expWhen(ex.date, lang === "en") + ` (${ex.date})`, daysLeft(ex.date) < 0) : null,
+        sound ? null : h("div", { class: "small muted", text: L("I-tap ang 🔊 para marinig ang alerto.", "Tap 🔊 to hear the alert.") }),
+        h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
+          low ? h("button", { class: "btn primary", style: "flex:1", onclick: () => { close(); go("products", "checklist"); } }, L("📋 Bibilhin", "📋 Restock list")) : null,
+          ex ? h("button", { class: "btn" + (low ? "" : " primary"), style: "flex:1", onclick: () => { close(); go("products", "expiry"); } }, L("⏰ Expiry", "⏰ Expiry list")) : null,
+          h("button", { class: "btn", onclick: () => { chime(); say(); }, "aria-label": L("Pakinggan", "Play sound and voice") }, "🔊"),
+          h("button", { class: "btn", onclick: close }, L("Mamaya", "Later"))),
+        h("div", { class: "small muted", text: L("Susunod na paalala: ibang paninda. Patayin sa Settings.", "Next reminder shows other items. Turn off in Settings.") })));
+    ($("#screen") || document.body).append(box); SA.open = true;
+    if (voice.auto) setTimeout(say, sound ? 900 : 0);
   }
   // simulated sale: picks the item closest to its reorder level and sells just enough to reach it
   function demoSale() {
@@ -2988,9 +3036,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("div", { class: "card grid" }, h("h2", { text: L("🔔 Alerto sa paubos na stock", "🔔 Low-stock alert") }),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saOn", checked: alertsOn(), onchange: (e) => { setPref("kw-stockalert", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
         L("Pop-up, tunog at boses kapag umabot sa reorder level ang isang paninda", "Pop-up, sound and voice when an item reaches its reorder level")),
-      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saDemo", checked: demoOn(), onchange: (e) => { setPref("kw-demoalerts", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
-        L("Demo: ipakita 5 segundo pagbukas, at may kunwaring benta bawat 1 minuto (hindi naka-save)", "Demo: show it 5 seconds after opening, plus a simulated sale every minute (not saved)")),
-      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, h("button", { class: "btn", onclick: () => { chime(); showStockAlert(lowNow(), "open"); } }, L("Subukan ngayon", "Test now")),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "saRem", checked: remindersOn(), onchange: (e) => { setPref("kw-reminders", e.target.checked); resetStockAlerts(); checkStock("real"); } }),
+        L("Paalala sa paubos at expiry: 5 segundo pagbukas, saka 30 segundo, 1 minuto, at bawat minuto — ibang paninda bawat paalala", "Low-stock and expiry reminders: 5 s after opening, then 30 s, 1 minute, then every minute — a different item each time")),
+      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, h("button", { class: "btn", onclick: () => { chime(); const lows = lowNow(), exps = expiringNow(); showReminder(lows[SA.lowI++ % Math.max(1, lows.length)] || null, exps[SA.expI++ % Math.max(1, exps.length)] || null, { lowN: lows.length, lowPos: lows.length ? ((SA.lowI - 1) % lows.length) + 1 : 0, expN: exps.length, expPos: exps.length ? ((SA.expI - 1) % exps.length) + 1 : 0 }); } }, L("Subukan ngayon", "Test now")),
         SA.demoSold.size ? h("button", { class: "btn", onclick: () => { SA.demoSold.clear(); SA.known = null; checkStock("real"); toast(L("Na-reset ang demo", "Demo reset")); render(); } }, L("I-reset ang demo", "Reset demo")) : null),
       h("div", { class: "muted small", text: L("Nakasunod ang boses sa mute at sa piniling boses sa Ask Kwaderno.", "The voice follows the mute switch and voice choice in Ask Kwaderno.") })));
   }

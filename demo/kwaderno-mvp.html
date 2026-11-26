@@ -1179,17 +1179,17 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       let done = false; const finish = (v) => { if (done) return; done = true; scanWait = null; if (dlg.open && dlg.contains(box)) dlg.close(); resolve(v); };
       const mode = view === "sell" ? "sell" : "stock";
       const url = SCANNER_URL() + "?kw=1&return=" + encodeURIComponent(APP_URL + "#scan-" + mode + "-");
-      const open = () => { const w = window.open(url, "kwscanner"); if (!w) { msg.textContent = L("Hindi nabuksan — pindutin ang link sa ibaba.", "It didn't open — tap the link below."); link.hidden = false; } };
+      const open = () => { try { window.open(url, "kwscanner"); } catch { /* blocked: the button below opens it */ } };
       const typed = h("input", { type: "text", inputmode: "numeric", autocomplete: "off", id: "xsTyped", placeholder: L("hal. 4800016644290", "e.g. 4800016644290"), maxlength: 48 });
       const msg = h("div", { class: "small", role: "status" });
       const use = () => { const v = typed.value.replace(/\s+/g, ""); if (!v) return; const bad = codeIssue(v); if (bad) { scanBeep(false); msg.style.color = "var(--bad)"; msg.textContent = bad; return; } scanBeep(true); finish(v); };
       typed.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); use(); } });
-      const link = h("a", { class: "btn", href: url, target: "kwscanner", rel: "opener", hidden: true }, L("Buksan ang scanner", "Open the scanner"));
+      const link = h("a", { class: "btn primary big", id: "xsOpen", href: url, target: "kwscanner", rel: "opener" }, svgIcon(IC.scan), L("Buksan ang scanner", "Open the scanner"));
       const box = h("div", { class: "grid", id: "xsWait" },
-        h("div", { style: "display:flex;gap:10px;align-items:center" }, h("span", { class: "spin", "aria-hidden": "true" }), h("b", { text: L("Bukas ang scanner sa bagong tab — itapat ang camera sa barcode o QR.", "The scanner is open in a new tab — point the camera at the barcode or QR.") })),
-        h("p", { class: "muted small", style: "margin:0", text: L("Kusa itong babasa at babalik dito ang numero. Gumagana rin ang Bluetooth/USB scanner ngayon.", "It reads by itself and the number comes back here. A Bluetooth/USB scanner works right now too.") }),
-        h("button", { class: "btn primary", id: "xsOpen", onclick: open }, L("📷 Buksan ulit ang scanner", "📷 Open the scanner again")), link,
+        h("p", { style: "margin:0", text: L("Itapat ang camera sa barcode o QR — kusa itong babasa at babalik dito ang numero.", "Point the camera at the barcode or QR — it reads by itself and the number comes back here.") }),
+        link,
         h("label", { class: "f" }, L("O i-type ang numero", "Or type the number"), typed), h("button", { class: "btn", onclick: use }, L("Gamitin ang numerong ito", "Use this number")), msg,
+        h("p", { class: "muted small", style: "margin:0", text: L("Gumagana rin ang Bluetooth/USB scanner — i-scan lang.", "A Bluetooth/USB barcode scanner works too — just scan.") }),
         h("button", { class: "btn", onclick: () => finish(null) }, L("Kanselahin", "Cancel")));
       scanWait = { resolve: finish };
       openDialog(title || L("I-scan", "Scan"), box);
@@ -1228,6 +1228,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   }, true);
   function takePendingScan() { if (!pendingScan || !S.ready) return; const { mode, codes } = pendingScan; pendingScan = null; setTimeout(() => codes.forEach((c, i) => setTimeout(() => incomingCode(c, mode), i * 50)), 100); }
   function scanBarcode(opts = {}) {
+    if (opts.ask && !opts.file && !liveCameraAllowed()) return externalScan(opts.title || L("Magdagdag ng barcode", "Add barcode")); // one box: the scanner (opened straight from the tap) or type the number
     return new Promise((resolve) => {
       let done = false;
       let handOff = false; // closing this box to open the live scanner is not a cancel

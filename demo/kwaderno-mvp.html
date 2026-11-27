@@ -714,7 +714,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     S.rootBase = S.owner ? "" : `stores/${S.me}/`;
     try { S.branch = localStorage.getItem("kw-branch:" + (S.me || "owner")) || ""; } catch { S.branch = ""; }
     document.documentElement.classList.add("lockwait"); setTimeout(() => { if (!S.branchDocLoaded) { S.branchDocLoaded = true; checkOpenLock(); } }, 8000);
-    db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
+    db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); libIdx = null; render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
     if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); try { watchAdminOrders(); } catch { /* later */ } try { autoLearnOcr(); } catch { /* later */ } scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/rules").onSnapshot((d) => { S.rules = d.exists ? d.data() : null; render(); }, () => {});
@@ -1370,9 +1370,33 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       h("button", { class: "btn", onclick: () => dlg.close() }, L("Kanselahin", "Cancel"))));
   }
   // Product photo or a colored initials placeholder (hue from the name, stable per product).
+  // ---------- photos from the KELSON library, automatically, for products without their own photo ----------
+  // Matched by barcode first (library items can carry barcodes), then by name; sizes must agree (155g ≠ 425g).
+  let libIdx = null, libIdxKey = "";
+  const SIZE_RE = /\b\d+(\.\d+)?\s*(g|gm|grams?|kg|ml|l|ltr|liters?|s|pcs|pc|oz)\b/g;
+  const sizeOf = (t) => (fold(t).match(SIZE_RE) || []).map((x) => x.replace(/\s+/g, "").replace(/(gm|grams?)$/, "g").replace(/(ltr|liters?)$/, "l").replace(/pcs$/, "pc"));
+  const nameToks = (t) => fold(t).replace(SIZE_RE, " ").split(" ").filter((w) => w.length >= 2); // sizes are compared on their own
+  function libIndex() {
+    const key = S.library.length + "|" + S.library.map((it) => it.id + (it.updatedAt || it.createdAt || "")).join(",").length;
+    if (libIdx && libIdxKey === key) return libIdx;
+    const byCode = new Map(), items = [];
+    for (const it of S.library) { if (!photoUrlOk(it.photo?.url)) continue; for (const b of it.barcodes || []) byCode.set(normCode(b), it); items.push(it); }
+    libIdxKey = key; return (libIdx = { byCode, items, memo: new Map() });
+  }
+  function libPhotoFor(p) {
+    if (!S.library.length) return null;
+    const ix = libIndex(), mk = p.id + "|" + p.name + "|" + (p.barcodes || []).join(",");
+    if (ix.memo.has(mk)) return ix.memo.get(mk);
+    let hit = null;
+    for (const b of p.barcodes || []) { hit = ix.byCode.get(normCode(b)); if (hit) break; }
+    if (!hit) { let best = 0; for (const it of ix.items) { const f1 = nameMatchScore(p.name, it.name); if (f1 > best) { best = f1; hit = f1 >= 0.8 ? it : null; } } }
+    const out = hit ? hit.photo.url : null; ix.memo.set(mk, out); return out;
+  }
   function productImage(p) {
     const url = p.photo?.url;
     if (photoUrlOk(url)) return h("img", { class: "pimg", src: url, alt: p.name, loading: "lazy" });
+    const lib = libPhotoFor(p); // no photo of its own: the KELSON library's photo of this product, if there is one
+    if (lib) return h("img", { class: "pimg", src: lib, alt: p.name, loading: "lazy", "data-lib": "1" });
     const words = p.name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
     const initials = (words[0]?.[0] || "?") + (words[1]?.[0] || "");
     let hash = 0; for (const ch of p.category || p.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
@@ -6337,7 +6361,9 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       h("div", { class: "toolbar" },
         h("input", { type: "search", id: "libSearch", placeholder: "Search library", value: libQ, "aria-label": "Search the photo library",
           oninput: (e) => { libQ = e.target.value; render(); const el = $("#libSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
-        h("button", { class: "btn primary", onclick: addLibraryItems }, upIcon(), "Add product photos")),
+        h("button", { class: "btn primary", onclick: addLibraryItems }, upIcon(), "Add product photos"),
+        h("button", { class: "btn", id: "aiLibBtn", onclick: () => aiLibraryAdd(), title: "Claude reads each package (name, size, barcode) and matches it to the products stores sell — you approve before anything is saved" }, "✨ AI name & match photos")),
+      missingPhotosCard(),
       items.length ? h("div", { class: "libgrid", style: "max-height:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))" }, items.map((it) => h("div", { class: "libitem" },
         h("img", { class: "pimg", src: it.photo.url, alt: it.name, loading: "lazy" }), h("b", { class: "small", text: it.name }), h("span", { class: "muted small", text: it.category || "—" }),
         h("div", { class: "pills" },
@@ -6347,6 +6373,79 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
             h("button", { class: "btn danger big", onclick: async () => { dlg.close(); try { await S.db.doc("library/" + it.id).delete(); toast("Removed"); } catch { toast("Could not remove"); } } }, "Remove"),
             h("button", { class: "btn", onclick: () => dlg.close() }, "Cancel"))) }, "Remove")))))
         : h("div", { class: "empty", text: S.library.length ? "Nothing matches your search." : "No photos yet. Tap “Add product photos” — you can pick many at once; each file name becomes the product name (you can edit it)." }));
+  }
+  /** Products stores sell that no library photo covers yet — most stores first — each one photo away from every store. */
+  let libMissAll = false;
+  function missingPhotosCard() {
+    const g = new Map();
+    for (const st of S.stores) for (const it of st.items || []) {
+      if (!it.name) continue; const k = fold(it.name);
+      const x = g.get(k) || { name: it.name, bc: it.bc || null, stores: 0 }; x.stores++; if (!x.bc && it.bc) x.bc = it.bc; g.set(k, x);
+    }
+    const miss = [...g.values()].filter((x) => !libPhotoFor({ id: "admin:" + x.name, name: x.name, barcodes: x.bc ? [x.bc] : [] })).sort((a, b) => b.stores - a.stores || a.name.localeCompare(b.name));
+    const total = g.size, covered = total - miss.length;
+    return h("div", { class: "card", id: "libMissing" },
+      h("h2", { text: `Photos in stores: ${covered} of ${total} products covered`, style: "margin-bottom:4px" }),
+      h("p", { class: "muted small", style: "margin:0 0 8px", text: "Every store shows the library photo automatically for products without their own photo (matched by barcode, else by name and size). These are not covered yet — most stores first." }),
+      miss.length ? h("div", {}, h("ul", { class: "list" }, miss.slice(0, libMissAll ? 60 : 8).map((x) => h("li", {},
+        h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: `in ${x.stores} store(s)` + (x.bc ? ` · barcode ${x.bc}` : "") })),
+        h("button", { class: "btn sm primary", onclick: () => addLibraryPhotoFor(x) }, upIcon(), "Add photo"),
+        h("button", { class: "btn sm", title: "Claude reads the package to fill barcode/size — you check before saving", onclick: () => aiLibraryAdd(x) }, "✨ AI")))),
+      miss.length > 8 ? h("button", { class: "btn sm ghost", id: "libMissMore", style: "margin-top:6px", onclick: () => { libMissAll = !libMissAll; render(); } }, libMissAll ? "Show fewer" : `Show all ${Math.min(60, miss.length)} missing`) : null)
+        : h("div", { class: "empty", text: total ? "Every product in the stores has a library photo. 🎉" : "No store products yet." }));
+  }
+  /** Shared name matcher (same rule the stores use): token F1 ≥ 0.8, sizes must agree. */
+  function nameMatchScore(a, b) {
+    const sa = sizeOf(a), sb = sizeOf(b); if (sa.length && sb.length && !sa.some((x) => sb.includes(x))) return 0;
+    const ta = nameToks(a), tb = nameToks(b); if (!ta.length || !tb.length) return 0;
+    const eq = (t, w) => t === w || (t.length >= 5 && w.length >= 5 && lev(t, w) <= 1);
+    const m1 = ta.filter((t) => tb.some((w) => eq(t, w))).length, m2 = tb.filter((w) => ta.some((t) => eq(t, w))).length; if (!m1) return 0;
+    const pr = m1 / ta.length, rc = m2 / tb.length; return (2 * pr * rc) / (pr + rc);
+  }
+  /** AI is only for photos we have no data on: Claude reads each package once, the smart matcher links it to a store product,
+   *  the admin approves, and the photo is saved ONCE to the cloud library — every store then gets it without AI. */
+  async function aiLibraryAdd(preset) {
+    const files = await pickFiles(); if (!files.length) return;
+    const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Uploading needs Editor access");
+    const pool = new Map(); for (const st of S.stores) for (const it of st.items || []) if (it.name && !pool.has(fold(it.name))) pool.set(fold(it.name), { name: it.name, bc: it.bc || null });
+    const want = [...pool.values()];
+    const rows = []; toast(`Reading ${files.length} photo(s)…`);
+    for (const f of files.slice(0, 20)) {
+      const jpg = await squareJpeg(f, 640); let ai = null, err = null;
+      try { ai = await askClaudeJson('This is a photo of one retail product package (Philippine sari-sari store / grocery). Read the package. Reply JSON only: {"brand": string|null, "name": string (product name with variant, no brand), "size": string|null (e.g. "155g", "1L", "10pcs"), "barcode": string|null (digits printed under the barcode, only if clearly readable)}. If it is not a product package, reply {"name": null}.', [jpg]); }
+      catch (e) { err = claudeError(e); }
+      const aiName = ai?.name ? [ai.brand, ai.name, ai.size].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 80) : "";
+      const code = String(ai?.barcode || "").replace(/\D/g, ""); let best = null, sc = 0;
+      for (const w of want) { const v = (code && w.bc && normCode(w.bc) === normCode(code)) ? 2 : aiName ? nameMatchScore(aiName, w.name) : 0; if (v > sc) { sc = v; best = w; } }
+      if (preset) { best = preset; sc = 2; }
+      const fileName = f.name.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim();
+      rows.push({ jpg, url: URL.createObjectURL(jpg), aiName, err, match: sc >= 0.8 ? best : null, name: sc >= 0.8 ? best.name : aiName || fileName, bc: code || (sc >= 0.8 && best.bc) || "" });
+    }
+    const list = h("ul", { class: "list" }, rows.map((r) => {
+      r.on = h("input", { type: "checkbox", checked: !!(r.name) || null }); r.nIn = h("input", { type: "text", value: r.name, maxlength: 80 }); r.cIn = h("input", { type: "text", value: r.bc, inputmode: "numeric", placeholder: "barcode (optional)" });
+      return h("li", { style: "align-items:flex-start" }, r.on, h("img", { src: r.url, alt: "", style: "width:64px;height:64px;object-fit:cover;border-radius:8px" }),
+        h("div", { class: "grow grid", style: "gap:4px" }, r.nIn, r.cIn,
+          h("div", { class: "muted small", text: r.err ? "AI couldn't read it: " + r.err : r.match ? `✓ Matches “${r.match.name}” sold in stores` + (r.aiName && fold(r.aiName) !== fold(r.match.name) ? ` (AI read: ${r.aiName})` : "") : r.aiName ? `AI read: ${r.aiName} — not sold in any store yet` : "Type the name" })));
+    }));
+    openDialog("Check before saving", h("div", { class: "grid" },
+      h("p", { class: "muted small", style: "margin:0", text: "Claude read each package. Fix anything wrong, untick what you don't want. Saved once to the cloud library — stores then match it themselves, without AI." }), list,
+      h("button", { class: "btn primary big", onclick: async (e) => {
+        e.target.disabled = true; let n = 0;
+        for (const r of rows) { if (!r.on.checked || !r.nIn.value.trim()) continue;
+          try { const a = await assets.upload(r.jpg); const codes = [...new Set(r.cIn.value.split(/[\s,;]+/).map((x) => x.replace(/\D/g, "")).filter((x) => x.length >= 8))];
+            await S.db.doc("library/" + uid()).set({ name: r.nIn.value.trim().slice(0, 80), category: null, barcodes: codes, photo: { id: a.id, url: a.url }, source: r.aiName ? "ai-read" : "admin", createdAt: new Date().toISOString() }); n++;
+          } catch {}
+        }
+        rows.forEach((r) => URL.revokeObjectURL(r.url)); dlg.close(); toast(n ? `Saved ${n} photo(s) — stores will show them automatically` : "Nothing saved");
+      } }, "Save to library")));
+  }
+  async function addLibraryPhotoFor(x) {
+    const files = await pickFiles(); const f = files[0]; if (!f) return;
+    const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Uploading needs Editor access");
+    try { const a = await assets.upload(await squareJpeg(f, 640));
+      await S.db.doc("library/" + uid()).set({ name: x.name.slice(0, 80), category: null, barcodes: x.bc ? [x.bc] : [], photo: { id: a.id, url: a.url }, createdAt: new Date().toISOString() });
+      toast(`Photo added — ${x.name} now shows it in ${x.stores} store(s)`);
+    } catch { toast("Could not upload — try again"); }
   }
   async function addLibraryItems() {
     const files = await pickFiles(); if (!files.length) return;
@@ -6365,10 +6464,13 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   function editLibraryItem(it) {
     const name = h("input", { type: "text", value: it.name, maxlength: 80 });
     const cat = h("select", {}, h("option", { value: "", text: "—" }), CATS.map((c) => h("option", { value: c, text: c, selected: it.category === c || null })));
+    const codes = h("input", { type: "text", id: "libCodes", value: (it.barcodes || []).join(", "), inputmode: "numeric", placeholder: "e.g. 748485200040" });
     openDialog("Edit library photo", h("form", { class: "grid", onsubmit: async (e) => {
       e.preventDefault(); if (!name.value.trim()) return toast("Enter a name");
-      try { await S.db.doc("library/" + it.id).set({ ...strip(it), name: name.value.trim(), category: cat.value || null }); dlg.close(); toast("Saved"); } catch { toast("Could not save"); }
+      const barcodes = [...new Set(codes.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean))].slice(0, 10);
+      try { await S.db.doc("library/" + it.id).set({ ...strip(it), name: name.value.trim(), category: cat.value || null, barcodes, updatedAt: new Date().toISOString() }); dlg.close(); toast("Saved"); } catch { toast("Could not save"); }
     } }, h("img", { class: "pimg", src: it.photo.url, alt: "", style: "max-width:200px;border-radius:10px" }), h("label", { class: "f" }, "Product name", name), h("label", { class: "f" }, "Category", cat),
+      h("label", { class: "f" }, "Barcode(s) — exact match in every store, even if the name differs", codes),
       h("button", { class: "btn primary big", type: "submit" }, "Save")));
   }
 

@@ -724,6 +724,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; scheduleAuto(); if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/manufacturers").onSnapshot((d) => { S.mfrMap = d.exists ? d.data().map || {} : {}; mfrIdx = null; if (view === "admin") render(); }, () => {});
+    if (S.owner) db.doc("admin/photofinder").onSnapshot((d) => { S.photoFinder = d.exists ? { auto: true, tried: {}, ...d.data() } : { auto: true, tried: {} }; setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500); }, () => { S.photoFinder = { auto: true, tried: {} }; });
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
@@ -881,6 +882,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function render() {
     if (pendingScan && S.ready) setTimeout(takePendingScan, 0);
     if (pendingLog && S.ready) { const pl = pendingLog; pendingLog = null; setTimeout(() => importLogbook(pl), 0); }
+    if (view === "admin" && !autoFindTried && S.photoFinder && S.stores?.length) setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500);
     applyLayout();
     document.documentElement.lang = lang === "en" ? "en" : "fil";
     langBtn.replaceChildren(...[["en", "English"], ["tl", "Tagalog"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
@@ -1223,9 +1225,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     } else if (hit) { scanBeep(true); go("products", "p-" + hit.id); } else unknownBarcode(code, (np) => go("products", "p-" + np.id));
   }
   window.addEventListener("message", (e) => {
-    const d = e.data; if (!d || !["kw-scan", "kw-unscan", "kw-hello", "kw-logbook"].includes(d.type)) return;
+    const d = e.data; if (!d || !["kw-scan", "kw-unscan", "kw-hello", "kw-logbook", "kw-scan-photo"].includes(d.type)) return;
     let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin; } catch { ok = false; }
     if (!ok) return;
+    if (d.type === "kw-scan-photo") { takeScanPhoto(d); return; }
     if (d.type === "kw-hello") { // the scanner asks for the product list (kept on the phone so its Logbook matches offline)
       try { e.source?.postMessage({ type: "kw-catalog", products: activeProducts().map((p) => ({ id: p.id, name: p.name, price: p.price || 0, cost: p.cost || 0, sold: (typeof D !== "undefined" && D.sold?.get(p.id)) || 0 })),
         customers: (S.customers || []).filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
@@ -1348,18 +1351,35 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     return productById(p.id) || { ...cur, barcodes: [code, ...list] };
   }
   /** A code that isn't in the products: fix a near-miss, add it to an existing product, or make a new one. then(product) continues the scan. */
+  /** The scanner found the real product (name + photo) for a scanned barcode on the open product databases.
+   *  Shown at once wherever this barcode appears; a new product starts with it; Super Admin's photo finder saves it for every store. */
+  const scanInfo = new Map();
+  function takeScanPhoto(d) {
+    if (typeof d.code !== "string" || !/^\d{8,14}$/.test(d.code) || !(d.blob instanceof Blob) || !/^image\//.test(d.blob.type) || d.blob.size > 3e6) return;
+    const k = normCode(d.code), old = scanInfo.get(k); if (old?.url) URL.revokeObjectURL(old.url);
+    const info = { code: d.code, name: String(d.name || "").slice(0, 80), blob: d.blob, url: URL.createObjectURL(d.blob), source: String(d.source || "Open Food Facts").slice(0, 40) };
+    scanInfo.set(k, info); if (scanInfo.size > 300) { const [k0, v0] = scanInfo.entries().next().value; URL.revokeObjectURL(v0.url); scanInfo.delete(k0); }
+    const box = $("#ubPhoto"); if (box && box.dataset.code === k) box.replaceChildren(...scanPhotoBits(info));
+    if (view !== "admin") render();
+  }
+  const scanPhotoBits = (info) => [h("img", { src: info.url, alt: "", style: "width:84px;height:84px;object-fit:cover;border-radius:10px;background:#fff" }),
+    h("div", { class: "grid", style: "gap:2px" }, h("b", { text: info.name || L("Nahanap ang larawan", "Photo found") }), h("span", { class: "muted small", text: L(`Totoong larawan mula sa barcode · ${info.source}`, `Real photo from the barcode · ${info.source}`) }))];
   function unknownBarcode(code, then) {
     setTimeout(() => scanBeep(false), 180);
     const qr = !/^\d+$/.test(code), near = nearBarcode(code);
     const list = h("div", { class: "grid", style: "gap:6px;max-height:40vh;overflow:auto" });
     const q = h("input", { type: "search", id: "ubSearch", placeholder: L("Hanapin ang paninda…", "Search your products…"), autocomplete: "off" });
-    const pick = async (p, replace) => { try { const np = await attachBarcode(p, code, replace); dlg.close(); then?.(np); render(); } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } };
+    const pick = async (p, replace) => { try { const np = await attachBarcode(p, code, replace); dlg.close(); then?.(np); render();
+      const si = scanInfo.get(normCode(code)); if (si && np && !photoUrlOk(productById(np.id)?.photo?.url)) setProductPhoto(productById(np.id) || np, si.blob).catch(() => {}); // its real photo, kept
+    } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || "")); } };
     const draw = () => { const t = q.value.trim().toLowerCase();
       const ps = activeProducts().filter((p) => !t || p.name.toLowerCase().includes(t)).slice(0, 8);
       list.replaceChildren(...ps.map((p) => h("button", { class: "btn", style: "justify-content:space-between;text-align:left", onclick: () => pick(p) }, h("span", { text: p.name }), h("span", { class: "muted small", text: (p.barcodes || []).length ? (p.barcodes || [])[0] : L("walang barcode", "no barcode") }))),
         ...(ps.length ? [] : [h("div", { class: "muted small", text: L("Walang tugma.", "No match.") })])); };
     q.addEventListener("input", draw); draw();
+    const si = scanInfo.get(normCode(code));
     openDialog(qr ? L("Bagong QR code", "New QR code") : L("Bagong barcode", "New barcode"), h("div", { class: "grid", id: "unknownCode" },
+      qr ? null : h("div", { id: "ubPhoto", "data-code": normCode(code), style: "display:flex;gap:12px;align-items:center" }, ...(si ? scanPhotoBits(si) : [])),
       h("p", { style: "overflow-wrap:anywhere;margin:0", text: qr ? L(`Wala pa sa paninda mo ang QR code na ito: ${code.slice(0, 120)}`, `This QR code isn't in your products yet: ${code.slice(0, 120)}`) : L(`Wala pa sa paninda mo ang barcode ${code}.`, `Barcode ${code} is not in your products yet.`) }),
       ...near.slice(0, 3).map(({ p, old }) => h("div", { class: "note", style: "display:grid;gap:6px;margin:0" },
         h("b", { text: L(`Ito ba ang ${p.name}?`, `Is this ${p.name}?`) }),
@@ -1397,6 +1417,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (photoUrlOk(url)) return h("img", { class: "pimg", src: url, alt: p.name, loading: "lazy" });
     const lib = libPhotoFor(p); // no photo of its own: the KELSON library's photo of this product, if there is one
     if (lib) return h("img", { class: "pimg", src: lib.url, alt: p.name, loading: "lazy", "data-lib": "1", title: lib.credit ? `Photo: ${lib.credit}` : null });
+    for (const b of p.barcodes || []) { const si = scanInfo.get(normCode(b)); if (si) return h("img", { class: "pimg", src: si.url, alt: p.name, "data-scan": "1", title: `Photo: ${si.source} (CC BY-SA)` }); }
     const words = p.name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
     const initials = (words[0]?.[0] || "?") + (words[1]?.[0] || "");
     let hash = 0; for (const ch of p.category || p.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
@@ -3920,11 +3941,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         : h("div", { class: "empty", text: S.products.length ? "No matching products." : "No products yet. Add your first product." }));
   }
   function productForm(p) {
-    const v = p || { name: draft?.name || "", unit: "pc", price: draft?.price || 0, cost: 0, reorder: 5, category: draft?.cat || "", barcodes: [] };
+    const scanned = !p && pendingBarcode ? scanInfo.get(normCode(pendingBarcode)) : null; // real name + photo found from the scanned barcode
+    const v = p || { name: draft?.name || scanned?.name || "", unit: "pc", price: draft?.price || 0, cost: 0, reorder: 5, category: draft?.cat || "", barcodes: [] };
     if (!p) draft = null;
     const i = (id, label, val, extra = {}) => h("label", { class: "f" }, label, h("input", { type: "text", id, value: val ?? "", ...extra }));
     const pid = p?.id || "new";
     if (formPhoto && formPhoto.pid !== pid) formPhoto = null;
+    if (!formPhoto && scanned?.blob) formPhoto = { pid, file: scanned.blob, url: URL.createObjectURL(scanned.blob), scanned: scanned.source };
     const preview = () => {
       if (formPhoto?.file || formPhoto?.lib) return h("img", { class: "pimg", src: formPhoto.url, alt: "New photo" });
       if (formPhoto?.remove) return productImage({ ...v, photo: null, name: $("#pf-name")?.value || v.name || "?" });
@@ -6392,7 +6415,13 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     return h("div", { class: "card", id: "libMissing" },
       h("h2", { text: `Photos in stores: ${covered} of ${total} products covered`, style: "margin-bottom:4px" }),
       h("p", { class: "muted small", style: "margin:0 0 8px", text: "Every store shows the library photo automatically for products without their own photo (matched by barcode, else by name and size). These are not covered yet — most stores first." }),
-      miss.length ? h("button", { class: "btn primary", id: "findOnlineBtn", style: "margin-bottom:8px", onclick: () => findPhotosOnline(miss) }, `🌐 Find ${Math.min(200, miss.length)} photos online`) : null,
+      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px" },
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:center" }, h("input", { type: "checkbox", id: "photoAuto", checked: S.photoFinder?.auto !== false || null,
+          onchange: async (e) => { try { await S.db.doc("admin/photofinder").set({ ...(S.photoFinder || { tried: {} }), auto: e.target.checked }); toast(e.target.checked ? "Automatic photos on" : "Automatic photos off"); } catch { toast("Could not save"); } } }),
+          "Automatic: find missing photos online (any country) when Super Admin opens; save sure matches by themselves"),
+        miss.length ? h("button", { class: "btn primary", id: "findOnlineBtn", onclick: () => findPhotosOnline(miss) }, `🌐 Find ${Math.min(200, miss.length)} photos online now`) : null),
+      online.rows.length && !dlg.open ? h("button", { class: "btn", id: "onlineReview", style: "margin-bottom:8px", onclick: () => onlineDialog() }, `👀 ${online.rows.length} photo(s) found online need a check`) : null,
+      online.auto && online.win && !online.done ? h("p", { class: "small", id: "onlineProgress", style: "margin:0 0 8px", text: `🌐 Finding photos online… ${online.progress} of ${online.total} · ${online.saved} added` }) : null,
       miss.length ? h("div", {}, h("ul", { class: "list" }, miss.slice(0, libMissAll ? 60 : 8).map((x) => h("li", {},
         h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: `in ${x.stores} store(s)` + (x.bc ? ` · barcode ${x.bc}` : "") })),
         h("button", { class: "btn sm primary", onclick: () => addLibraryPhotoFor(x) }, upIcon(), "Add photo"),
@@ -6448,12 +6477,38 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   /** Photos from the internet: the open product databases (Open Food Facts / Beauty / Products — every country, CC BY-SA).
    *  The lookup runs on the KWADERNO Scan site (a normal web page that can reach them); each photo comes back here,
    *  the admin checks the list, and only then is it saved ONCE to the cloud library for every store. */
-  const online = { win: null, list: [], rows: [], done: false, total: 0, progress: 0 };
-  function findPhotosOnline(miss) {
-    const w = window.open(SCANNER_URL() + "photos.html", "kwphotos");
-    if (!w) return toast("Allow pop-ups for this page, then tap again");
-    Object.assign(online, { win: w, list: miss.slice(0, 200).map((x) => ({ name: x.name, bc: x.bc || "" })), rows: [], done: false, total: Math.min(200, miss.length), progress: 0 });
-    onlineDialog();
+  const online = { win: null, list: [], rows: [], done: false, total: 0, progress: 0, auto: false, saved: 0, queue: Promise.resolve(), names: new Set() };
+  function findPhotosOnline(miss, auto) {
+    const w = window.open(SCANNER_URL() + "photos.html" + (auto ? "#auto" : ""), "kwphotos");
+    if (!w) { if (!auto) toast("Allow pop-ups for this page, then tap again"); return false; }
+    const list = miss.slice(0, 200).map((x) => ({ name: x.name, bc: x.bc || "" }));
+    Object.assign(online, { win: w, list, rows: auto ? online.rows : [], done: false, total: list.length, progress: 0, auto: !!auto, saved: 0, names: new Set(list.map((x) => fold(x.name) + (x.bc ? "|" + x.bc : ""))) });
+    if (auto) toast(`🌐 Finding ${list.length} product photo(s) online — saving the sure matches automatically`); else onlineDialog();
+    return true;
+  }
+  /** Automatic: on the Super Admin's first tap of the session (browsers only open a tab after a tap), look up every product
+   *  still without a photo that wasn't searched in the last 30 days. Sure matches are saved by themselves; the rest wait for a check. */
+  var autoFindTried = false;
+  function autoFindTargets() {
+    const tried = S.photoFinder?.tried || {}, since = Date.now() - 30 * DAYMS;
+    const key = (x) => fold(x.name) + (x.bc ? "|" + x.bc : ""); // a product that gets a barcode is looked up again (barcode = exact)
+    return missingPhotoList().miss.filter((x) => !(tried[key(x)] && new Date(tried[key(x)]).getTime() > since));
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (!autoNeedsTap || view !== "admin" || S.photoFinder?.auto === false) return;
+    if (e.target.closest?.("dialog, button, a, input, select, textarea, label, summary, [role=button], [role=tab]")) return; // never hijack a control
+    autoNeedsTap = false; const t = autoFindTargets(); if (t.length) findPhotosOnline(t, true);
+  }, true);
+  async function saveOnlineRow(r, assets) {
+    const a = await assets.upload(r.blob); const codes = [...new Set(r.cIn.value.split(/[\s,;]+/).map((x) => x.replace(/\D/g, "")).filter((x) => x.length >= 8))];
+    await S.db.doc("library/" + uid()).set({ name: r.nIn.value.trim().slice(0, 80), category: null, barcodes: codes, photo: { id: a.id, url: a.url }, source: "online",
+      credit: { source: r.source, license: r.license, link: /^https:\/\/world\.open(food|beauty|products)facts\.org\//.test(r.link) ? r.link : null, title: r.title.slice(0, 120) }, createdAt: new Date().toISOString() });
+  }
+  async function markTried(names) {
+    if (!names.length) return; const tried = { ...(S.photoFinder?.tried || {}) }; const now = new Date().toISOString();
+    for (const n of names) tried[n] = now;
+    const keep = Object.entries(tried).sort((a, b) => (a[1] < b[1] ? 1 : -1)).slice(0, 3000); // bounded
+    try { await S.db.doc("admin/photofinder").set({ auto: S.photoFinder?.auto !== false, tried: Object.fromEntries(keep), updatedAt: now }); } catch { /* next time */ }
   }
   function onlineDialog() {
     const ok = online.rows.filter((r) => r.on.checked).length;
@@ -6469,10 +6524,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Saving needs Editor access");
     e.target.disabled = true; let n = 0;
     for (const r of online.rows) { if (!r.on.checked || !r.nIn.value.trim()) continue;
-      try { const a = await assets.upload(r.blob); const codes = [...new Set(r.cIn.value.split(/[\s,;]+/).map((x) => x.replace(/\D/g, "")).filter((x) => x.length >= 8))];
-        await S.db.doc("library/" + uid()).set({ name: r.nIn.value.trim().slice(0, 80), category: null, barcodes: codes, photo: { id: a.id, url: a.url }, source: "online",
-          credit: { source: r.source, license: r.license, link: /^https:\/\/world\.open(food|beauty|products)facts\.org\//.test(r.link) ? r.link : null, title: r.title.slice(0, 120) }, createdAt: new Date().toISOString() }); n++;
-      } catch { /* skip this one */ }
+      try { await saveOnlineRow(r, assets); n++; } catch { /* skip this one */ }
     }
     online.rows.forEach((r) => URL.revokeObjectURL(r.url)); online.rows = []; dlg.close(); toast(n ? `Saved ${n} photo(s) — every store shows them now` : "Nothing saved");
   }
@@ -6480,19 +6532,70 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const d = e.data; if (!d || typeof d.type !== "string" || !d.type.startsWith("kw-photo-")) return;
     let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin && e.source === online.win; } catch { ok = false; }
     if (!ok || !S.owner) return;
-    if (d.type === "kw-photo-hello") { e.source.postMessage({ type: "kw-photo-list", items: online.list }, e.origin); return; }
+    if (d.type === "kw-photo-hello") { e.source.postMessage({ type: "kw-photo-list", items: online.list, auto: online.auto }, e.origin); return; }
+    photoEvent(d);
+  });
+  function photoEvent(d) {
     if (d.type === "kw-photo-progress") { online.progress = Number(d.done) || 0; }
-    if (d.type === "kw-photo-done") { online.done = true; online.progress = online.total; }
+    if (d.type === "kw-photo-done") { online.done = true; online.progress = online.total;
+      if (online.auto) online.queue = online.queue.then(async () => { await markTried([...online.names]);
+        const wait = online.rows.length; toast(`🌐 Photos online: ${online.saved} added automatically` + (wait ? ` · ${wait} need a check (Photo library)` : "")); if (view === "admin") render(); });
+    }
     if (d.type === "kw-photo-found" && d.blob instanceof Blob && /^image\//.test(d.blob.type) && d.blob.size < 3e6 && typeof d.name === "string") {
       const strong = d.how === "barcode" || Number(d.score) >= 0.8;
       const r = { blob: d.blob, url: URL.createObjectURL(d.blob), name: d.name, title: String(d.title || "").slice(0, 120), how: d.how === "barcode" ? "barcode" : "name", score: Number(d.score) || 0,
         source: String(d.source || "Open Food Facts").slice(0, 40), license: "CC BY-SA", link: String(d.link || "") };
       r.on = h("input", { type: "checkbox", checked: strong || null }); r.nIn = h("input", { type: "text", value: d.name.slice(0, 80), maxlength: 80 });
       r.cIn = h("input", { type: "text", value: String(d.code || "").replace(/\D/g, ""), inputmode: "numeric", placeholder: "barcode" });
-      online.rows.push(r);
+      if (online.auto && d.how === "barcode" || online.auto && Number(d.score) >= 0.95) { // sure match: save by itself
+        online.queue = online.queue.then(async () => { const assets = await window.claude?.use?.("assets"); if (!assets) { online.rows.push(r); return; }
+          try { await saveOnlineRow(r, assets); online.saved++; URL.revokeObjectURL(r.url); } catch { online.rows.push(r); } });
+      } else online.rows.push(r);
     }
+    if (online.auto && !dlg.open) { const pg = $("#onlineProgress"); if (pg) pg.textContent = `🌐 Finding photos online… ${online.progress} of ${online.total} · ${online.saved} added`; return; }
     if (dlg.open && $("#onlineDlg")) { const y = $("#dlgBody").scrollTop; onlineDialog(); $("#dlgBody").scrollTop = y; }
-  });
+  }
+  // ---- the same lookup, run inside this page when the browser lets it reach the databases: no tab, no tap ----
+  const PHOTO_DBS = [{ host: "https://world.openfoodfacts.org", label: "Open Food Facts" }, { host: "https://world.openbeautyfacts.org", label: "Open Beauty Facts" }, { host: "https://world.openproductsfacts.org", label: "Open Products Facts" }];
+  const PHOTO_FIELDS = "code,product_name,product_name_en,brands,quantity,image_front_url,image_url";
+  const photoApi = () => window.__kwPhotoApi || {}; // tests swap the network here
+  async function photoJson(url) { const A = photoApi(); if (A.getJson) return A.getJson(url); const c = new AbortController(), t = setTimeout(() => c.abort(), 30000);
+    try { const r = await fetch(url, { signal: c.signal }); if (!r.ok) throw new Error("HTTP " + r.status); return await r.json(); } finally { clearTimeout(t); } }
+  async function photoBlob(url) { const A = photoApi(); if (A.getBlob) return A.getBlob(url); const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status); return r.blob(); }
+  const offTitle = (p) => [String(p.brands || "").split(",")[0], p.product_name || p.product_name_en, p.quantity].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  const offImg = (p) => p.image_front_url || p.image_url || "";
+  let offLast = 0;
+  async function offSearch(db, q) { const wait = offLast + (photoApi().gap ?? 6500) - Date.now(); if (wait > 0) await new Promise((r) => setTimeout(r, wait)); offLast = Date.now();
+    const d = await photoJson(`${db.host}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=12&fields=${PHOTO_FIELDS}`); return (d && d.products) || []; }
+  async function offFind(item) {
+    const bc = String(item.bc || "").replace(/\D/g, "");
+    if (bc.length >= 8) for (const db of PHOTO_DBS) { try { const d = await photoJson(`${db.host}/api/v2/product/${bc}.json?fields=${PHOTO_FIELDS}`); const p = d && d.status === 1 && d.product; if (p && offImg(p)) return { p: { ...p, code: p.code || bc }, db, how: "barcode", sc: 1 }; } catch { /* next */ } }
+    const q = String(item.name || "").replace(/\(.*?\)/g, " ").replace(SIZE_RE, " ").replace(/\s+/g, " ").trim(); if (!q) return null;
+    let best = null;
+    for (const db of PHOTO_DBS) { let list = []; try { list = await offSearch(db, q); } catch { continue; }
+      for (const p of list) { if (!offImg(p)) continue; const sb = sizeOf(offTitle(p)), sa = sizeOf(item.name); const sc = nameMatchScore(item.name, offTitle(p)) + (sa.length && sb.length ? 0.05 : 0); if (!best || sc > best.sc) best = { p, db, sc, how: "name" }; }
+      if (best && best.sc >= 0.8) break; }
+    return best && best.sc >= 0.6 ? best : null;
+  }
+  async function runPhotosHere(list) {
+    Object.assign(online, { win: null, list, rows: online.rows, done: false, total: list.length, progress: 0, auto: true, saved: 0, names: new Set(list.map((x) => fold(x.name) + (x.bc ? "|" + x.bc : ""))) });
+    if (view === "admin") render();
+    for (let i = 0; i < list.length; i++) {
+      let hit = null; try { hit = await offFind(list[i]); } catch { hit = null; }
+      if (hit) { try { const blob = await squareJpeg(await photoBlob(offImg(hit.p)), 640); const code = String(hit.p.code || "").replace(/\D/g, "");
+        photoEvent({ type: "kw-photo-found", name: list[i].name, title: offTitle(hit.p), code, how: hit.how, score: hit.sc, blob, source: hit.db.label, link: `${hit.db.host}/product/${code}` }); } catch { /* skip */ } }
+      photoEvent({ type: "kw-photo-progress", done: i + 1 });
+    }
+    photoEvent({ type: "kw-photo-done" });
+  }
+  /** Automatic start when Super Admin opens: in the background if this page can reach the databases, else on the next ordinary tap (a tab). */
+  var autoNeedsTap = false;
+  async function maybeAutoFind() {
+    if (autoFindTried || view !== "admin" || !S.owner || !S.photoFinder || S.photoFinder.auto === false || !S.stores?.length) return;
+    autoFindTried = true; const t = autoFindTargets(); if (!t.length) return;
+    let direct = false; try { const d = await photoJson("https://world.openfoodfacts.org/api/v2/product/737628064502.json?fields=code"); direct = !!d; } catch { direct = false; }
+    if (direct) runPhotosHere(t.slice(0, 200)); else autoNeedsTap = true;
+  }
   async function addLibraryPhotoFor(x) {
     const files = await pickFiles(); const f = files[0]; if (!f) return;
     const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Uploading needs Editor access");

@@ -275,3 +275,7 @@ body.logbook .status { display: none; }
 .lb-sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .lb-sub select, .lb-sub input, .lb-desc { min-height: 40px; border-radius: 10px; border: 1px solid #444; background: #151515; color: var(--text); padding: 0 8px; }
 .lb-desc { width: 100%; }
+/* reading progress inside the Logbook sheets (the scan screen's status line is hidden in Logbook mode) */
+.lb-status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #cde; font-size: .9rem; }
+.lb-status .btn { margin-left: auto; }
+.lb-secs { color: #8a9; }

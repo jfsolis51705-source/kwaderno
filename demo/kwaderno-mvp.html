@@ -742,7 +742,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/manufacturers").onSnapshot((d) => { S.mfrMap = d.exists ? d.data().map || {} : {}; mfrIdx = null; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/photofinder").onSnapshot((d) => { S.photoFinder = d.exists ? { auto: true, tried: {}, ...d.data() } : { auto: true, tried: {} }; setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500); }, () => { S.photoFinder = { auto: true, tried: {} }; });
-    if (S.owner) db.doc("admin/engine").onSnapshot((d) => { S.engineTest = d.exists ? d.data() : null; if (view === "admin") render(); }, () => {});
+    if (S.owner) db.doc("admin/engine").onSnapshot((d) => { S.engine = d.exists ? d.data() : null; if (S.engine?.model?.id !== SE.nnKey) SE.nn = null; if (view === "admin" && !SE.busy) render(); }, () => {});
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
@@ -901,6 +901,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (pendingScan && S.ready) setTimeout(takePendingScan, 0);
     if (pendingLog && S.ready) { const pl = pendingLog; pendingLog = null; setTimeout(() => importLogbook(pl), 0); }
     if (view === "admin" && !autoFindTried && S.photoFinder && S.stores?.length) setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500);
+    if (view === "admin" && S.engine && !engineAuto) setTimeout(() => { try { engineAutoRun(); } catch { /* later */ } }, 0);
     applyLayout();
     document.documentElement.lang = lang === "en" ? "en" : "fil";
     langBtn.replaceChildren(...[["en", "English"], ["tl", "Tagalog"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
@@ -5254,15 +5255,27 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   }
 
   // ----- Drilldown of one submission (visit) -----
-  // ---------- KWADERNO SHELF ENGINE: our own shelf recognition — no outside AI ----------
-  // 1 shelf rows from long horizontal edges · 2 product boxes from vertical edges inside each row ·
-  // 3 a fingerprint per box (colour mix, colour layout, edge pattern) · 4 nearest match in OUR reference library
-  //   (boxes from photos a person checked + the product photo library) · 5 same product side by side = facings ·
-  // 6 every photo the admin marks "checked" teaches it. Unsure boxes are left for the admin; AI stays optional.
-  const SE = { refs: null, key: "", building: null };
+  // ---------- KWADERNO OFFLINE AI: three smart algorithms, no outside AI needed once it graduates ----------
+  // Algo 1 · Worker: shelf rows + product boxes from edges, a fingerprint per box (colour mix, colour layout, edge pattern),
+  //          nearest match in OUR memory (teacher-labelled boxes + the product photo library), same product side by side = facings.
+  // Algo 2 · Coach: compares the worker with the teacher (team-checked photos, and AI readings while teaching), tries several
+  //          settings and keeps the best, lists weak products, graduates the worker when it agrees ≥85% three days running.
+  // Algo 3 · Strategist: trains a small neural network (TensorFlow.js, in this browser) on the teacher's product crops,
+  //          runs experiments (sizes, layers, augmentation), keeps the winner, and tells the team what to teach next.
+  // The engine reads with the neural network first, the fingerprints second; anything unsure is left for a person.
+  const SE = { refs: null, key: "", cands: new Map(), nn: null, nnKey: "", busy: null };
+  const ENGINE_DEFAULT = { th: 0.72, w: [0.5, 0.3, 0.2], sens: 1, margin: 0.015 };
+  const engineDoc = () => S.engine || {};
+  const engineCfg = () => ({ ...ENGINE_DEFAULT, ...(engineDoc().cfg?.params || {}) });
+  const useAiTeacher = () => engineDoc().cfg?.useAi !== false;
   const seImg = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
   const seScratch = (() => { let c; return () => (c ||= Object.assign(document.createElement("canvas"), { width: 16, height: 16 })); })();
-  function seFeat(src, x, y, w, hh) { // src = image or canvas; box in pixels → fingerprint
+  /** Photos the engine may learn from: checked by a person, or (while teaching) read by the AI with boxes. */
+  function teacherPhotos(ai = useAiTeacher()) {
+    return auditPhotos().filter((a) => a.p.url && !a.p.sample && boxCount(a.p) && (a.p.checked || (ai && a.p.counted && !a.p.engine)))
+      .map((a) => ({ a, by: a.p.checked ? "team" : "ai" }));
+  }
+  function seFeat(src, x, y, w, hh) { // a fingerprint of one box
     const c = seScratch(), g = c.getContext("2d", { willReadFrequently: true }); g.clearRect(0, 0, 16, 16);
     g.drawImage(src, Math.max(0, x), Math.max(0, y), Math.max(2, w), Math.max(2, hh), 0, 0, 16, 16);
     const d = g.getImageData(0, 0, 16, 16).data, hist = new Float32Array(16), lay = new Float32Array(48), gray = new Float32Array(256);
@@ -5275,32 +5288,33 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     }
     let hs = 0; for (const v of hist) hs += v; for (let i = 0; i < 16; i++) hist[i] /= hs || 1;
     let m = 0; for (const v of lay) m += v; m /= 48; let sd = 0; for (const v of lay) sd += (v - m) ** 2; sd = Math.sqrt(sd / 48) || 1; for (let i = 0; i < 48; i++) lay[i] = (lay[i] - m) / sd;
-    const hash = new Int8Array(64); for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 8; xx++) { const a = gray[(yy * 2) * 16 + xx * 2], b2 = gray[(yy * 2) * 16 + xx * 2 + 2 > 255 ? 255 : (yy * 2) * 16 + xx * 2 + 2]; hash[yy * 8 + xx] = a > b2 ? 1 : -1; }
+    const hash = new Int8Array(64); for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 8; xx++) { const a = gray[yy * 32 + xx * 2], b2 = gray[yy * 32 + Math.min(15, xx * 2 + 1)]; hash[yy * 8 + xx] = a > b2 ? 1 : -1; }
     return { hist, lay, hash };
   }
-  function seSim(a, b) { // 0..1: colour mix (histogram intersection) · colour layout (correlation) · edge pattern (hash agreement)
+  function seSim(a, b, w = ENGINE_DEFAULT.w) {
     let hi = 0; for (let i = 0; i < 16; i++) hi += Math.min(a.hist[i], b.hist[i]);
     let lc = 0; for (let i = 0; i < 48; i++) lc += a.lay[i] * b.lay[i]; lc = (lc / 48 + 1) / 2;
     let hg = 0; for (let i = 0; i < 64; i++) if (a.hash[i] === b.hash[i]) hg++; hg /= 64;
-    return 0.5 * hi + 0.3 * lc + 0.2 * hg;
+    return w[0] * hi + w[1] * lc + w[2] * hg;
   }
-  /** Reference library = boxes on photos a person CHECKED + the product photo library. Rebuilt when either changes. */
-  async function seRefs(skipUid) {
-    const checked = auditPhotos().filter((a) => a.p.checked && a.p.url && !a.p.sample && boxCount(a.p));
-    const key = checked.map((a) => a.uid + (a.p.checkedAt || "")).join("|") + "#" + S.library.length + "#" + (skipUid || "");
-    if (SE.refs && SE.key === key) return SE.refs;
-    const refs = [];
-    for (const a of checked) { if (a.uid === skipUid) continue;
-      let im; try { im = await seImg(a.p.url); } catch { continue; }
-      for (const it of a.p.items || []) { if (!okBox(it.box)) continue; const [x, y, w, hh] = it.box, n = Math.max(1, it.facings || 1);
-        const W = im.naturalWidth, H = im.naturalHeight, fw = (w * W) / Math.min(n, 6); // one facing ≈ the box split by its facings
-        for (let k = 0; k < Math.min(n, 6); k++) refs.push({ name: it.name, brand: it.brand, category: it.category, f: seFeat(im, x * W + k * fw, y * H, fw, hh * H), from: a.uid }); } }
+  /** Each teacher box split into its facings (≤ 6): the unit both the memory and the neural network learn from. */
+  async function teacherCrops(T) {
+    const out = [];
+    for (const { a, by } of T) { let im; try { im = await seImg(a.p.url); } catch { continue; }
+      const W = im.naturalWidth, H = im.naturalHeight;
+      for (const it of a.p.items || []) { if (!okBox(it.box)) continue; const [x, y, w, hh] = it.box, n = Math.min(6, Math.max(1, it.facings || 1)), fw = (w * W) / n;
+        for (let k = 0; k < n; k++) out.push({ im, x: x * W + k * fw, y: y * H, w: fw, h: hh * H, name: it.name, brand: it.brand, category: it.category, from: a.uid, by }); } }
     for (const it of S.library) { if (!photoUrlOk(it.photo?.url)) continue; let im; try { im = await seImg(it.photo.url); } catch { continue; }
-      const W = im.naturalWidth, H = im.naturalHeight; refs.push({ name: it.name, brand: it.name.split(" ")[0], category: it.category || "Others", f: seFeat(im, W * 0.1, H * 0.1, W * 0.8, H * 0.8), from: "library" }); }
-    SE.refs = refs; SE.key = key; return refs;
+      const W = im.naturalWidth, H = im.naturalHeight; out.push({ im, x: W * 0.1, y: H * 0.1, w: W * 0.8, h: H * 0.8, name: it.name, brand: it.name.split(" ")[0], category: it.category || "Others", from: "library", by: "library" }); }
+    return out;
   }
-  /** Candidate product boxes from edges alone (no AI). */
-  function seDetect(im) {
+  async function seRefs() {
+    const T = teacherPhotos(), key = T.map((t) => t.a.uid + (t.a.p.checkedAt || t.a.p.scannedAt || "")).join("|") + "#" + S.library.length;
+    if (SE.refs && SE.key === key) return SE.refs;
+    SE.refs = (await teacherCrops(T)).map((c) => ({ name: c.name, brand: c.brand, category: c.category, f: seFeat(c.im, c.x, c.y, c.w, c.h), from: c.from, by: c.by })); SE.key = key; return SE.refs;
+  }
+  /** Candidate product boxes from edges alone. sens: lower = more boxes. */
+  function seDetect(im, sens = 1) {
     const W = 480, H = Math.round((im.naturalHeight / im.naturalWidth) * W), c = Object.assign(document.createElement("canvas"), { width: W, height: H }), g = c.getContext("2d", { willReadFrequently: true });
     g.drawImage(im, 0, 0, W, H); const d = g.getImageData(0, 0, W, H).data, gr = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) gr[i] = 0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2];
@@ -5308,63 +5322,224 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const peaks = (a, minGap, k) => { const m = a.reduce((x, y) => x + y, 0) / a.length, sd = Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length), out = [];
       for (let i = 1; i < a.length - 1; i++) if (a[i] > m + k * sd && a[i] >= a[i - 1] && a[i] >= a[i + 1]) { if (out.length && i - out.at(-1) < minGap) { if (a[i] > a[out.at(-1)]) out[out.length - 1] = i; } else out.push(i); } return out; };
     const rowE = new Array(H).fill(0); for (let y = 1; y < H - 1; y++) { let e = 0; for (let x = 0; x < W; x++) e += Math.abs(gr[(y + 1) * W + x] - gr[(y - 1) * W + x]); rowE[y] = e; }
-    let cuts = [0, ...peaks(smooth(rowE, 2), Math.round(H * 0.09), 1.1), H - 1];
+    const cuts = [0, ...peaks(smooth(rowE, 2), Math.round(H * 0.09), 1.1 * sens), H - 1];
     let bands = []; for (let i = 0; i < cuts.length - 1; i++) if (cuts[i + 1] - cuts[i] >= H * 0.08) bands.push([cuts[i], cuts[i + 1]]);
     if (!bands.length) bands = [[0, Math.round(H / 3)], [Math.round(H / 3), Math.round((2 * H) / 3)], [Math.round((2 * H) / 3), H - 1]];
     const boxes = [];
     for (const [y0, y1] of bands) { const bh = y1 - y0, colE = new Array(W).fill(0);
       for (let x = 1; x < W - 1; x++) { let e = 0; for (let y = y0; y < y1; y++) e += Math.abs(gr[y * W + x + 1] - gr[y * W + x - 1]); colE[x] = e; }
-      const xs = [0, ...peaks(smooth(colE, 1), Math.max(6, Math.round(bh * 0.3)), 0.6), W - 1];
+      const xs = [0, ...peaks(smooth(colE, 1), Math.max(6, Math.round(bh * 0.3)), 0.6 * sens), W - 1];
       for (let i = 0; i < xs.length - 1; i++) { const x0 = xs[i], x1 = xs[i + 1], w = x1 - x0; if (w < bh * 0.18) continue;
         const parts = w > bh * 1.6 ? Math.ceil(w / (bh * 0.8)) : 1; for (let k = 0; k < parts; k++) boxes.push([(x0 + (k * w) / parts) / W, y0 / H, w / parts / W, bh / H]); } }
     return boxes.slice(0, 160);
   }
-  /** Read one shelf photo with our engine → items with boxes and facings, plus boxes it could not name. */
-  async function seRead(url, skipUid) {
-    const refs = await seRefs(skipUid); if (!refs.length) return { items: [], unknown: 0, total: 0, refs: 0 };
-    const im = await seImg(url), W = im.naturalWidth, H = im.naturalHeight, cands = seDetect(im), hits = [];
-    for (const b of cands) { const f = seFeat(im, b[0] * W, b[1] * H, b[2] * W, b[3] * H); let best = null, second = null;
-      for (const r of refs) { const sc = seSim(f, r.f); if (!best || sc > best.sc) { if (best && best.r.name !== r.name) second = best; best = { r, sc }; } else if ((!second || sc > second.sc) && r.name !== best.r.name) second = { r, sc }; }
-      const margin = best && second ? best.sc - second.sc : 1; hits.push({ b, ok: best && best.sc >= 0.72 && margin >= 0.015, name: best?.r.name, ref: best?.r, sc: best?.sc || 0 }); }
-    const by = new Map(); for (const x of hits.filter((x) => x.ok)) { const g = by.get(x.name) || { ref: x.ref, n: 0, sc: 0, boxes: [] }; g.n++; g.sc += x.sc; g.boxes.push(x.b); by.set(x.name, g); }
-    const items = [...by.values()].map((g) => { // box = the biggest run of neighbouring packs on one shelf row (never one box across rows)
+  /** Boxes + fingerprints of a photo, computed once per detection setting (the Coach re-scores them many times). */
+  async function seCands(url, sens) {
+    const k = url + "|" + sens; if (SE.cands.has(k)) return SE.cands.get(k);
+    const im = await seImg(url), W = im.naturalWidth, H = im.naturalHeight;
+    const v = { im, list: seDetect(im, sens).map((b) => ({ b, f: seFeat(im, b[0] * W, b[1] * H, b[2] * W, b[3] * H) })) };
+    if (SE.cands.size > 200) SE.cands.clear(); SE.cands.set(k, v); return v;
+  }
+  /** Name each candidate: neural network first (when trained and sure), fingerprints second. */
+  async function seLabel(cands, refs, P, skipUid) {
+    const nnOut = SE.nn ? await nnPredict(cands.im, cands.list.map((c) => c.b)) : null;
+    return cands.list.map((c, i) => {
+      let best = null, second = null;
+      for (const r of refs) { if (r.from === skipUid) continue; const sc = seSim(c.f, r.f, P.w);
+        if (!best || sc > best.sc) { if (best && best.r.name !== r.name) second = best; best = { r, sc }; } else if ((!second || sc > second.sc) && r.name !== best.r.name) second = { r, sc }; }
+      const fpOk = best && best.sc >= P.th && (second ? best.sc - second.sc : 1) >= P.margin;
+      const nn = nnOut?.[i];
+      if (nn && nn.p >= 0.6) { if (nn.name === "__other") return { b: c.b, ok: false }; const ref = refs.find((r) => r.name === nn.name) || { name: nn.name, brand: nn.name.split(" ")[0], category: "Others" };
+        return { b: c.b, ok: true, name: nn.name, ref, sc: nn.p, how: fpOk && best.r.name === nn.name ? "both" : "nn" }; }
+      return { b: c.b, ok: !!fpOk, name: best?.r.name, ref: best?.r, sc: best?.sc || 0, how: "fp" };
+    });
+  }
+  function seGroup(hits) {
+    const by = new Map(); for (const x of hits.filter((x) => x.ok)) { const g = by.get(x.name) || { ref: x.ref, n: 0, sc: 0, boxes: [], how: new Set() }; g.n++; g.sc += x.sc; g.boxes.push(x.b); g.how.add(x.how); by.set(x.name, g); }
+    return [...by.values()].map((g) => { // box = the biggest run of neighbouring packs on one shelf row
       const runs = []; for (const b of g.boxes.slice().sort((p, q) => p[1] - q[1] || p[0] - q[0])) { const r = runs.find((r) => Math.abs(r.at(-1)[1] - b[1]) < 0.01 && b[0] - (r.at(-1)[0] + r.at(-1)[2]) < 0.03); r ? r.push(b) : runs.push([b]); }
       const run = runs.sort((p, q) => q.length - p.length)[0], xs = run.map((b) => b[0]), ys = run.map((b) => b[1]), x2 = run.map((b) => b[0] + b[2]), y2 = run.map((b) => b[1] + b[3]);
       const box = [Math.min(...xs), Math.min(...ys), Math.max(...x2) - Math.min(...xs), Math.max(...y2) - Math.min(...ys)].map((v) => Math.round(v * 1000) / 1000);
-      return { name: g.ref.name, brand: g.ref.brand, category: g.ref.category, facings: g.n, box, conf: Math.round((g.sc / g.n) * 100) / 100, src: "engine" }; }).sort((a, b) => b.facings - a.facings);
-    return { items, unknown: hits.filter((x) => !x.ok).length, total: hits.length, refs: refs.length };
+      return { name: g.ref.name, brand: g.ref.brand, category: g.ref.category, facings: g.n, box, conf: Math.round((g.sc / g.n) * 100) / 100, src: "engine", how: [...g.how].join("+") };
+    }).sort((a, b) => b.facings - a.facings);
+  }
+  async function seRead(url, skipUid, P = engineCfg()) {
+    const refs = await seRefs(); if (!refs.length && !SE.nn) return { items: [], unknown: 0, total: 0, refs: 0 };
+    await nnEnsure(true); const cands = await seCands(url, P.sens), hits = await seLabel(cands, refs, P, skipUid);
+    return { items: seGroup(hits), unknown: hits.filter((x) => !x.ok).length, total: hits.length, refs: refs.length };
   }
   async function engineReadPhoto(a, quiet) {
     try { const r = await seRead(a.p.url, a.uid);
-      if (!r.refs) { if (!quiet) toast("The engine has nothing to compare with yet — check a few photos first (✓ Mark checked)"); return false; }
-      await a.save({ ...a.p, items: r.items, counted: true, checked: false, engine: { at: new Date().toISOString(), unknown: r.unknown, boxes: r.total, refs: r.refs } });
+      if (!r.refs && !SE.nn) { if (!quiet) toast("Nothing to compare with yet — check a few photos (✓ Mark checked) or read some with AI first"); return false; }
+      await a.save({ ...a.p, items: r.items, counted: true, checked: false, engine: { at: new Date().toISOString(), unknown: r.unknown, boxes: r.total, refs: r.refs, nn: !!SE.nn } });
       if (!quiet) toast(`Engine: ${r.items.length} product(s), ${r.total - r.unknown} of ${r.total} boxes named — check and correct`); return true;
     } catch { if (!quiet) toast("The engine could not read this photo"); return false; }
   }
-  /** Honest accuracy: each checked photo is read with references from the OTHER checked photos and compared with what a person confirmed. */
+  /** Score settings P against the teacher: each photo is read WITHOUT its own labels (leave-one-out). */
+  async function coachScore(T, refs, P, perProduct) {
+    let tp = 0, fp = 0, fn = 0;
+    for (const { a } of T) { const hits = await seLabel(await seCands(a.p.url, P.sens), refs, P, a.uid), got = new Set(seGroup(hits).map((x) => fold(x.name))), truth = new Set((a.p.items || []).filter((it) => okBox(it.box)).map((it) => fold(it.name)));
+      for (const x of got) truth.has(x) ? tp++ : fp++;
+      for (const x of truth) { const hit = got.has(x); if (!hit) fn++; if (perProduct) { const r = perProduct.get(x) || { name: (a.p.items || []).find((it) => fold(it.name) === x)?.name || x, seen: 0, found: 0 }; r.seen++; if (hit) r.found++; perProduct.set(x, r); } } }
+    const prec = tp + fp ? tp / (tp + fp) : 0, rec = tp + fn ? tp / (tp + fn) : 0;
+    return { prec, rec, f1: prec + rec ? (2 * prec * rec) / (prec + rec) : 0 };
+  }
+  /** Algo 2 · Coach: try several settings, keep the best, find weak products, log the day, graduate when ready. */
+  async function coachRun(quiet) {
+    if (SE.busy) return; const T = teacherPhotos().slice(0, 40); if (T.length < 2) { if (!quiet) toast("The Coach needs at least 2 teacher photos: check some, or read some with AI"); return; }
+    SE.busy = "coach"; render(); try {
+      const refs = await seRefs(); await nnEnsure(true);
+      const grid = []; for (const th of [0.66, 0.7, 0.74, 0.78]) for (const w of [[0.5, 0.3, 0.2], [0.35, 0.4, 0.25], [0.6, 0.2, 0.2]]) for (const sens of [0.7, 1]) grid.push({ th, w, sens, margin: 0.015 });
+      const tried = []; let best = null;
+      for (const P of grid) { const s = await coachScore(T, refs, P); tried.push({ ...P, f1: Math.round(s.f1 * 1000) / 1000 }); if (!best || s.f1 > best.s.f1) best = { P, s }; }
+      const per = new Map(); const final = await coachScore(T, refs, best.P, per);
+      const weak = [...per.values()].filter((r) => r.found / r.seen < 0.5).sort((a, b) => a.found / a.seen - b.found / b.seen).slice(0, 12).map((r) => ({ name: r.name, recall: Math.round((r.found / r.seen) * 100) }));
+      const day = todayKey(), prev = engineDoc(), hist = (prev.history || []).filter((h0) => h0.d !== day);
+      const products = new Set(refs.map((r) => fold(r.name))).size;
+      hist.push({ d: day, f1: Math.round(final.f1 * 1000) / 10, prec: Math.round(final.prec * 1000) / 10, rec: Math.round(final.rec * 1000) / 10, photos: T.length, team: T.filter((t) => t.by === "team").length, products, nn: prev.model?.valAcc ?? null });
+      const last3 = hist.slice(-3), graduated = last3.length === 3 && last3.every((h0) => h0.f1 >= 85);
+      await S.db.doc("admin/engine").set({ ...prev, cfg: { ...(prev.cfg || {}), params: best.P }, startedAt: prev.startedAt || new Date().toISOString(), history: hist.slice(-120), weak, tried: tried.sort((a, b) => b.f1 - a.f1).slice(0, 8),
+        status: graduated ? "graduated" : prev.status === "graduated" && final.f1 < 0.75 ? "teaching" : prev.status || "teaching", coachAt: new Date().toISOString() });
+      if (!quiet) toast(`Coach: best setting scores ${Math.round(final.f1 * 100)}% agreement with the teacher`);
+    } catch (e) { if (!quiet) toast("Coach stopped: " + (e?.message || "error")); } finally { SE.busy = null; render(); }
+  }
+  // ----- Algo 3 · Strategist: a small neural network trained here, in the browser (TensorFlow.js, Apache-2.0) -----
+  const TF_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js";
+  let tfLoading = null;
+  function ensureTf() { if (window.tf) return Promise.resolve(window.tf); return (tfLoading ||= new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = TF_URL; sc.async = true; sc.onload = () => (window.tf ? res(window.tf) : rej(new Error("no tf"))); sc.onerror = () => { tfLoading = null; rej(new Error("Could not load TensorFlow.js")); }; document.head.append(sc); })); }
+  function nnTensor(tf, im, b, size, jitter) { // one box → size×size RGB in 0..1
+    const W = im.naturalWidth || im.width, H = im.naturalHeight || im.height, c = Object.assign(document.createElement("canvas"), { width: size, height: size }), g = c.getContext("2d", { willReadFrequently: true });
+    const [x, y, w, hh] = b; const jx = jitter ? (Math.random() - 0.5) * 0.12 * w : 0, jy = jitter ? (Math.random() - 0.5) * 0.12 * hh : 0;
+    if (jitter) g.filter = `brightness(${0.8 + Math.random() * 0.4}) contrast(${0.85 + Math.random() * 0.3})`;
+    g.drawImage(im, Math.max(0, x + jx), Math.max(0, y + jy), Math.max(2, w), Math.max(2, hh), 0, 0, size, size);
+    return tf.tidy(() => tf.browser.fromPixels(c).toFloat().div(255));
+  }
+  function nnBuild(tf, size, n, f) {
+    const m = tf.sequential();
+    m.add(tf.layers.conv2d({ inputShape: [size, size, 3], filters: f, kernelSize: 3, activation: "relu", padding: "same" })); m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+    m.add(tf.layers.conv2d({ filters: f * 2, kernelSize: 3, activation: "relu", padding: "same" })); m.add(tf.layers.maxPooling2d({ poolSize: 2 }));
+    m.add(tf.layers.conv2d({ filters: f * 4, kernelSize: 3, activation: "relu", padding: "same" })); m.add(tf.layers.globalAveragePooling2d({}));
+    m.add(tf.layers.dropout({ rate: 0.3 })); m.add(tf.layers.dense({ units: n, activation: "softmax" }));
+    m.compile({ optimizer: tf.train.adam(0.003), loss: "categoricalCrossentropy", metrics: ["accuracy"] }); return m;
+  }
+  /** Train, compare the experiments, keep and save the winner. */
+  async function strategistTrain(quiet) {
+    if (SE.busy) return; SE.busy = "train"; render();
+    const say = (t) => { const el = $("#nnStatus"); if (el) el.textContent = t; else if (!quiet) toast(t); };
+    try {
+      const tf = await ensureTf(); say("Collecting product crops…");
+      const crops = await teacherCrops(teacherPhotos()); const byName = new Map(); for (const c of crops) (byName.get(c.name) || byName.set(c.name, []).get(c.name)).push(c);
+      const classes = [...byName.keys()].filter((k) => byName.get(k).length >= 2).sort();
+      if (classes.length < 2) { say("Needs at least 2 products with 2+ examples each — check or read more photos"); return; }
+      // "other": shelf areas that are not a labelled product, so the network can say "I don't know"
+      const others = []; for (const { a } of teacherPhotos()) { let im; try { im = await seImg(a.p.url); } catch { continue; } const W = im.naturalWidth, H = im.naturalHeight, bx = (a.p.items || []).filter((it) => okBox(it.box)).map((it) => it.box);
+        for (let k = 0; k < 6; k++) { const w = 0.08 + Math.random() * 0.1, hh = 0.1 + Math.random() * 0.15, x = Math.random() * (1 - w), y = Math.random() * (1 - hh); if (bx.some(([X, Y, Wd, Hd]) => x < X + Wd && x + w > X && y < Y + Hd && y + hh > Y)) continue; others.push({ im, x: x * W, y: y * H, w: w * W, h: hh * H, name: "__other" }); } }
+      const labels = [...classes, ...(others.length >= 4 ? ["__other"] : [])], data = [...classes.flatMap((k) => byName.get(k)), ...(others.length >= 4 ? others.slice(0, 120) : [])];
+      const order = data.map((_, i) => i).sort(() => Math.random() - 0.5), nVal = Math.max(1, Math.round(order.length * 0.2)), val = order.slice(0, nVal), trn = order.slice(nVal);
+      const experiments = [{ id: "S32-8", size: 32, f: 8, aug: 4 }, { id: "M40-12", size: 40, f: 12, aug: 6 }, { id: "M40-12-noaug", size: 40, f: 12, aug: 1 }];
+      let best = null; const results = [];
+      for (const ex of experiments) {
+        say(`Experiment ${ex.id}: building ${trn.length * ex.aug} training images…`);
+        const xs = [], ys = []; for (const i of trn) for (let k = 0; k < ex.aug; k++) { const c = data[i]; xs.push(nnTensor(tf, c.im, [c.x, c.y, c.w, c.h], ex.size, k > 0)); ys.push(labels.indexOf(c.name)); }
+        const vx = val.map((i) => { const c = data[i]; return nnTensor(tf, c.im, [c.x, c.y, c.w, c.h], ex.size, false); }), vy = val.map((i) => labels.indexOf(data[i].name));
+        const X = tf.stack(xs), Y = tf.oneHot(tf.tensor1d(ys, "int32"), labels.length), VX = tf.stack(vx), VY = tf.oneHot(tf.tensor1d(vy, "int32"), labels.length); xs.forEach((t) => t.dispose()); vx.forEach((t) => t.dispose());
+        const m = nnBuild(tf, ex.size, labels.length, ex.f);
+        await m.fit(X, Y, { epochs: 18, batchSize: 32, shuffle: true, validationData: [VX, VY], callbacks: { onEpochEnd: async (ep, logs) => { say(`Experiment ${ex.id}: round ${ep + 1} of 18 · checking accuracy ${Math.round((logs.val_acc ?? logs.val_accuracy ?? 0) * 100)}%`); await tf.nextFrame(); } } });
+        const ev = m.evaluate(VX, VY), acc = (await ev[1].data())[0]; ev.forEach((t) => t.dispose()); X.dispose(); Y.dispose(); VX.dispose(); VY.dispose();
+        results.push({ id: ex.id, size: ex.size, acc: Math.round(acc * 1000) / 10 }); if (!best || acc > best.acc) { best?.m.dispose(); best = { m, acc, ex }; } else m.dispose();
+      }
+      say("Saving the winning model…");
+      let saved = null; await best.m.save(tf.io.withSaveHandler(async (art) => { saved = art; return { modelArtifactsInfo: { dateSaved: new Date(), modelTopologyType: "JSON" } }; }));
+      const u8 = new Uint8Array(saved.weightData); let bin = ""; for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); const b64 = btoa(bin);
+      const blob = new Blob([JSON.stringify({ topology: saved.modelTopology, specs: saved.weightSpecs, data: b64, labels, size: best.ex.size })], { type: "application/json" });
+      const assets = await window.claude?.use?.("assets"); if (!assets) { say("Saving needs Editor access"); return; }
+      const up = await assets.upload(blob), prev = engineDoc();
+      if (prev.model?.id) assets.delete(prev.model.id).catch(() => {});
+      const counts = classes.map((k) => ({ name: k, n: byName.get(k).length })).sort((a, b) => a.n - b.n);
+      await S.db.doc("admin/engine").set({ ...prev, model: { id: up.id, url: up.url, labels: labels.length, products: classes.length, samples: data.length, size: best.ex.size, valAcc: Math.round(best.acc * 1000) / 10, winner: best.ex.id, at: new Date().toISOString() },
+        experiments: results, teachNext: counts.slice(0, 8), trainedAt: new Date().toISOString() });
+      SE.nn = { m: best.m, labels, size: best.ex.size }; SE.nnKey = up.id;
+      say(`Trained: ${classes.length} products, winner ${best.ex.id}, ${Math.round(best.acc * 100)}% on photos it had not seen`);
+    } catch (e) { say("Training stopped: " + (e?.message || "error")); } finally { SE.busy = null; render(); }
+  }
+  /** Load the saved neural network once (quiet: never fails loudly; the fingerprints still work). */
+  async function nnEnsure(quiet) {
+    const md = engineDoc().model; if (!md?.url) return null; if (SE.nn && SE.nnKey === md.id) return SE.nn;
+    try { const tf = await ensureTf(), j = await (await fetch(md.url)).json(), bin = Uint8Array.from(atob(j.data), (ch) => ch.charCodeAt(0)).buffer;
+      const m = await tf.loadLayersModel(tf.io.fromMemory({ modelTopology: j.topology, weightSpecs: j.specs, weightData: bin })); SE.nn = { m, labels: j.labels, size: j.size }; SE.nnKey = md.id; return SE.nn;
+    } catch (e) { if (!quiet) toast("Could not load the neural network"); return null; }
+  }
+  async function nnPredict(im, boxes) {
+    const nn = SE.nn, tf = window.tf; if (!nn || !tf || !boxes.length) return null; const W = im.naturalWidth, H = im.naturalHeight;
+    const X = tf.stack(boxes.map((b) => nnTensor(tf, im, [b[0] * W, b[1] * H, b[2] * W, b[3] * H], nn.size, false))), P = nn.m.predict(X), d = await P.data(); X.dispose(); P.dispose();
+    const n = nn.labels.length; return boxes.map((_, i) => { let k = 0; for (let j = 1; j < n; j++) if (d[i * n + j] > d[i * n + k]) k = j; return { name: nn.labels.at(k), p: d[i * n + k] }; });
+  }
+  /** Honest accuracy: each teacher photo read without its own labels, compared with what the teacher says. */
   async function engineTest() {
-    const checked = auditPhotos().filter((a) => a.p.checked && a.p.url && !a.p.sample && boxCount(a.p)); if (checked.length < 2) return toast("Check at least 2 photos first");
-    toast(`Testing on ${checked.length} checked photo(s)…`); let tp = 0, fp = 0, fn = 0;
-    for (const a of checked) { const r = await seRead(a.p.url, a.uid); const truth = new Set((a.p.items || []).map((it) => fold(it.name))), got = new Set(r.items.map((it) => fold(it.name)));
-      for (const x of got) truth.has(x) ? tp++ : fp++; for (const x of truth) if (!got.has(x)) fn++; }
-    SE.refs = null; const prec = tp + fp ? tp / (tp + fp) : 0, rec = tp + fn ? tp / (tp + fn) : 0;
-    const res = { at: new Date().toISOString(), photos: checked.length, precision: Math.round(prec * 1000) / 10, recall: Math.round(rec * 1000) / 10 };
-    try { await S.db.doc("admin/engine").set(res); } catch { /* shown anyway */ }
-    openDialog("Shelf engine — accuracy test", h("div", { class: "grid" },
-      h("p", { style: "margin:0", text: `Tested on ${res.photos} photo(s) a person checked, each read without its own labels.` }),
+    const T = teacherPhotos(); if (T.length < 2) return toast("Needs at least 2 teacher photos");
+    toast(`Testing on ${T.length} photo(s)…`); await nnEnsure(true); const s = await coachScore(T, await seRefs(), engineCfg());
+    const res = { at: new Date().toISOString(), photos: T.length, team: T.filter((t) => t.by === "team").length, precision: Math.round(s.prec * 1000) / 10, recall: Math.round(s.rec * 1000) / 10 };
+    try { await S.db.doc("admin/engine").set({ ...engineDoc(), test: res }); } catch { /* shown anyway */ }
+    openDialog("KWADERNO offline AI — accuracy test", h("div", { class: "grid" },
+      h("p", { style: "margin:0", text: `Tested on ${res.photos} photo(s) (${res.team} checked by your team), each read without its own labels.` }),
       h("div", { class: "kpis", style: "display:grid;grid-template-columns:1fr 1fr;gap:8px" }, kpiBox("Correct when it names a product", res.precision + "%", "precision"), kpiBox("Products it finds", res.recall + "%", "recall")),
-      h("p", { class: "muted small", style: "margin:0", text: "It improves as more photos are checked. Use these numbers, not guesses, when you describe the engine." })));
+      h("p", { class: "muted small", style: "margin:0", text: "Use these measured numbers, not guesses, when you describe the system." })));
+  }
+  /** Pop-up learning report: what the three algorithms learned, how accuracy moved, what to teach next. */
+  function learningReport() {
+    const e = engineDoc(), hist = e.history || [], last = hist.at(-1), days = e.startedAt ? Math.max(1, Math.ceil((Date.now() - Date.parse(e.startedAt)) / DAYMS)) : 0;
+    const W = 520, Hh = 120, pts = hist.slice(-30), sx = (i) => 30 + (pts.length > 1 ? (i * (W - 50)) / (pts.length - 1) : 0), sy = (v) => 10 + (1 - v / 100) * (Hh - 30);
+    const NS = "http://www.w3.org/2000/svg", el = (t, at, txt) => { const x = document.createElementNS(NS, t); for (const [k, v] of Object.entries(at)) x.setAttribute(k, v); if (txt != null) x.textContent = txt; return x; };
+    const svg = el("svg", { viewBox: `0 0 ${W} ${Hh}`, width: "100%", role: "img", "aria-label": "Agreement with the teacher by day" });
+    svg.append(el("line", { x1: 30, x2: W - 20, y1: sy(85), y2: sy(85), stroke: "var(--ok)", "stroke-dasharray": "4 4" }), el("text", { x: W - 20, y: sy(85) - 4, "text-anchor": "end", "font-size": 11, fill: "var(--muted)" }, "goal 85%"));
+    for (const v of [0, 50, 100]) svg.append(el("text", { x: 24, y: sy(v) + 4, "text-anchor": "end", "font-size": 10, fill: "var(--muted)" }, v + "%"));
+    if (pts.length) { svg.append(el("polyline", { points: pts.map((p0, i) => `${sx(i)},${sy(p0.f1)}`).join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
+      pts.forEach((p0, i) => svg.append(el("circle", { cx: sx(i), cy: sy(p0.f1), r: 3.5, fill: "var(--accent)" }))); pts.length && svg.append(el("text", { x: sx(pts.length - 1), y: sy(pts.at(-1).f1) - 8, "text-anchor": "end", "font-size": 11, "font-weight": 700, fill: "var(--fg)" }, pts.at(-1).f1 + "%")); }
+    const status = e.status === "graduated" ? "🎓 Graduated — works without AI (AI only spot-checks)" : `📚 Teaching — day ${days || 1}${days <= 7 ? " of 7" : ""}`;
+    openDialog("KWADERNO offline AI — learning report", h("div", { class: "grid", id: "learnReport" },
+      h("div", { class: "note", style: "margin:0;font-weight:600", text: status }),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px" },
+        kpiBox("Agreement (Algo 1)", last ? last.f1 + "%" : "—", last ? `correct ${last.prec}% · finds ${last.rec}%` : "run the Coach"),
+        kpiBox("Neural network (Algo 3)", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products · ${e.model.samples} examples` : "train it"),
+        kpiBox("Products known", last ? String(last.products) : "—", last ? `${last.photos} teacher photos · ${last.team} team-checked` : "")),
+      pts.length > 1 ? h("div", {}, h("b", { class: "small", text: "Agreement with the teacher, by day" }), svg) : h("p", { class: "muted small", style: "margin:0", text: "The trend chart appears after the Coach has run on two different days." }),
+      e.tried?.length ? h("div", {}, h("b", { class: "small", text: "Coach (Algo 2) — settings tried, best first" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.tried.slice(0, 4).map((t) => h("li", { text: `match ≥ ${t.th} · colour/layout/pattern ${t.w.join("/")} · detail ${t.sens} → ${Math.round(t.f1 * 100)}%` })))) : null,
+      e.experiments?.length ? h("div", {}, h("b", { class: "small", text: "Strategist (Algo 3) — neural network experiments" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.experiments.map((x) => h("li", { text: `${x.id}${x.id === e.model?.winner ? " (winner)" : ""}: ${x.acc}% on unseen examples` })))) : null,
+      e.weak?.length ? h("div", {}, h("b", { class: "small", text: "Weak products — check more photos with these" }), h("div", { class: "chips", style: "margin-top:4px" }, e.weak.map((w) => h("span", { class: "chip", text: `${w.name} · ${w.recall}%` })))) : null,
+      e.teachNext?.length ? h("div", {}, h("b", { class: "small", text: "Teach next — fewest examples" }), h("div", { class: "chips", style: "margin-top:4px" }, e.teachNext.map((w) => h("span", { class: "chip", text: `${w.name} · ${w.n}` })))) : null,
+      h("p", { class: "muted small", style: "margin:0", text: "Learns while Super Admin is open. Graduates when it agrees with the teacher ≥85% three days in a row; if it drops, teaching turns back on." })));
+    try { localStorage.setItem("kw-learn-seen", last?.d || "x"); } catch { /* fine */ }
+  }
+  // While Super Admin is open: the Coach runs at most twice a day, the network retrains at most daily; the report pops up once per new day.
+  var engineAuto = false;
+  function engineAutoRun() {
+    if (engineAuto || view !== "admin" || !S.owner || !S.engine || S.engine.cfg?.auto === false) return; engineAuto = true;
+    setTimeout(async () => { const e = engineDoc(), h12 = Date.now() - Date.parse(e.coachAt || 0) > 12 * 3600e3, d24 = Date.now() - Date.parse(e.trainedAt || 0) > 24 * 3600e3;
+      if (teacherPhotos().length >= 2 && h12) await coachRun(true);
+      if (teacherPhotos().length >= 2 && d24 && e.startedAt) await strategistTrain(true);
+      let seen = null; try { seen = localStorage.getItem("kw-learn-seen"); } catch { /* fine */ }
+      const lastD = engineDoc().history?.at(-1)?.d; if (lastD && seen !== lastD && !dlg.open) learningReport(); }, 4000);
   }
   function engineCard() {
-    const checked = auditPhotos().filter((a) => a.p.checked && !a.p.sample), skus = new Set(checked.flatMap((a) => (a.p.items || []).filter((it) => okBox(it.box)).map((it) => fold(it.name))));
-    const t = S.engineTest;
+    const e = engineDoc(), T = teacherPhotos(), team = T.filter((t) => t.by === "team").length, last = e.history?.at(-1);
     return h("div", { class: "card", id: "engineCard" },
-      h("h2", { style: "margin:0 0 4px", text: "KWADERNO Shelf Engine — our own recognition (no AI)" }),
-      h("p", { class: "muted small", style: "margin:0 0 8px", text: "Finds shelf rows and products from edges, fingerprints each product (colour mix, colour layout, edge pattern) and matches it with photos your team checked. Every checked photo teaches it." }),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline" }, h("h2", { style: "margin:0", text: "KWADERNO offline AI — 3 smart algorithms" }),
+        h("span", { class: "chip", text: e.status === "graduated" ? "🎓 Graduated" : e.startedAt ? "📚 Teaching" : "Not started" })),
+      h("p", { class: "muted small", style: "margin:4px 0 8px", text: "Algo 1 reads shelves by colours, edges and patterns · Algo 2 (Coach) checks it against the teacher and tunes it · Algo 3 (Strategist) trains a small neural network here in the browser. Works offline once it graduates." }),
       h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px" },
-        kpiBox("Checked photos", String(checked.length), "what it learns from"), kpiBox("Products it knows", String(skus.size + S.library.length), `${skus.size} from shelves · ${S.library.length} from the photo library`),
-        kpiBox("Accuracy", t ? `${t.precision}% / ${t.recall}%` : "not tested", t ? `correct / found · ${t.photos} photo(s)` : "check 2+ photos, then Test")),
-      h("div", { class: "pills", style: "margin-top:8px" }, h("button", { class: "btn", id: "engineTestBtn", onclick: engineTest }, "Test accuracy")));
+        kpiBox("Teacher photos", String(T.length), `${team} checked by your team · ${T.length - team} AI-read`),
+        kpiBox("Agreement (Algo 1)", last ? last.f1 + "%" : "—", "goal 85%, 3 days running"),
+        kpiBox("Neural network", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products` : "Algo 3"),
+        kpiBox("Accuracy test", e.test ? `${e.test.precision}% / ${e.test.recall}%` : "not tested", "correct / found")),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:center;margin-top:8px" }, h("input", { type: "checkbox", id: "aiTeacher", checked: useAiTeacher() || null, onchange: async (ev) => { try { await S.db.doc("admin/engine").set({ ...engineDoc(), cfg: { ...(engineDoc().cfg || {}), useAi: ev.target.checked } }); SE.refs = null; } catch { toast("Could not save"); } } }),
+        "Learn from AI readings too (marked AI-taught; team checks always win — confirm the AI provider's terms)"),
+      h("div", { class: "pills", style: "margin-top:8px" },
+        !e.startedAt ? h("button", { class: "btn primary", id: "startTeach", onclick: async () => { try { await S.db.doc("admin/engine").set({ ...engineDoc(), startedAt: new Date().toISOString(), status: "teaching" }); toast("Teaching week started"); coachRun(); } catch { toast("Could not save"); } } }, "▶ Start the teaching week") : null,
+        h("button", { class: "btn", id: "coachBtn", disabled: !!SE.busy || null, onclick: () => coachRun() }, SE.busy === "coach" ? "Coach working…" : "🧭 Run the Coach (Algo 2)"),
+        h("button", { class: "btn", id: "trainBtn", disabled: !!SE.busy || null, onclick: () => strategistTrain() }, SE.busy === "train" ? "Training…" : "🧠 Train the neural network (Algo 3)"),
+        h("button", { class: "btn", id: "engineTestBtn", onclick: engineTest }, "Test accuracy"),
+        h("button", { class: "btn", id: "reportBtn", onclick: learningReport }, "📊 Learning report")),
+      SE.busy === "train" ? h("p", { class: "small", id: "nnStatus", style: "margin:6px 0 0", text: "Starting…" }) : null);
   }
   function viewAuditDrill(a) {
     const all = auditPhotos(); const visit = visitsOf(all).find((v) => v.photos.some((x) => x.uid === a.uid));

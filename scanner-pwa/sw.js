@@ -1,5 +1,5 @@
 // Offline support: keep the app's own files on the device. Scans never go through here.
-const CACHE = "kwscan-v9";
+const CACHE = "kwscan-v10";
 const READER_CACHE = "kwscan-reader-v1"; // the handwriting reader (~7 MB): kept across app updates
 const FILES = ["./", "index.html", "styles.css", "app.js", "manifest.webmanifest", "vendor/zxing-library-0.21.3.min.js", "logbook.js",
   "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
@@ -14,6 +14,7 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET" || new URL(req.url).origin !== location.origin) return;
   // the handwriting reader's files never change (versioned): from the phone first, the internet only the first time
   if (new URL(req.url).pathname.includes("/vendor/tesseract/")) { e.respondWith(caches.open(READER_CACHE).then((c) => c.match(req).then((hit) => hit || fetch(req).then((r) => { if (r.ok) c.put(req, r.clone()); return r; })))); return; }
-  e.respondWith(fetch(req).then((r) => { if (r.ok) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(req.mode === "navigate" ? "index.html" : req, copy)); } return r; })
-    .catch(() => caches.match(req.mode === "navigate" ? "index.html" : req).then((hit) => hit || caches.match(req))));
+  // each page is saved under its own address (the Photo Finder must never replace the scanner's offline copy)
+  e.respondWith(fetch(req).then((r) => { if (r.ok && !r.redirected) { const copy = r.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); } return r; })
+    .catch(() => caches.match(req, { ignoreSearch: req.mode === "navigate" }).then((hit) => hit || (req.mode === "navigate" ? caches.match("index.html") : undefined))));
 });

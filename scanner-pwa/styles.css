@@ -279,3 +279,10 @@ body.logbook .status { display: none; }
 .lb-status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: #cde; font-size: .9rem; }
 .lb-status .btn { margin-left: auto; }
 .lb-secs { color: #8a9; }
+
+/* real product photo (from the barcode) in the scan list and the pop-up */
+.hud-list li.has-ph { grid-template-columns: 44px 1fr auto; }
+.hud-list li.has-ph .ph { grid-row: 1 / span 2; grid-column: 1; width: 44px; height: 44px; object-fit: cover; border-radius: 8px; background: #fff; }
+.hud-list li.has-ph .n, .hud-list li.has-ph .c { grid-column: 2; }
+.hud-list li.has-ph .x { grid-column: 3; }
+.pop-img { width: 34%; aspect-ratio: 1; object-fit: cover; border-radius: 14px; background: #fff; box-shadow: 0 0 18px rgba(25, 240, 255, .6); position: relative; z-index: 1; }

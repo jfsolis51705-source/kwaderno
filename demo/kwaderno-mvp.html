@@ -262,6 +262,7 @@ tfoot td { font-weight: 700; }
 .pills button { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 6px 12px; font-size: .85rem; }
 .pills button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
 dialog { border: 0; padding: 0; border-radius: 16px; background: var(--surface); color: var(--fg); width: min(520px, calc(100% - 24px)); max-height: calc(100% - 24px); }
+dialog.wide { width: min(980px, calc(100% - 24px)); }
 dialog::backdrop { background: rgb(0 0 0 / .45); }
 dialog .dh { display: flex; justify-content: space-between; align-items: center; padding: 16px 16px 0; gap: 10px; }
 dialog .db { padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; overflow-y: auto; }
@@ -5973,11 +5974,49 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     for (const r of rows) {
       const g = m.get(r.co) || { co: r.co, rev: 0, units: 0, stores: new Set(), skus: new Map(), out: 0, low: 0 };
       g.rev += r.rev; g.units += r.units; g.stores.add(r.st.id); if (r.out) g.out++; if (r.low) g.low++;
-      const p = g.skus.get(r.it.k) || { name: r.it.name, cat: r.it.cat, rev: 0, units: 0, stores: 0, out: 0, prices: [] };
+      const p = g.skus.get(r.it.k) || { k: r.it.k, name: r.it.name, cat: r.it.cat, rev: 0, units: 0, stores: 0, out: 0, prices: [] };
       p.rev += r.rev; p.units += r.units; p.stores++; if (r.out) p.out++; if (r.it.price) p.prices.push(r.it.price); g.skus.set(r.it.k, p);
       m.set(r.co, g);
     }
     return [...m.values()].sort((a, b) => (a.co === "Unassigned") - (b.co === "Unassigned") || b.rev - a.rev);
+  }
+  /** The stores behind a product's "Stores" count: each store's own numbers for it, tap a store for its full page. */
+  let psSort = "rev";
+  function productStores(p) {
+    const rows = mfrRows().filter((r) => r.it.k === p.k).map((r) => ({ st: r.st, it: r.it, rev: r.rev, units: r.units, s7: r.it.s7 || 0, stock: r.it.stock, price: r.it.price || 0, out: r.out, low: r.low }));
+    const prices = rows.map((r) => r.price).filter(Boolean).sort((a, b) => a - b), med = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
+    const body = h("div", { class: "grid", id: "psDlg" });
+    const sorts = [["rev", "Sales"], ["units", "Units"], ["stock", "Stock"], ["price", "Price"], ["name", "Name"]];
+    const draw = () => {
+      const list = rows.slice().sort((a, b) => psSort === "name" ? String(a.st.name).localeCompare(String(b.st.name)) : psSort === "stock" ? (a.stock ?? 0) - (b.stock ?? 0) : b[psSort] - a[psSort]);
+      body.replaceChildren(
+        h("p", { class: "muted small", style: "margin:0", text: `${rows.length} store(s) · ${peso(rows.reduce((a, r) => a + r.rev, 0))} sales · ${qtyFmt(rows.reduce((a, r) => a + r.units, 0))} units in 30 days · usual price ${med ? peso(med) : "—"} · ${rows.filter((r) => r.out).length} out of stock` }),
+        h("div", { class: "pills", style: "align-items:center" }, h("b", { class: "small", text: "Sort:" }), sorts.map(([k, l]) => h("button", { "aria-pressed": String(psSort === k), onclick: () => { psSort = k; draw(); } }, l)),
+          h("button", { class: "btn sm", id: "psCsv", onclick: () => csv(list) }, "⬇️ CSV")),
+        innerWidth < 640 ? h("ul", { class: "list", id: "psTable" }, list.map((r) => h("li", { tabindex: 0, style: "cursor:pointer;display:grid;gap:2px", onclick: () => { dlg.close(); go("admin", "s-" + r.st.id); } },
+          h("div", { style: "display:flex;justify-content:space-between;gap:8px" }, h("b", { text: r.st.name || "Store" }), h("b", { class: "num", text: peso(r.rev) })),
+          h("div", { class: "muted small", text: [r.st.barangay, r.st.city].filter(Boolean).join(", ") || "Area not set" }),
+          h("div", { class: "small" }, `${qtyFmt(r.units)} units · ${qtyFmt(r.s7)} last 7d · ${r.price ? peso(r.price) : "—"} · `,
+            h("span", { style: r.out ? "color:var(--bad);font-weight:700" : r.low ? "color:var(--warn)" : null, text: r.stock == null ? "stock —" : r.out ? "out of stock" : `stock ${qtyFmt(r.stock)}${r.low ? " (low)" : ""}` }))))) :
+        h("div", { class: "table-wrap" }, h("table", { id: "psTable" },
+          h("thead", {}, h("tr", {}, ["Store", "Sales 30d", "Units 30d", "Last 7d", "Price", "Stock"].map((t, i) => h("th", { class: i ? "r" : null, text: t })))),
+          h("tbody", {}, list.map((r) => h("tr", { style: "cursor:pointer", tabindex: 0, title: "Open this store", onclick: () => { dlg.close(); go("admin", "s-" + r.st.id); }, onkeydown: (e) => { if (e.key === "Enter") { dlg.close(); go("admin", "s-" + r.st.id); } } },
+            h("td", {}, h("div", { style: "font-weight:600", text: r.st.name || "Store" }), h("div", { class: "muted small", text: [r.st.barangay, r.st.city].filter(Boolean).join(", ") || "Area not set" })),
+            h("td", { class: "r num", text: peso(r.rev) }), h("td", { class: "r num", text: qtyFmt(r.units) }), h("td", { class: "r num", text: qtyFmt(r.s7) }),
+            h("td", { class: "r num", style: med && r.price && Math.abs(r.price - med) / med >= 0.15 ? "color:var(--warn)" : null, text: r.price ? peso(r.price) : "—" }),
+            h("td", { class: "r num", style: r.out ? "color:var(--bad);font-weight:700" : r.low ? "color:var(--warn)" : null, text: r.stock == null ? "—" : (r.out ? "0 · out" : qtyFmt(r.stock) + (r.low ? " · low" : "")) })))))),
+        h("p", { class: "muted small", style: "margin:0", text: "Tap a store to open its page (sales by day, payment mix, stock). Orange price = 15%+ away from the usual price." }));
+    };
+    const csv = async (list) => {
+      const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+      const lines = [["Product", "Store", "Barangay", "City", "Sales 30d (PHP)", "Units 30d", "Units 7d", "Price (PHP)", "Stock"].map(cell).join(",")];
+      for (const r of list) lines.push([p.name, r.st.name, r.st.barangay, r.st.city, (r.rev / 100).toFixed(2), r.units, r.s7, (r.price / 100).toFixed(2), r.stock ?? ""].map(cell).join(","));
+      const data = "\uFEFF" + lines.join("\r\n"), name = `stores-${fold(p.name).replace(/ /g, "-").slice(0, 30)}-${todayKey()}.csv`;
+      try { const dl = await window.claude?.use?.("downloads"); if (!dl) throw new Error("none"); await dl.save({ filename: name, data }); toast("Saved " + name); }
+      catch { try { await navigator.clipboard.writeText(data); toast("Couldn't save a file here — copied the table instead"); } catch { toast("Couldn't export here"); } }
+    };
+    draw(); openDialog(`${p.name} — ${rows.length} store(s)`, body);
+    dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
   }
   async function mfrCsv(groups, total) {
     const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
@@ -6337,7 +6376,8 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
         h("div", { class: "table-wrap" }, h("table", { id: "mfrSkus" },
           h("thead", {}, h("tr", {}, ["Product", "Sales", "Units", "Stores", "Median price", "Out", "Company"].map((t, i) => h("th", { class: i && i < 6 ? "r" : null, text: t })))),
           h("tbody", {}, skus.map((p) => { const pr = p.prices.sort((a, b) => a - b), med = pr.length ? pr[Math.floor(pr.length / 2)] : 0;
-            return h("tr", {}, h("td", { text: p.name }), h("td", { class: "r num", text: peso(p.rev) }), h("td", { class: "r num", text: qtyFmt(p.units) }), h("td", { class: "r num", text: String(p.stores) }),
+            return h("tr", {}, h("td", { text: p.name }), h("td", { class: "r num", text: peso(p.rev) }), h("td", { class: "r num", text: qtyFmt(p.units) }),
+              h("td", { class: "r num" }, h("button", { class: "linkbtn num", "data-stores": p.k, title: `See the ${p.stores} store(s) selling ${p.name}`, onclick: () => productStores(p), style: "background:none;border:0;padding:2px 4px;color:var(--accent);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer" }, String(p.stores))),
               h("td", { class: "r num", text: med ? peso(med) : "—" }), h("td", { class: "r num", text: p.out ? String(p.out) : "" }),
               h("td", {}, h("select", { "aria-label": "Company for " + p.name, onchange: (e) => assign(p.name, e.target.value) },
                 h("option", { value: "", text: "Automatic" + (mfrOf(p.name) && !(S.mfrMap || {})[mfrKey(p.name)] ? ` (${mfrOf(p.name)})` : "") }),

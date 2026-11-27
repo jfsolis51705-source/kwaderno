@@ -742,6 +742,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
     if (S.owner) db.doc("admin/manufacturers").onSnapshot((d) => { S.mfrMap = d.exists ? d.data().map || {} : {}; mfrIdx = null; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/photofinder").onSnapshot((d) => { S.photoFinder = d.exists ? { auto: true, tried: {}, ...d.data() } : { auto: true, tried: {} }; setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500); }, () => { S.photoFinder = { auto: true, tried: {} }; });
+    if (S.owner) db.doc("admin/engine").onSnapshot((d) => { S.engineTest = d.exists ? d.data() : null; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/msl").onSnapshot((d) => { S.msl = d.exists ? d.data() : { items: [] }; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/directory").onSnapshot((d) => { S.directory = d.exists ? d.data().stores || [] : []; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/pilot").onSnapshot((d) => { S.pilot = d.exists ? d.data() : { pins: [] }; render(); }, () => { S.pilot = { pins: [] }; render(); });
@@ -5253,6 +5254,118 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   }
 
   // ----- Drilldown of one submission (visit) -----
+  // ---------- KWADERNO SHELF ENGINE: our own shelf recognition — no outside AI ----------
+  // 1 shelf rows from long horizontal edges · 2 product boxes from vertical edges inside each row ·
+  // 3 a fingerprint per box (colour mix, colour layout, edge pattern) · 4 nearest match in OUR reference library
+  //   (boxes from photos a person checked + the product photo library) · 5 same product side by side = facings ·
+  // 6 every photo the admin marks "checked" teaches it. Unsure boxes are left for the admin; AI stays optional.
+  const SE = { refs: null, key: "", building: null };
+  const seImg = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
+  const seScratch = (() => { let c; return () => (c ||= Object.assign(document.createElement("canvas"), { width: 16, height: 16 })); })();
+  function seFeat(src, x, y, w, hh) { // src = image or canvas; box in pixels → fingerprint
+    const c = seScratch(), g = c.getContext("2d", { willReadFrequently: true }); g.clearRect(0, 0, 16, 16);
+    g.drawImage(src, Math.max(0, x), Math.max(0, y), Math.max(2, w), Math.max(2, hh), 0, 0, 16, 16);
+    const d = g.getImageData(0, 0, 16, 16).data, hist = new Float32Array(16), lay = new Float32Array(48), gray = new Float32Array(256);
+    for (let i = 0; i < 256; i++) {
+      const r = d[i * 4] / 255, gg = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255, mx = Math.max(r, gg, b), mn = Math.min(r, gg, b), sat = mx ? (mx - mn) / mx : 0;
+      gray[i] = 0.3 * r + 0.59 * gg + 0.11 * b;
+      if (sat > 0.25 && mx > 0.2) { let hue = mx === mn ? 0 : mx === r ? ((gg - b) / (mx - mn)) % 6 : mx === gg ? (b - r) / (mx - mn) + 2 : (r - gg) / (mx - mn) + 4; hue = (hue * 60 + 360) % 360; hist[Math.min(11, Math.floor(hue / 30))] += sat * mx; }
+      else hist[12 + Math.min(3, Math.floor(mx * 4))] += 1;
+      const cell = Math.floor((i >> 4) / 4) * 4 + Math.floor((i & 15) / 4); lay[cell * 3] += r; lay[cell * 3 + 1] += gg; lay[cell * 3 + 2] += b;
+    }
+    let hs = 0; for (const v of hist) hs += v; for (let i = 0; i < 16; i++) hist[i] /= hs || 1;
+    let m = 0; for (const v of lay) m += v; m /= 48; let sd = 0; for (const v of lay) sd += (v - m) ** 2; sd = Math.sqrt(sd / 48) || 1; for (let i = 0; i < 48; i++) lay[i] = (lay[i] - m) / sd;
+    const hash = new Int8Array(64); for (let yy = 0; yy < 8; yy++) for (let xx = 0; xx < 8; xx++) { const a = gray[(yy * 2) * 16 + xx * 2], b2 = gray[(yy * 2) * 16 + xx * 2 + 2 > 255 ? 255 : (yy * 2) * 16 + xx * 2 + 2]; hash[yy * 8 + xx] = a > b2 ? 1 : -1; }
+    return { hist, lay, hash };
+  }
+  function seSim(a, b) { // 0..1: colour mix (histogram intersection) · colour layout (correlation) · edge pattern (hash agreement)
+    let hi = 0; for (let i = 0; i < 16; i++) hi += Math.min(a.hist[i], b.hist[i]);
+    let lc = 0; for (let i = 0; i < 48; i++) lc += a.lay[i] * b.lay[i]; lc = (lc / 48 + 1) / 2;
+    let hg = 0; for (let i = 0; i < 64; i++) if (a.hash[i] === b.hash[i]) hg++; hg /= 64;
+    return 0.5 * hi + 0.3 * lc + 0.2 * hg;
+  }
+  /** Reference library = boxes on photos a person CHECKED + the product photo library. Rebuilt when either changes. */
+  async function seRefs(skipUid) {
+    const checked = auditPhotos().filter((a) => a.p.checked && a.p.url && !a.p.sample && boxCount(a.p));
+    const key = checked.map((a) => a.uid + (a.p.checkedAt || "")).join("|") + "#" + S.library.length + "#" + (skipUid || "");
+    if (SE.refs && SE.key === key) return SE.refs;
+    const refs = [];
+    for (const a of checked) { if (a.uid === skipUid) continue;
+      let im; try { im = await seImg(a.p.url); } catch { continue; }
+      for (const it of a.p.items || []) { if (!okBox(it.box)) continue; const [x, y, w, hh] = it.box, n = Math.max(1, it.facings || 1);
+        const W = im.naturalWidth, H = im.naturalHeight, fw = (w * W) / Math.min(n, 6); // one facing ≈ the box split by its facings
+        for (let k = 0; k < Math.min(n, 6); k++) refs.push({ name: it.name, brand: it.brand, category: it.category, f: seFeat(im, x * W + k * fw, y * H, fw, hh * H), from: a.uid }); } }
+    for (const it of S.library) { if (!photoUrlOk(it.photo?.url)) continue; let im; try { im = await seImg(it.photo.url); } catch { continue; }
+      const W = im.naturalWidth, H = im.naturalHeight; refs.push({ name: it.name, brand: it.name.split(" ")[0], category: it.category || "Others", f: seFeat(im, W * 0.1, H * 0.1, W * 0.8, H * 0.8), from: "library" }); }
+    SE.refs = refs; SE.key = key; return refs;
+  }
+  /** Candidate product boxes from edges alone (no AI). */
+  function seDetect(im) {
+    const W = 480, H = Math.round((im.naturalHeight / im.naturalWidth) * W), c = Object.assign(document.createElement("canvas"), { width: W, height: H }), g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(im, 0, 0, W, H); const d = g.getImageData(0, 0, W, H).data, gr = new Float32Array(W * H);
+    for (let i = 0; i < W * H; i++) gr[i] = 0.3 * d[i * 4] + 0.59 * d[i * 4 + 1] + 0.11 * d[i * 4 + 2];
+    const smooth = (a, r) => a.map((_, i) => { let s2 = 0, n = 0; for (let j = Math.max(0, i - r); j <= Math.min(a.length - 1, i + r); j++) { s2 += a[j]; n++; } return s2 / n; });
+    const peaks = (a, minGap, k) => { const m = a.reduce((x, y) => x + y, 0) / a.length, sd = Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length), out = [];
+      for (let i = 1; i < a.length - 1; i++) if (a[i] > m + k * sd && a[i] >= a[i - 1] && a[i] >= a[i + 1]) { if (out.length && i - out.at(-1) < minGap) { if (a[i] > a[out.at(-1)]) out[out.length - 1] = i; } else out.push(i); } return out; };
+    const rowE = new Array(H).fill(0); for (let y = 1; y < H - 1; y++) { let e = 0; for (let x = 0; x < W; x++) e += Math.abs(gr[(y + 1) * W + x] - gr[(y - 1) * W + x]); rowE[y] = e; }
+    let cuts = [0, ...peaks(smooth(rowE, 2), Math.round(H * 0.09), 1.1), H - 1];
+    let bands = []; for (let i = 0; i < cuts.length - 1; i++) if (cuts[i + 1] - cuts[i] >= H * 0.08) bands.push([cuts[i], cuts[i + 1]]);
+    if (!bands.length) bands = [[0, Math.round(H / 3)], [Math.round(H / 3), Math.round((2 * H) / 3)], [Math.round((2 * H) / 3), H - 1]];
+    const boxes = [];
+    for (const [y0, y1] of bands) { const bh = y1 - y0, colE = new Array(W).fill(0);
+      for (let x = 1; x < W - 1; x++) { let e = 0; for (let y = y0; y < y1; y++) e += Math.abs(gr[y * W + x + 1] - gr[y * W + x - 1]); colE[x] = e; }
+      const xs = [0, ...peaks(smooth(colE, 1), Math.max(6, Math.round(bh * 0.3)), 0.6), W - 1];
+      for (let i = 0; i < xs.length - 1; i++) { const x0 = xs[i], x1 = xs[i + 1], w = x1 - x0; if (w < bh * 0.18) continue;
+        const parts = w > bh * 1.6 ? Math.ceil(w / (bh * 0.8)) : 1; for (let k = 0; k < parts; k++) boxes.push([(x0 + (k * w) / parts) / W, y0 / H, w / parts / W, bh / H]); } }
+    return boxes.slice(0, 160);
+  }
+  /** Read one shelf photo with our engine → items with boxes and facings, plus boxes it could not name. */
+  async function seRead(url, skipUid) {
+    const refs = await seRefs(skipUid); if (!refs.length) return { items: [], unknown: 0, total: 0, refs: 0 };
+    const im = await seImg(url), W = im.naturalWidth, H = im.naturalHeight, cands = seDetect(im), hits = [];
+    for (const b of cands) { const f = seFeat(im, b[0] * W, b[1] * H, b[2] * W, b[3] * H); let best = null, second = null;
+      for (const r of refs) { const sc = seSim(f, r.f); if (!best || sc > best.sc) { if (best && best.r.name !== r.name) second = best; best = { r, sc }; } else if ((!second || sc > second.sc) && r.name !== best.r.name) second = { r, sc }; }
+      const margin = best && second ? best.sc - second.sc : 1; hits.push({ b, ok: best && best.sc >= 0.72 && margin >= 0.015, name: best?.r.name, ref: best?.r, sc: best?.sc || 0 }); }
+    const by = new Map(); for (const x of hits.filter((x) => x.ok)) { const g = by.get(x.name) || { ref: x.ref, n: 0, sc: 0, boxes: [] }; g.n++; g.sc += x.sc; g.boxes.push(x.b); by.set(x.name, g); }
+    const items = [...by.values()].map((g) => { // box = the biggest run of neighbouring packs on one shelf row (never one box across rows)
+      const runs = []; for (const b of g.boxes.slice().sort((p, q) => p[1] - q[1] || p[0] - q[0])) { const r = runs.find((r) => Math.abs(r.at(-1)[1] - b[1]) < 0.01 && b[0] - (r.at(-1)[0] + r.at(-1)[2]) < 0.03); r ? r.push(b) : runs.push([b]); }
+      const run = runs.sort((p, q) => q.length - p.length)[0], xs = run.map((b) => b[0]), ys = run.map((b) => b[1]), x2 = run.map((b) => b[0] + b[2]), y2 = run.map((b) => b[1] + b[3]);
+      const box = [Math.min(...xs), Math.min(...ys), Math.max(...x2) - Math.min(...xs), Math.max(...y2) - Math.min(...ys)].map((v) => Math.round(v * 1000) / 1000);
+      return { name: g.ref.name, brand: g.ref.brand, category: g.ref.category, facings: g.n, box, conf: Math.round((g.sc / g.n) * 100) / 100, src: "engine" }; }).sort((a, b) => b.facings - a.facings);
+    return { items, unknown: hits.filter((x) => !x.ok).length, total: hits.length, refs: refs.length };
+  }
+  async function engineReadPhoto(a, quiet) {
+    try { const r = await seRead(a.p.url, a.uid);
+      if (!r.refs) { if (!quiet) toast("The engine has nothing to compare with yet — check a few photos first (✓ Mark checked)"); return false; }
+      await a.save({ ...a.p, items: r.items, counted: true, checked: false, engine: { at: new Date().toISOString(), unknown: r.unknown, boxes: r.total, refs: r.refs } });
+      if (!quiet) toast(`Engine: ${r.items.length} product(s), ${r.total - r.unknown} of ${r.total} boxes named — check and correct`); return true;
+    } catch { if (!quiet) toast("The engine could not read this photo"); return false; }
+  }
+  /** Honest accuracy: each checked photo is read with references from the OTHER checked photos and compared with what a person confirmed. */
+  async function engineTest() {
+    const checked = auditPhotos().filter((a) => a.p.checked && a.p.url && !a.p.sample && boxCount(a.p)); if (checked.length < 2) return toast("Check at least 2 photos first");
+    toast(`Testing on ${checked.length} checked photo(s)…`); let tp = 0, fp = 0, fn = 0;
+    for (const a of checked) { const r = await seRead(a.p.url, a.uid); const truth = new Set((a.p.items || []).map((it) => fold(it.name))), got = new Set(r.items.map((it) => fold(it.name)));
+      for (const x of got) truth.has(x) ? tp++ : fp++; for (const x of truth) if (!got.has(x)) fn++; }
+    SE.refs = null; const prec = tp + fp ? tp / (tp + fp) : 0, rec = tp + fn ? tp / (tp + fn) : 0;
+    const res = { at: new Date().toISOString(), photos: checked.length, precision: Math.round(prec * 1000) / 10, recall: Math.round(rec * 1000) / 10 };
+    try { await S.db.doc("admin/engine").set(res); } catch { /* shown anyway */ }
+    openDialog("Shelf engine — accuracy test", h("div", { class: "grid" },
+      h("p", { style: "margin:0", text: `Tested on ${res.photos} photo(s) a person checked, each read without its own labels.` }),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:1fr 1fr;gap:8px" }, kpiBox("Correct when it names a product", res.precision + "%", "precision"), kpiBox("Products it finds", res.recall + "%", "recall")),
+      h("p", { class: "muted small", style: "margin:0", text: "It improves as more photos are checked. Use these numbers, not guesses, when you describe the engine." })));
+  }
+  function engineCard() {
+    const checked = auditPhotos().filter((a) => a.p.checked && !a.p.sample), skus = new Set(checked.flatMap((a) => (a.p.items || []).filter((it) => okBox(it.box)).map((it) => fold(it.name))));
+    const t = S.engineTest;
+    return h("div", { class: "card", id: "engineCard" },
+      h("h2", { style: "margin:0 0 4px", text: "KWADERNO Shelf Engine — our own recognition (no AI)" }),
+      h("p", { class: "muted small", style: "margin:0 0 8px", text: "Finds shelf rows and products from edges, fingerprints each product (colour mix, colour layout, edge pattern) and matches it with photos your team checked. Every checked photo teaches it." }),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px" },
+        kpiBox("Checked photos", String(checked.length), "what it learns from"), kpiBox("Products it knows", String(skus.size + S.library.length), `${skus.size} from shelves · ${S.library.length} from the photo library`),
+        kpiBox("Accuracy", t ? `${t.precision}% / ${t.recall}%` : "not tested", t ? `correct / found · ${t.photos} photo(s)` : "check 2+ photos, then Test")),
+      h("div", { class: "pills", style: "margin-top:8px" }, h("button", { class: "btn", id: "engineTestBtn", onclick: engineTest }, "Test accuracy")));
+  }
   function viewAuditDrill(a) {
     const all = auditPhotos(); const visit = visitsOf(all).find((v) => v.photos.some((x) => x.uid === a.uid));
     const st = visitStats(visit, all);
@@ -5288,7 +5401,10 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
             h("div", { class: "pills", style: "margin-bottom:8px" },
               h("button", { class: "btn sm", "aria-label": "Zoom in", onclick: () => { drillZoom = Math.min(3, drillZoom + 0.5); render(); } }, "+"), h("button", { class: "btn sm", "aria-label": "Zoom out", onclick: () => { drillZoom = Math.max(1, drillZoom - 0.5); render(); } }, "−"),
               h("button", { class: "btn sm", onclick: () => openDialog(a.store, h("div", { class: "grid", style: "justify-items:center" }, boxedPhoto(cur.p, { big: true }), boxToggle())) }, "Preview"),
-              h("button", { class: "btn sm primary", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI counting facings…"); await scanAuditPhoto(cur); } }, cur.p.counted ? "Re-scan (AI)" : "Count facings (AI)")),
+              h("button", { class: "btn sm primary", id: "engineReadBtn", title: "Our own algorithm — no outside AI", onclick: async (e) => { e.currentTarget.disabled = true; toast("Shelf engine reading…"); await engineReadPhoto(cur); } }, "⚙️ Read with our engine"),
+              h("button", { class: "btn sm", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI counting facings…"); await scanAuditPhoto(cur); } }, cur.p.counted ? "Re-scan (AI)" : "Count facings (AI)"),
+              hasBoxes ? h("button", { class: "btn sm" + (cur.p.checked ? " primary" : ""), id: "markChecked", title: "A person confirmed these products and boxes — the engine learns from it", onclick: async () => { try { await cur.save({ ...cur.p, checked: !cur.p.checked, checkedAt: cur.p.checked ? null : new Date().toISOString(), checkedBy: S.me || null }); SE.refs = null; toast(cur.p.checked ? "Unchecked" : "✓ Checked — the engine learns from this photo"); } catch { toast("Could not save"); } } }, cur.p.checked ? "✓ Checked" : "✓ Mark checked") : null),
+            cur.p.engine && !cur.p.checked ? h("div", { class: "note small", style: "margin:0 0 8px", text: `Read by our engine: ${cur.p.engine.boxes - cur.p.engine.unknown} of ${cur.p.engine.boxes} boxes named, compared with ${cur.p.engine.refs} references. Correct it, then ✓ Mark checked.` }) : null,
             h("div", { style: "overflow:auto;max-height:560px;border-radius:8px" }, h("div", { style: `position:relative;width:${drillZoom * 100}%` }, h("img", { src: cur.p.url, alt: `Shelf photo of ${a.store}`, style: "display:block;width:100%" }), overlay)),
             !hasBoxes ? h("div", { class: "muted small", style: "margin-top:6px", text: cur.p.counted ? "AI gave no boxes for this photo." : "Numbered boxes appear after “Count facings (AI)”." }) : null,
             visit.photos.length > 1 ? h("div", { class: "pills", style: "margin-top:8px" }, visit.photos.map((x) => h("button", { style: `padding:0;border:2px solid ${x.uid === cur.uid ? "var(--accent)" : "transparent"};border-radius:8px;background:none`, onclick: () => { drillDisplay = x.p.display || "shelf"; go("admin", "audit-d-" + encodeURIComponent(x.uid)); }, "aria-label": "Show photo" }, h("img", { src: x.p.url, alt: "", style: "width:64px;height:48px;object-fit:cover;border-radius:6px;display:block" })))) : null),
@@ -5314,7 +5430,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
                 h("td", {}, drillMode === "sku" ? h("span", {}, r.name.toUpperCase(), r.msl ? h("span", { class: "sample-tag", style: "color:var(--accent);background:var(--accent-soft)", text: "MSL" }) : null) : String(r.skus)),
                 h("td", { class: "r" }, drillMode === "sku" && inDisp.length === 1 ? h("input", { type: "number", min: 1, max: 200, value: r.facings, style: "width:64px;text-align:right", "aria-label": "Facings of " + r.name, onchange: (e) => editFacings.set(normName(r.name), Math.max(1, Math.round(Number(e.target.value) || 1))) }) : String(r.facings)),
                 h("td", { class: "r num", text: pct(total ? r.facings / total : 0) })))))) : h("div", { class: "empty", text: "Not read yet — tap “Count facings (AI)”." }),
-            list.length && drillMode === "sku" && inDisp.length === 1 ? h("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-top:8px" }, h("span", { class: "muted small", text: cur.p.counted ? "Facings counted by AI — correct any number and Save." : "Facings not counted yet (each SKU shows 1)." }), h("button", { class: "btn primary sm", onclick: saveFacings }, "Save")) : null))));
+            list.length && drillMode === "sku" && inDisp.length === 1 ? h("div", { style: "display:flex;justify-content:space-between;align-items:center;margin-top:8px" }, h("span", { class: "muted small", text: cur.p.engine && !cur.p.checked ? "Facings counted by our engine — correct any number and Save, then ✓ Mark checked." : cur.p.checked ? "Checked by a person — the engine learns from this photo." : cur.p.counted ? "Facings counted by AI — correct any number and Save." : "Facings not counted yet (each SKU shows 1)." }), h("button", { class: "btn primary sm", onclick: saveFacings }, "Save")) : null))));
   }
 
   // ----- Out of stock & On shelf (latest visit per store) -----
@@ -6495,7 +6611,11 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
         h("input", { type: "search", id: "visSearch", placeholder: "Search store, barangay or product seen", value: visQ, "aria-label": "Search visual inventory",
           oninput: (e) => { visQ = e.target.value; render(); const el = $("#visSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
         h("button", { class: "btn", onclick: newAlbum }, "+ New store album"),
-        readAllBtn(), boxToggle()),
+        readAllBtn(), h("button", { class: "btn", id: "engineAllBtn", title: "Our own algorithm — no outside AI", onclick: async (e) => {
+          const todo = auditPhotos().filter((a) => a.p.url && !a.p.sample && !a.p.checked); if (!todo.length) return toast("No unchecked photos to read");
+          e.currentTarget.disabled = true; let ok = 0; for (const [n, a] of todo.entries()) { toast(`Engine reading ${n + 1} of ${todo.length}…`); if (await engineReadPhoto(a, true)) ok++; else if (!SE.refs?.length) break; }
+          toast(ok ? `Engine read ${ok} photo(s) — check and correct them` : "The engine needs checked photos first (open a photo → ✓ Mark checked)"); render(); } }, "⚙️ Read all with our engine"), boxToggle()),
+      engineCard(),
       scanned ? shelfPresence(all) : null,
       list.length ? h("div", { class: "vgrid" }, list.map((v) => {
         const cover = (v.photos || [])[0]; const seen = seenItems(v);

@@ -1390,13 +1390,13 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     let hit = null;
     for (const b of p.barcodes || []) { hit = ix.byCode.get(normCode(b)); if (hit) break; }
     if (!hit) { let best = 0; for (const it of ix.items) { const f1 = nameMatchScore(p.name, it.name); if (f1 > best) { best = f1; hit = f1 >= 0.8 ? it : null; } } }
-    const out = hit ? hit.photo.url : null; ix.memo.set(mk, out); return out;
+    const out = hit ? { url: hit.photo.url, credit: hit.credit?.source ? `${hit.credit.source} (${hit.credit.license || "CC BY-SA"})` : null } : null; ix.memo.set(mk, out); return out;
   }
   function productImage(p) {
     const url = p.photo?.url;
     if (photoUrlOk(url)) return h("img", { class: "pimg", src: url, alt: p.name, loading: "lazy" });
     const lib = libPhotoFor(p); // no photo of its own: the KELSON library's photo of this product, if there is one
-    if (lib) return h("img", { class: "pimg", src: lib, alt: p.name, loading: "lazy", "data-lib": "1" });
+    if (lib) return h("img", { class: "pimg", src: lib.url, alt: p.name, loading: "lazy", "data-lib": "1", title: lib.credit ? `Photo: ${lib.credit}` : null });
     const words = p.name.replace(/[^A-Za-z0-9 ]/g, " ").split(/\s+/).filter(Boolean);
     const initials = (words[0]?.[0] || "?") + (words[1]?.[0] || "");
     let hash = 0; for (const ch of p.category || p.name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
@@ -6366,6 +6366,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       missingPhotosCard(),
       items.length ? h("div", { class: "libgrid", style: "max-height:none;grid-template-columns:repeat(auto-fill,minmax(150px,1fr))" }, items.map((it) => h("div", { class: "libitem" },
         h("img", { class: "pimg", src: it.photo.url, alt: it.name, loading: "lazy" }), h("b", { class: "small", text: it.name }), h("span", { class: "muted small", text: it.category || "—" }),
+        it.credit?.source ? h("span", { class: "muted small", style: "font-size:11px", text: `Photo: ${it.credit.source} (${it.credit.license || "CC BY-SA"})` }) : null,
         h("div", { class: "pills" },
           h("button", { class: "btn sm", onclick: () => editLibraryItem(it) }, "Edit"),
           h("button", { class: "btn sm danger", onclick: () => openDialog("Remove from library?", h("div", { class: "grid" },
@@ -6376,17 +6377,22 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   }
   /** Products stores sell that no library photo covers yet — most stores first — each one photo away from every store. */
   let libMissAll = false;
-  function missingPhotosCard() {
+  function missingPhotoList() {
     const g = new Map();
     for (const st of S.stores) for (const it of st.items || []) {
       if (!it.name) continue; const k = fold(it.name);
       const x = g.get(k) || { name: it.name, bc: it.bc || null, stores: 0 }; x.stores++; if (!x.bc && it.bc) x.bc = it.bc; g.set(k, x);
     }
+    for (const p of S.owner ? activeProducts() : []) { const k = fold(p.name); if (!g.has(k)) g.set(k, { name: p.name, bc: (p.barcodes || [])[0] || null, stores: 1 }); } // the admin's own store too
     const miss = [...g.values()].filter((x) => !libPhotoFor({ id: "admin:" + x.name, name: x.name, barcodes: x.bc ? [x.bc] : [] })).sort((a, b) => b.stores - a.stores || a.name.localeCompare(b.name));
-    const total = g.size, covered = total - miss.length;
+    return { miss, total: g.size };
+  }
+  function missingPhotosCard() {
+    const { miss, total } = missingPhotoList(); const covered = total - miss.length;
     return h("div", { class: "card", id: "libMissing" },
       h("h2", { text: `Photos in stores: ${covered} of ${total} products covered`, style: "margin-bottom:4px" }),
       h("p", { class: "muted small", style: "margin:0 0 8px", text: "Every store shows the library photo automatically for products without their own photo (matched by barcode, else by name and size). These are not covered yet — most stores first." }),
+      miss.length ? h("button", { class: "btn primary", id: "findOnlineBtn", style: "margin-bottom:8px", onclick: () => findPhotosOnline(miss) }, `🌐 Find ${Math.min(200, miss.length)} photos online`) : null,
       miss.length ? h("div", {}, h("ul", { class: "list" }, miss.slice(0, libMissAll ? 60 : 8).map((x) => h("li", {},
         h("div", { class: "grow" }, h("div", { style: "font-weight:600", text: x.name }), h("div", { class: "muted small", text: `in ${x.stores} store(s)` + (x.bc ? ` · barcode ${x.bc}` : "") })),
         h("button", { class: "btn sm primary", onclick: () => addLibraryPhotoFor(x) }, upIcon(), "Add photo"),
@@ -6439,6 +6445,54 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         rows.forEach((r) => URL.revokeObjectURL(r.url)); dlg.close(); toast(n ? `Saved ${n} photo(s) — stores will show them automatically` : "Nothing saved");
       } }, "Save to library")));
   }
+  /** Photos from the internet: the open product databases (Open Food Facts / Beauty / Products — every country, CC BY-SA).
+   *  The lookup runs on the KWADERNO Scan site (a normal web page that can reach them); each photo comes back here,
+   *  the admin checks the list, and only then is it saved ONCE to the cloud library for every store. */
+  const online = { win: null, list: [], rows: [], done: false, total: 0, progress: 0 };
+  function findPhotosOnline(miss) {
+    const w = window.open(SCANNER_URL() + "photos.html", "kwphotos");
+    if (!w) return toast("Allow pop-ups for this page, then tap again");
+    Object.assign(online, { win: w, list: miss.slice(0, 200).map((x) => ({ name: x.name, bc: x.bc || "" })), rows: [], done: false, total: Math.min(200, miss.length), progress: 0 });
+    onlineDialog();
+  }
+  function onlineDialog() {
+    const ok = online.rows.filter((r) => r.on.checked).length;
+    openDialog("Photos found online", h("div", { class: "grid", id: "onlineDlg" },
+      h("p", { class: "muted small", style: "margin:0", text: online.done ? `Done: found ${online.rows.length} of ${online.total}. Untick anything that isn't the same product, then save.` : `Searching ${online.progress} of ${online.total}… keep the Photo Finder tab open. Found so far: ${online.rows.length}.` }),
+      online.rows.length ? h("ul", { class: "list", id: "onlineList" }, online.rows.map((r) => h("li", { style: "align-items:flex-start" }, r.on, h("img", { src: r.url, alt: "", style: "width:64px;height:64px;object-fit:cover;border-radius:8px;background:#fff" }),
+        h("div", { class: "grow grid", style: "gap:4px" }, r.nIn, r.cIn,
+          h("div", { class: "muted small", text: `${r.how === "barcode" ? "Same barcode" : r.score >= 0.8 ? "Name matches" : "Possible match — check"}: “${r.title}” · ${r.source} (${r.license})` }))))) : null,
+      h("button", { class: "btn primary big", id: "onlineSave", disabled: !online.rows.length || null, onclick: saveOnline }, `Save ${ok} to library`)));
+    for (const r of online.rows) r.on.onchange = () => { const b = $("#onlineSave"); if (b) b.textContent = `Save ${online.rows.filter((x) => x.on.checked).length} to library`; };
+  }
+  async function saveOnline(e) {
+    const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Saving needs Editor access");
+    e.target.disabled = true; let n = 0;
+    for (const r of online.rows) { if (!r.on.checked || !r.nIn.value.trim()) continue;
+      try { const a = await assets.upload(r.blob); const codes = [...new Set(r.cIn.value.split(/[\s,;]+/).map((x) => x.replace(/\D/g, "")).filter((x) => x.length >= 8))];
+        await S.db.doc("library/" + uid()).set({ name: r.nIn.value.trim().slice(0, 80), category: null, barcodes: codes, photo: { id: a.id, url: a.url }, source: "online",
+          credit: { source: r.source, license: r.license, link: /^https:\/\/world\.open(food|beauty|products)facts\.org\//.test(r.link) ? r.link : null, title: r.title.slice(0, 120) }, createdAt: new Date().toISOString() }); n++;
+      } catch { /* skip this one */ }
+    }
+    online.rows.forEach((r) => URL.revokeObjectURL(r.url)); online.rows = []; dlg.close(); toast(n ? `Saved ${n} photo(s) — every store shows them now` : "Nothing saved");
+  }
+  window.addEventListener("message", (e) => {
+    const d = e.data; if (!d || typeof d.type !== "string" || !d.type.startsWith("kw-photo-")) return;
+    let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin && e.source === online.win; } catch { ok = false; }
+    if (!ok || !S.owner) return;
+    if (d.type === "kw-photo-hello") { e.source.postMessage({ type: "kw-photo-list", items: online.list }, e.origin); return; }
+    if (d.type === "kw-photo-progress") { online.progress = Number(d.done) || 0; }
+    if (d.type === "kw-photo-done") { online.done = true; online.progress = online.total; }
+    if (d.type === "kw-photo-found" && d.blob instanceof Blob && /^image\//.test(d.blob.type) && d.blob.size < 3e6 && typeof d.name === "string") {
+      const strong = d.how === "barcode" || Number(d.score) >= 0.8;
+      const r = { blob: d.blob, url: URL.createObjectURL(d.blob), name: d.name, title: String(d.title || "").slice(0, 120), how: d.how === "barcode" ? "barcode" : "name", score: Number(d.score) || 0,
+        source: String(d.source || "Open Food Facts").slice(0, 40), license: "CC BY-SA", link: String(d.link || "") };
+      r.on = h("input", { type: "checkbox", checked: strong || null }); r.nIn = h("input", { type: "text", value: d.name.slice(0, 80), maxlength: 80 });
+      r.cIn = h("input", { type: "text", value: String(d.code || "").replace(/\D/g, ""), inputmode: "numeric", placeholder: "barcode" });
+      online.rows.push(r);
+    }
+    if (dlg.open && $("#onlineDlg")) { const y = $("#dlgBody").scrollTop; onlineDialog(); $("#dlgBody").scrollTop = y; }
+  });
   async function addLibraryPhotoFor(x) {
     const files = await pickFiles(); const f = files[0]; if (!f) return;
     const assets = await window.claude?.use?.("assets"); if (!assets) return toast("Uploading needs Editor access");

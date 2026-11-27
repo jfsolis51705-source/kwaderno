@@ -504,6 +504,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 .feed li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .88rem; }
 .feed li:last-child { border-bottom: 0; }
 .feed .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); align-self: center; }
+.linkbtn { background: none; border: 0; padding: 2px 4px; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .sample-tag { font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--warn); background: var(--warn-soft); padding: 1px 6px; border-radius: 6px; margin-left: 6px; vertical-align: 1px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .toolbar select { width: auto; flex: 0 1 190px; min-width: 0; }
@@ -4849,13 +4850,13 @@ ${catalog}`;
       show.length > 60 ? h("div", { class: "muted small", style: "margin-top:6px", text: `Showing 60 of ${show.length}.` }) : null);
   }
   function productDialog(x, nStores) {
-    const rows = [...x.rows].sort((a, b) => b.s30 - a.s30);
-    openDialog(x.name, h("div", { class: "grid" },
-      h("div", { class: "pills" }, tagChip(x.tag), h("span", { class: "muted small", text: `${x.carry} of ${nStores} stores · ${x.perWeek.toFixed(1)} per store a week · usual ${peso(x.med)}` })),
-      h("div", { class: "table-wrap" }, h("table", {}, h("thead", {}, h("tr", {}, ["Store", "Price", "Stock", "Sold 30d"].map((t, i) => h("th", { class: i ? "r" : "", text: t })))),
-        h("tbody", {}, rows.map((r) => h("tr", {}, h("td", { class: "trunc", style: "max-width:150px", text: r.store.name }), h("td", { class: "r num", text: peso(r.price) }),
-          h("td", { class: "r num", style: r.stock <= (r.reorder || 0) ? "color:var(--warn)" : "", text: qtyFmt(r.stock) }), h("td", { class: "r num", text: r.s30 }))))))));
+    const rows = x.rows.map((r) => ({ ...(storeRef("s:" + r.store.id) || { name: r.store.name, sample: r.store.sample }), price: r.price || 0, stock: r.stock, s30: r.s30 || 0, s7: r.s7 || 0, low: r.stock > 0 && r.stock <= (r.reorder || 0), out: r.stock != null && r.stock <= 0 }));
+    storeList({ rows, title: x.name, file: "stores-" + fold(x.name).replace(/ /g, "-").slice(0, 30), sort: "s30",
+      summary: `${TAGS[x.tag]?.[1] || ""} · ${x.carry} of ${nStores} stores · ${x.perWeek.toFixed(1)} per store a week · usual ${peso(x.med)}`,
+      cols: [{ k: "s30", label: "Sold 30d", short: "sold", fmt: (v) => qtyFmt(v) }, { k: "s7", label: "Last 7d", short: "7d", fmt: (v) => qtyFmt(v) },
+        { k: "price", label: "Price", fmt: (v) => (v ? peso(v) : "—"), csv: (v) => (v / 100).toFixed(2), style: (r) => (x.med && r.price && Math.abs(r.price - x.med) / x.med >= 0.15 ? "color:var(--warn)" : null) }, stockCol] });
   }
+
   function storeProductsCard(x) {
     const net = new Map(aggregateProducts(S.stores.filter((s) => adminSample || !s.sample)).map((p) => [p.k, p]));
     const items = [...(x.items || [])].sort((a, b) => b.s30 - a.s30);
@@ -5980,43 +5981,67 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     }
     return [...m.values()].sort((a, b) => (a.co === "Unassigned") - (b.co === "Unassigned") || b.rev - a.rev);
   }
-  /** The stores behind a product's "Stores" count: each store's own numbers for it, tap a store for its full page. */
-  let psSort = "rev";
-  function productStores(p) {
-    const rows = mfrRows().filter((r) => r.it.k === p.k).map((r) => ({ st: r.st, it: r.it, rev: r.rev, units: r.units, s7: r.it.s7 || 0, stock: r.it.stock, price: r.it.price || 0, out: r.out, low: r.low }));
-    const prices = rows.map((r) => r.price).filter(Boolean).sort((a, b) => a - b), med = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
-    const body = h("div", { class: "grid", id: "psDlg" });
-    const sorts = [["rev", "Sales"], ["units", "Units"], ["stock", "Stock"], ["price", "Price"], ["name", "Name"]];
-    const draw = () => {
-      const list = rows.slice().sort((a, b) => psSort === "name" ? String(a.st.name).localeCompare(String(b.st.name)) : psSort === "stock" ? (a.stock ?? 0) - (b.stock ?? 0) : b[psSort] - a[psSort]);
-      body.replaceChildren(
-        h("p", { class: "muted small", style: "margin:0", text: `${rows.length} store(s) · ${peso(rows.reduce((a, r) => a + r.rev, 0))} sales · ${qtyFmt(rows.reduce((a, r) => a + r.units, 0))} units in 30 days · usual price ${med ? peso(med) : "—"} · ${rows.filter((r) => r.out).length} out of stock` }),
-        h("div", { class: "pills", style: "align-items:center" }, h("b", { class: "small", text: "Sort:" }), sorts.map(([k, l]) => h("button", { "aria-pressed": String(psSort === k), onclick: () => { psSort = k; draw(); } }, l)),
-          h("button", { class: "btn sm", id: "psCsv", onclick: () => csv(list) }, "⬇️ CSV")),
-        innerWidth < 640 ? h("ul", { class: "list", id: "psTable" }, list.map((r) => h("li", { tabindex: 0, style: "cursor:pointer;display:grid;gap:2px", onclick: () => { dlg.close(); go("admin", "s-" + r.st.id); } },
-          h("div", { style: "display:flex;justify-content:space-between;gap:8px" }, h("b", { text: r.st.name || "Store" }), h("b", { class: "num", text: peso(r.rev) })),
-          h("div", { class: "muted small", text: [r.st.barangay, r.st.city].filter(Boolean).join(", ") || "Area not set" }),
-          h("div", { class: "small" }, `${qtyFmt(r.units)} units · ${qtyFmt(r.s7)} last 7d · ${r.price ? peso(r.price) : "—"} · `,
-            h("span", { style: r.out ? "color:var(--bad);font-weight:700" : r.low ? "color:var(--warn)" : null, text: r.stock == null ? "stock —" : r.out ? "out of stock" : `stock ${qtyFmt(r.stock)}${r.low ? " (low)" : ""}` }))))) :
-        h("div", { class: "table-wrap" }, h("table", { id: "psTable" },
-          h("thead", {}, h("tr", {}, ["Store", "Sales 30d", "Units 30d", "Last 7d", "Price", "Stock"].map((t, i) => h("th", { class: i ? "r" : null, text: t })))),
-          h("tbody", {}, list.map((r) => h("tr", { style: "cursor:pointer", tabindex: 0, title: "Open this store", onclick: () => { dlg.close(); go("admin", "s-" + r.st.id); }, onkeydown: (e) => { if (e.key === "Enter") { dlg.close(); go("admin", "s-" + r.st.id); } } },
-            h("td", {}, h("div", { style: "font-weight:600", text: r.st.name || "Store" }), h("div", { class: "muted small", text: [r.st.barangay, r.st.city].filter(Boolean).join(", ") || "Area not set" })),
-            h("td", { class: "r num", text: peso(r.rev) }), h("td", { class: "r num", text: qtyFmt(r.units) }), h("td", { class: "r num", text: qtyFmt(r.s7) }),
-            h("td", { class: "r num", style: med && r.price && Math.abs(r.price - med) / med >= 0.15 ? "color:var(--warn)" : null, text: r.price ? peso(r.price) : "—" }),
-            h("td", { class: "r num", style: r.out ? "color:var(--bad);font-weight:700" : r.low ? "color:var(--warn)" : null, text: r.stock == null ? "—" : (r.out ? "0 · out" : qtyFmt(r.stock) + (r.low ? " · low" : "")) })))))),
-        h("p", { class: "muted small", style: "margin:0", text: "Tap a store to open its page (sales by day, payment mix, stock). Orange price = 15%+ away from the usual price." }));
-    };
+  /** One shared window for every "N stores" number in Super Admin: the real store names (sample stores tagged SAMPLE),
+   *  their numbers, sortable, CSV, compact cards on phones; tap a store to open its page. */
+  function storeRef(key) { // "s:<id>" = store using the app, "v:<id>" = store from the field survey (shelf photos)
+    const [t, id] = String(key).split(/:(.*)/s);
+    if (t === "v") { const v = S.visual.find((x) => x.id === id); return v ? { key, name: v.name, sample: false, survey: true, barangay: v.barangay, city: v.city, open: () => go("admin", "v-" + v.id) } : null; }
+    const st = S.stores.find((x) => x.id === id); return st ? { key, name: st.name || "Store", sample: !!st.sample, survey: false, barangay: st.barangay, city: st.city, st, open: () => go("admin", "s-" + st.id) } : null;
+  }
+  function storeList({ title, summary, rows, cols, sort, file, note }) {
+    let by = sort || cols[0]?.k || "name", dir = -1;
+    const body = h("div", { class: "grid", id: "slDlg" }), fmt = (c, r) => (c.fmt ? c.fmt(r[c.k], r) : r[c.k] ?? "—");
+    const samples = rows.filter((r) => r.sample).length, survey = rows.filter((r) => r.survey).length;
+    const nameCell = (r) => [h("div", { style: "font-weight:600" }, r.name || "Store", r.sample ? h("span", { class: "sample-tag", text: "sample" }) : null, r.survey ? h("span", { class: "sample-tag", style: "color:var(--accent);background:transparent;border:1px solid var(--line)", text: "survey" }) : null),
+      h("div", { class: "muted small", text: [r.barangay, r.city].filter(Boolean).join(", ") || "Area not set" })];
     const csv = async (list) => {
       const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
-      const lines = [["Product", "Store", "Barangay", "City", "Sales 30d (PHP)", "Units 30d", "Units 7d", "Price (PHP)", "Stock"].map(cell).join(",")];
-      for (const r of list) lines.push([p.name, r.st.name, r.st.barangay, r.st.city, (r.rev / 100).toFixed(2), r.units, r.s7, (r.price / 100).toFixed(2), r.stock ?? ""].map(cell).join(","));
-      const data = "\uFEFF" + lines.join("\r\n"), name = `stores-${fold(p.name).replace(/ /g, "-").slice(0, 30)}-${todayKey()}.csv`;
+      const lines = [["Store", "Sample store", "Barangay", "City", ...cols.map((c) => c.label)].map(cell).join(",")];
+      for (const r of list) lines.push([r.name, r.sample ? "yes" : "", r.barangay, r.city, ...cols.map((c) => (c.csv ? c.csv(r[c.k], r) : r[c.k]))].map(cell).join(","));
+      const data = "\uFEFF" + lines.join("\r\n"), name = `${file || "stores"}-${todayKey()}.csv`;
       try { const dl = await window.claude?.use?.("downloads"); if (!dl) throw new Error("none"); await dl.save({ filename: name, data }); toast("Saved " + name); }
       catch { try { await navigator.clipboard.writeText(data); toast("Couldn't save a file here — copied the table instead"); } catch { toast("Couldn't export here"); } }
     };
-    draw(); openDialog(`${p.name} — ${rows.length} store(s)`, body);
+    const go2 = (r) => { if (!r.open) return; dlg.close(); r.open(); };
+    const draw = () => {
+      const val = (r) => (by === "name" ? String(r.name || "") : r[by]);
+      const list = rows.slice().sort((a, b) => { const x = val(a), y = val(b); if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1; return (typeof x === "string" ? x.localeCompare(y) : x - y) * (by === "name" ? 1 : dir); });
+      const phone = innerWidth < 640;
+      body.replaceChildren(
+        h("p", { class: "muted small", style: "margin:0", text: [summary, samples ? `${samples} of ${rows.length} are SAMPLE stores (made-up numbers)` : null, survey ? `${survey} from your field survey (shelf photos)` : null].filter(Boolean).join(" · ") }),
+        h("div", { class: "pills", style: "align-items:center" }, h("b", { class: "small", text: "Sort:" }),
+          [["name", "Name"], ...cols.filter((c) => c.sort !== false).map((c) => [c.k, c.label])].map(([k, l]) => h("button", { "aria-pressed": String(by === k), onclick: () => { dir = by === k ? -dir : -1; by = k; draw(); } }, l + (by === k && k !== "name" ? (dir < 0 ? " ↓" : " ↑") : ""))),
+          h("button", { class: "btn sm", id: "slCsv", onclick: () => csv(list) }, "⬇️ CSV")),
+        phone ? h("ul", { class: "list", id: "slList" }, list.map((r) => h("li", { tabindex: 0, style: "cursor:pointer;display:grid;gap:2px", onclick: () => go2(r) }, ...nameCell(r),
+          h("div", { class: "small" }, ...cols.flatMap((c, i) => [i ? " · " : "", h("span", { style: c.style?.(r) || null, text: `${c.short || c.label} ${fmt(c, r)}` })])))))
+          : h("div", { class: "table-wrap" }, h("table", { id: "slList" },
+            h("thead", {}, h("tr", {}, h("th", { text: "Store" }), cols.map((c) => h("th", { class: "r", text: c.label })))),
+            h("tbody", {}, list.map((r) => h("tr", { class: r.open ? "click" : null, tabindex: 0, onclick: () => go2(r), onkeydown: (e) => { if (e.key === "Enter") go2(r); } },
+              h("td", {}, ...nameCell(r)), cols.map((c) => h("td", { class: "r num", style: c.style?.(r) || null, text: String(fmt(c, r)) }))))))),
+        h("p", { class: "muted small", style: "margin:0", text: note || "Tap a store to open its page." }));
+    };
+    draw(); openDialog(title, body);
     dlg.classList.add("wide"); dlg.addEventListener("close", () => dlg.classList.remove("wide"), { once: true });
+  }
+  const stockCol = { k: "stock", label: "Stock", fmt: (v, r) => (v == null ? "—" : r.out ? "0 · out" : qtyFmt(v) + (r.low ? " · low" : "")), style: (r) => (r.out ? "color:var(--bad);font-weight:700" : r.low ? "color:var(--warn)" : null) };
+  /** The stores behind a product's "Stores" count: each store's own numbers for it, tap a store for its full page. */
+  function productStores(p) {
+    const rows = mfrRows().filter((r) => r.it.k === p.k).map((r) => ({ ...storeRef("s:" + r.st.id), rev: r.rev, units: r.units, s7: r.it.s7 || 0, stock: r.it.stock, price: r.it.price || 0, out: r.out, low: r.low }));
+    const prices = rows.map((r) => r.price).filter(Boolean).sort((a, b) => a - b), med = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
+    storeList({ rows, title: `${p.name} — ${rows.length} store(s)`, file: "stores-" + fold(p.name).replace(/ /g, "-").slice(0, 30), sort: "rev",
+      summary: `${peso(rows.reduce((a, r) => a + r.rev, 0))} sales · ${qtyFmt(rows.reduce((a, r) => a + r.units, 0))} units in 30 days · usual price ${med ? peso(med) : "—"} · ${rows.filter((r) => r.out).length} out of stock`,
+      note: "Tap a store to open its page. Orange price = 15%+ away from the usual price.",
+      cols: [{ k: "rev", label: "Sales 30d", fmt: (v) => peso(v), csv: (v) => (v / 100).toFixed(2) }, { k: "units", label: "Units 30d", short: "units", fmt: (v) => qtyFmt(v) }, { k: "s7", label: "Last 7d", short: "7d", fmt: (v) => qtyFmt(v) },
+        { k: "price", label: "Price", fmt: (v) => (v ? peso(v) : "—"), csv: (v) => (v / 100).toFixed(2), style: (r) => (med && r.price && Math.abs(r.price - med) / med >= 0.15 ? "color:var(--warn)" : null) }, stockCol] });
+  }
+  /** Every store selling a company's products, with that company's numbers in each store. */
+  function companyStores(co) {
+    const m = new Map();
+    for (const r of mfrRows().filter((r) => r.co === co)) { const x = m.get(r.st.id) || { ...storeRef("s:" + r.st.id), rev: 0, units: 0, skus: 0, outN: 0 }; x.rev += r.rev; x.units += r.units; x.skus++; if (r.out) x.outN++; m.set(r.st.id, x); }
+    const rows = [...m.values()];
+    storeList({ rows, title: `${co} — ${rows.length} store(s)`, file: "stores-" + fold(co).replace(/ /g, "-").slice(0, 30), sort: "rev", summary: `${peso(rows.reduce((a, r) => a + r.rev, 0))} sales · ${qtyFmt(rows.reduce((a, r) => a + r.units, 0))} units in 30 days`,
+      cols: [{ k: "rev", label: "Sales 30d", fmt: (v) => peso(v), csv: (v) => (v / 100).toFixed(2) }, { k: "units", label: "Units 30d", short: "units", fmt: (v) => qtyFmt(v) }, { k: "skus", label: "Products", short: "products" },
+        { k: "outN", label: "Out of stock", short: "out", style: (r) => (r.outN ? "color:var(--bad);font-weight:700" : null) }] });
   }
   async function mfrCsv(groups, total) {
     const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
@@ -6052,7 +6077,7 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
         h("button", { class: "btn", id: "mfrCsv", onclick: () => mfrCsv(groups, total) }, "⬇️ Export CSV")),
       h("div", { class: "card", style: "padding-block:4px" }, list.length ? h("ul", { class: "list", id: "mfrList" }, list.map((g) => h("li", { style: "cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:4px 12px", onclick: () => go("admin", "mfr-" + encodeURIComponent(g.co)) },
         h("div", { style: "min-width:0" }, h("div", { style: "font-weight:700", text: g.co }),
-          h("div", { class: "muted small", text: `${g.skus.size} product(s) · in ${g.stores.size} store(s) · ${qtyFmt(g.units)} sold${g.out ? ` · ${g.out} out of stock` : ""}` })),
+          h("div", { class: "muted small" }, `${g.skus.size} product(s) · in `, h("button", { class: "linkbtn", "data-costores": g.co, onclick: (e) => { e.stopPropagation(); companyStores(g.co); }, text: `${g.stores.size} store(s)` }), ` · ${qtyFmt(g.units)} sold${g.out ? ` · ${g.out} out of stock` : ""}`)),
         h("div", { style: "text-align:right" }, h("div", { class: "num", style: "font-weight:700", text: peso(g.rev) }), h("div", { class: "muted small", text: total ? `${(g.rev / total * 100).toFixed(1)}%` : "" })),
         h("div", { style: "grid-column:1 / -1;height:6px;border-radius:99px;background:var(--line);overflow:hidden" }, h("div", { style: `height:100%;width:${(g.rev / max * 100).toFixed(1)}%;background:${g.co === "Unassigned" ? "var(--muted)" : "var(--accent)"}` })))))
         : h("div", { class: "empty", text: "No sales data yet for this filter." })),
@@ -6287,6 +6312,18 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
         h("button", { class: "btn sm", onclick: () => { pick.clear(); draw(); cnt.textContent = "0 picked"; } }, "Clear"), cnt), box,
       h("button", { class: "btn primary big", id: "mkCosOk", onclick: () => { mkCos = new Set(pick); dlg.close(); render(); } }, "Show these companies")));
   }
+  /** Every store behind an area card: stores using the app (sales) and field-survey stores (shelf photos). */
+  function areaStores(a, data) {
+    const rows = new Map();
+    for (const r of data.sales) if (a.sStores.has(r.store) && (mkLevel === "__all" || r.g[mkLevel] === a.name)) { const x = rows.get(r.store) || { ...storeRef(r.store), rev: 0, units: 0, facings: null }; x.rev += r.rev; x.units += r.units; rows.set(r.store, x); }
+    for (const r of data.shelf) if (a.aStores.has(r.store) && (mkLevel === "__all" || r.g[mkLevel] === a.name)) { const x = rows.get(r.store) || { ...storeRef(r.store), rev: null, units: null, facings: 0 }; x.facings = (x.facings || 0) + r.facings; rows.set(r.store, x); }
+    const lead = a.ranked[0]?.label;
+    if (lead) for (const [k, x] of rows) { let ls = 0, lf = 0, ts = 0, tf = 0; for (const r of data.sales) if (r.store === k) { ts += r.rev; if ((mkWhat === "co" ? r.co : r.product) === lead) ls += r.rev; } for (const r of data.shelf) if (r.store === k) { tf += r.facings; if ((mkWhat === "co" ? r.co : r.product) === lead) lf += r.facings; } const parts = [ts ? ls / ts : null, tf ? lf / tf : null].filter((v) => v != null); x.leadShare = parts.length ? parts.reduce((p, v) => p + v, 0) / parts.length : null; }
+    storeList({ title: `${a.name} — ${rows.size} store(s)`, rows: [...rows.values()].filter((r) => r.name), sort: "rev", file: "area-" + fold(a.name).replace(/ /g, "-").slice(0, 30),
+      summary: `${a.sStores.size} with sales (app) · ${a.aStores.size} shelf-audited (photos)` + (lead ? ` · leader: ${lead}` : ""),
+      cols: [{ k: "rev", label: "Sales 30d", fmt: (v) => (v == null ? "—" : peso(v)), csv: (v) => (v == null ? "" : (v / 100).toFixed(2)) }, { k: "units", label: "Units 30d", short: "units", fmt: (v) => (v == null ? "—" : qtyFmt(v)) },
+        { k: "facings", label: "Facings", short: "facings", fmt: (v) => (v == null ? "—" : String(v)) }, ...(lead ? [{ k: "leadShare", label: `${lead} share`, short: "leader", fmt: (v) => (v == null ? "—" : (v * 100).toFixed(1) + "%"), csv: (v) => (v == null ? "" : (v * 100).toFixed(1)) }] : [])] });
+  }
   function viewMarket() {
     const data = marketData(), areas = marketAreas(data), coList = companyDominance(data);
     if (mkCo && !coList.some((c) => c.co === mkCo) && !Object.values(S.mfrMap || {}).includes(mkCo)) mkCo = "";
@@ -6328,7 +6365,7 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
         return h("div", { class: "card mk-area", style: "margin:0;display:grid;gap:8px;align-content:start" },
           h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:baseline" }, h("h2", { style: "margin:0;font-size:1.05rem", text: a.name }),
             h("span", { class: "muted small", text: [mkLevel !== "island" ? a.g.island + (a.g.approx ? " (approx.)" : "") : null, mkLevel === "barangay" ? a.g.city : mkLevel === "city" ? a.g.region : null].filter(Boolean).join(" · ") })),
-          h("div", { class: "muted small", text: `${a.sStores.size} store(s) with sales · ${a.aStores.size} shelf-audited` }),
+          h("div", { class: "muted small" }, h("button", { class: "linkbtn", "data-area": a.name, onclick: () => areaStores(a, data), text: `${a.sStores.size} store(s) with sales · ${a.aStores.size} shelf-audited` })),
           lead ? h("div", { class: "note", style: "margin:0" }, h("div", { class: "small muted", text: `Dominant ${what}` }), h("div", { style: "font-weight:700", text: lead.label }), mkWhat === "p" ? h("div", { class: "small muted", text: lead.co }) : null,
             h("div", { class: "small", text: `Combined ${pct(lead.score)} · sales ${pct(lead.sales)} · shelf ${pct(lead.shelf)}${lead.presence !== null ? ` · on ${pct(lead.presence)} of audited shelves` : ""}` })) : null,
           h("ol", { style: "margin:0;padding-left:20px;display:grid;gap:6px" }, top.map((n) => h("li", {},
@@ -6370,14 +6407,14 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
       h("div", { class: "kpis" },
         kpiBox("Sales · 30 days", peso(g.rev), total ? `${(g.rev / total * 100).toFixed(1)}% of all sales` : ""),
         kpiBox("Units sold", qtyFmt(g.units), "30 days"),
-        kpiBox("Stores carrying", String(g.stores.size), `${g.skus.size} product(s)`),
+        h("button", { class: "kpi-btn", id: "coStoresKpi", style: "all:unset;cursor:pointer;display:block", title: "See the stores", onclick: () => companyStores(co) }, kpiBox("Stores carrying", String(g.stores.size), `${g.skus.size} product(s) · tap to see the stores`)),
         kpiBox("Out of stock", String(g.out), "store-products at zero")),
       h("div", { class: "card" }, h("h2", { text: "Products", style: "margin-bottom:6px" }),
         h("div", { class: "table-wrap" }, h("table", { id: "mfrSkus" },
           h("thead", {}, h("tr", {}, ["Product", "Sales", "Units", "Stores", "Median price", "Out", "Company"].map((t, i) => h("th", { class: i && i < 6 ? "r" : null, text: t })))),
           h("tbody", {}, skus.map((p) => { const pr = p.prices.sort((a, b) => a - b), med = pr.length ? pr[Math.floor(pr.length / 2)] : 0;
             return h("tr", {}, h("td", { text: p.name }), h("td", { class: "r num", text: peso(p.rev) }), h("td", { class: "r num", text: qtyFmt(p.units) }),
-              h("td", { class: "r num" }, h("button", { class: "linkbtn num", "data-stores": p.k, title: `See the ${p.stores} store(s) selling ${p.name}`, onclick: () => productStores(p), style: "background:none;border:0;padding:2px 4px;color:var(--accent);font:inherit;font-weight:700;text-decoration:underline;cursor:pointer" }, String(p.stores))),
+              h("td", { class: "r num" }, h("button", { class: "linkbtn num", "data-stores": p.k, title: `See the ${p.stores} store(s) selling ${p.name}`, onclick: () => productStores(p) }, String(p.stores))),
               h("td", { class: "r num", text: med ? peso(med) : "—" }), h("td", { class: "r num", text: p.out ? String(p.out) : "" }),
               h("td", {}, h("select", { "aria-label": "Company for " + p.name, onchange: (e) => assign(p.name, e.target.value) },
                 h("option", { value: "", text: "Automatic" + (mfrOf(p.name) && !(S.mfrMap || {})[mfrKey(p.name)] ? ` (${mfrOf(p.name)})` : "") }),
@@ -6458,23 +6495,28 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
   }
   // Shelf presence across all scanned photos: in how many stores each brand / product is on display.
   function shelfPresence(all) {
-    const brands = new Map(), prods = new Map(), cats = new Map(); let scannedStores = 0;
+    const brands = new Map(), prods = new Map(), cats = new Map(), brandStores = new Map(); let scannedStores = 0;
+    const lastPhoto = (v) => (v.photos || []).map((p) => p.date).filter(Boolean).sort().at(-1) || null;
+    const surveyRows = (list) => list.map(({ v, it, items }) => ({ ...storeRef("v:" + v.id), date: lastPhoto(v), photos: (v.photos || []).length, seen: it ? it.n : items.reduce((a, x) => a + x.n, 0), what: it ? null : items.map((x) => x.name).slice(0, 4).join(", ") }));
+    const surveyCols = (brand) => [{ k: "date", label: "Last photo", fmt: (v) => (v ? fmtDate(v) : "—") }, { k: "seen", label: "Times seen", short: "seen" }, { k: "photos", label: "Photos", short: "photos" }, ...(brand ? [{ k: "what", label: "Products seen", sort: false }] : [])];
+    const prodStores = (x) => storeList({ title: `${x.name} — on the shelf in ${x.n} store(s)`, rows: surveyRows(x.at), cols: surveyCols(false), sort: "date", file: "shelf-" + fold(x.name).replace(/ /g, "-").slice(0, 30), summary: "Seen in the shelf photos of your field survey", note: "Tap a store to open its photos and shelf list." });
+    const brandList = (b) => storeList({ title: `${b} — on display in ${brands.get(b)} store(s)`, rows: surveyRows(brandStores.get(b) || []), cols: surveyCols(true), sort: "date", file: "shelf-" + fold(b).replace(/ /g, "-").slice(0, 30), summary: "Seen in the shelf photos of your field survey", note: "Tap a store to open its photos and shelf list." });
     for (const v of all) {
       const seen = seenItems(v); if (!seen.length) continue; scannedStores++;
       const bs = new Set(seen.map((x) => (x.brand || x.name.split(" ")[0]).trim()));
-      for (const b of bs) brands.set(b, (brands.get(b) || 0) + 1);
-      for (const it of seen) { const k = it.name.toLowerCase(); const r = prods.get(k) || { name: it.name, cat: it.category, n: 0 }; r.n++; prods.set(k, r); cats.set(it.category, (cats.get(it.category) || 0) + 1); }
+      for (const b of bs) { brands.set(b, (brands.get(b) || 0) + 1); (brandStores.get(b) || brandStores.set(b, []).get(b)).push({ v, items: seen.filter((x) => (x.brand || x.name.split(" ")[0]).trim() === b) }); }
+      for (const it of seen) { const k = it.name.toLowerCase(); const r = prods.get(k) || { name: it.name, cat: it.category, n: 0, at: [] }; r.n++; r.at.push({ v, it }); prods.set(k, r); cats.set(it.category, (cats.get(it.category) || 0) + 1); }
     }
     const topB = [...brands.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15), topP = [...prods.values()].sort((a, b) => b.n - a.n).slice(0, 15);
     const catRows = [...cats.entries()].sort((a, b) => b[1] - a[1]); const catTotal = catRows.reduce((a, x) => a + x[1], 0) || 1;
-    const bar = (label, n, max, color, right) => h("div", { class: "bar-row", style: "grid-template-columns:minmax(0,150px) 1fr auto" },
-      h("span", { class: "trunc", text: label }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(n / max) * 100}%;background:${color}` })), h("span", { class: "num", text: right }));
+    const bar = (label, n, max, color, right, onOpen) => h(onOpen ? "button" : "div", { class: "bar-row", style: "grid-template-columns:minmax(0,150px) 1fr auto" + (onOpen ? ";background:none;border:0;padding:0;text-align:left;cursor:pointer;width:100%;color:inherit;font:inherit" : ""), onclick: onOpen || null, title: onOpen ? "See the stores" : null },
+      h("span", { class: "trunc", text: label }), h("div", { class: "bar-track" }, h("div", { class: "bar-fill", style: `width:${(n / max) * 100}%;background:${color}` })), h("span", { class: "num" + (onOpen ? " linkbtn" : ""), style: onOpen ? "padding:0" : null, text: right }));
     return h("div", { class: "grid two" },
       h("div", { class: "card" }, h("h2", { text: "Brands on display — share of stores" }), h("div", { class: "muted small", style: "margin:2px 0 10px", text: `In how many of the ${scannedStores} scanned stores each brand appears on the shelf` }),
-        h("div", { class: "grid", style: "gap:7px" }, topB.map(([b, n]) => bar(b, n, scannedStores, "var(--s1)", `${n}/${scannedStores} · ${Math.round((n / scannedStores) * 100)}%`)))),
+        h("div", { class: "grid", style: "gap:7px" }, topB.map(([b, n]) => bar(b, n, scannedStores, "var(--s1)", `${n}/${scannedStores} · ${Math.round((n / scannedStores) * 100)}%`, () => brandList(b))))),
       h("div", { class: "grid", style: "gap:16px" },
         h("div", { class: "card" }, h("h2", { text: "Most-stocked products", style: "margin-bottom:10px" }),
-          h("div", { class: "grid", style: "gap:7px" }, topP.slice(0, 10).map((x) => bar(x.name, x.n, scannedStores, "var(--s3)", `${x.n} stores`)))),
+          h("div", { class: "grid", style: "gap:7px" }, topP.slice(0, 10).map((x) => bar(x.name, x.n, scannedStores, "var(--s3)", `${x.n} stores`, () => prodStores(x))))),
         h("div", { class: "card" }, h("h2", { text: "Shelf mix by category", style: "margin-bottom:10px" }),
           h("div", { class: "grid", style: "gap:7px" }, catRows.map(([c, n]) => bar(c, n, catRows[0][1], "var(--s2)", `${Math.round((n / catTotal) * 100)}%`))))));
   }
@@ -6671,7 +6713,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   }
   document.addEventListener("pointerdown", (e) => {
     if (!autoNeedsTap || view !== "admin" || S.photoFinder?.auto === false) return;
-    if (e.target.closest?.("dialog, button, a, input, select, textarea, label, summary, [role=button], [role=tab]")) return; // never hijack a control
+    if (e.target.closest?.("dialog, button, a, input, select, textarea, label, summary, tr, li, [tabindex], .click, .bar-row, .tile, .card.kpi, [role=button], [role=tab]")) return; // never hijack a control, row or list item
     autoNeedsTap = false; const t = autoFindTargets(); if (t.length) findPhotosOnline(t, true);
   }, true);
   async function saveOnlineRow(r, assets) {

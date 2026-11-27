@@ -174,15 +174,16 @@
   const READER_FILES = ["tesseract.min.js", "worker.min.js", "core/tesseract-core-simd-lstm.wasm.js", "core/tesseract-core-lstm.wasm.js", "lang/eng.traineddata.gz"].map((f) => VENDOR + f);
   let workerP = null, progress = { status: "", p: 0 };
   const loadScript = (src) => new Promise((res, rej) => { if (window.Tesseract) return res(); const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("load")); document.head.append(s); });
+  const limit = (p, ms, msg) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
   function reader() {
-    return (workerP ??= (async () => {
+    return (workerP ??= limit((async () => {
       await loadScript(VENDOR + "tesseract.min.js");
       const w = await window.Tesseract.createWorker("eng", 1, { workerPath: VENDOR + "worker.min.js", corePath: VENDOR + "core", langPath: VENDOR + "lang", gzip: true,
         logger: (m) => { progress = { status: m.status || "", p: m.progress || 0 }; showProgress(); } });
       await w.setParameters({ tessedit_pageseg_mode: "6", preserve_interword_spaces: "1" });
       store.set("kwscan-reader-ready", true); renderCam();
       return w;
-    })().catch((e) => { workerP = null; throw e; }));
+    })(), 180000, "load").catch((e) => { workerP = null; throw e; }));
   }
   /** Keep the reader's files on this phone so the Logbook works without internet next time. */
   async function keepOffline() {
@@ -210,7 +211,8 @@
       n ? `✓ ${n} of your products known` : "Open the scanner from KWADERNO once so it knows your products"].join(" · ");
     $("lbPendBtn").hidden = !pend.length; $("lbPendTxt").textContent = `${pend.length} waiting`;
   }
-  function showProgress() { const s = $("lbProg"); if (s) s.textContent = progress.status === "recognizing text" ? `Reading the writing… ${Math.round(progress.p * 100)}%` : progress.status ? `Getting the reader ready (first time only)… ${Math.round(progress.p * 100)}%` : ""; }
+  let readPass = "";
+  function showProgress() { const s = $("lbProg"); if (s) s.textContent = progress.status === "recognizing text" ? `Reading the page${readPass}… ${Math.round(progress.p * 100)}%` : progress.status ? `Getting the reader ready (first time only, needs internet)… ${Math.round(progress.p * 100)}%` : "Reading the page…"; }
   window.__kwLogbook = { shown(on) { camUi.hidden = !on; if (on) { renderCam(); keepOffline(); } } };
   if (document.body.classList.contains("logbook")) window.__kwLogbook.shown(true);
 
@@ -293,24 +295,30 @@
       const { bw, gray } = cleanPage(img); const w = await reader();
       const readAs = async (cv, psm) => {
         await w.setParameters({ tessedit_pageseg_mode: psm });
-        const { data } = await w.recognize(cv, {}, { text: true, blocks: true });
+        const { data } = await limit(w.recognize(cv, {}, { text: true, blocks: true }), 120000, "slow");
         const sc = 1000 / cv.height; // same scale for every reading (all copies are the same size)
         return (data.blocks || []).flatMap((b) => (b.paragraphs || []).flatMap((p) => p.lines || [])).filter((l) => String(l.text).trim())
           .map((l) => ({ text: l.text, conf: l.confidence, y: ((l.bbox.y0 + l.bbox.y1) / 2) * sc, h: (l.bbox.y1 - l.bbox.y0) * sc }));
       };
-      // three readings, merged later line by line (by position), so a line one reading misses comes from another
-      const all = [...await readAs(bw, "6"), ...await readAs(gray, "6"), ...await readAs(gray, "4")].sort((a, b) => a.y - b.y);
+      // up to three readings, merged later line by line (by position), so a line one reading misses comes from another.
+      readPass = ""; let all = await readAs(bw, "6");
+      // printed text (bills, receipts) reads well the first time: many clear lines → done; handwriting gets all three looks
+      const printed = all.length >= 12 && all.reduce((a2, l) => a2 + l.conf, 0) / all.length >= 70;
+      if (!printed) { readPass = " (2nd look)"; all = all.concat(await readAs(gray, "6")); readPass = " (3rd look)"; all = all.concat(await readAs(gray, "4")); }
+      all.sort((a, b) => a.y - b.y);
       const hMed = all.map((r) => r.h).sort((a, b) => a - b)[Math.floor(all.length / 2)] || 30;
       const groups = []; for (const r of all) { const g = groups.at(-1); if (g && Math.abs(r.y - g.y) < hMed * 0.55) { g.lines.push(r); g.y = (g.y * (g.lines.length - 1) + r.y) / g.lines.length; } else groups.push({ y: r.y, lines: [r] }); }
       pg.groups = groups;
-    })().catch((e) => { pg.error = e?.message === "load" ? "The reader couldn't load. Connect to the internet once, then it works offline." : "The page couldn't be read. Type the lines below while looking at the photo."; pg.groups = []; });
+    })().catch((e) => { pg.error = e?.message === "load" ? "The reader couldn't load (slow or no internet). Try again on Wi-Fi once — after that it works offline." : e?.message === "slow" ? "Reading took too long on this phone. Type the lines below, or retake the photo closer (only the part you need)." : "The page couldn't be read. Type the lines below while looking at the photo."; pg.groups = []; });
     ask();
   }
   /** "What is this page?" — asked right after the photo, while it's being read. */
   function ask() {
     sheet.hidden = false;
-    const prog = el("div", { class: "status" }, el("span", { class: "spin", "aria-hidden": "true" }), el("span", { id: "lbProg", text: "Reading the page…" }));
-    page.readP.then(() => { prog.replaceChildren(el("span", { text: "✓ Page read — choose what it is" })); });
+    const t0 = Date.now(), secs = el("span", { class: "lb-secs" }), out = el("button", { type: "button", class: "btn sm", hidden: true, onclick: () => { page.groups = []; page.error = "Reading stopped. Type the lines below while looking at the photo."; page.stopped = true; if (page.kind) { buildRows(); review(); } else out.textContent = "Stopped — now choose what the page is"; } }, "Stop — I'll type it");
+    const prog = el("div", { class: "lb-status", role: "status" }, el("span", { class: "spin", "aria-hidden": "true" }), el("span", { id: "lbProg", text: "Reading the page…" }), secs, out);
+    const tick = setInterval(() => { if (page.groups || !document.body.contains(prog)) { clearInterval(tick); return; } const n = Math.round((Date.now() - t0) / 1000); secs.textContent = ` · ${n}s`; if (n >= 25) out.hidden = false; }, 1000);
+    page.readP.then(() => { clearInterval(tick); prog.replaceChildren(el("span", { text: page.error ? "⚠ " + page.error : "✓ Page read — choose what it is" })); });
     sheet.replaceChildren(el("header", { class: "bar" }, el("button", { class: "icon", type: "button", "aria-label": "Back", onclick: () => { sheet.hidden = true; }, text: "←" }), el("b", { id: "lbTitle", text: "What is this page?" }), el("span")),
       el("div", { class: "sheet-body" },
         el("div", { class: "lb-ask-top" }, el("img", { src: page.preview, alt: "Photo of the page", class: "lb-thumb" }), prog),
@@ -320,9 +328,9 @@
   }
   async function choose(kind) {
     page.kind = kind;
-    const st = $("lbProg"); if (st && !page.groups) st.textContent = "Almost done reading…";
     document.querySelectorAll(".lb-kind").forEach((b) => b.setAttribute("aria-checked", String(b.id === "lbKind-" + kind)));
-    await page.readP;
+    await Promise.race([page.readP, new Promise((r) => { const iv = setInterval(() => { if (page.stopped) { clearInterval(iv); r(); } }, 300); })]);
+    if (page.kind !== kind) return;
     buildRows(); api.beep(true); review();
   }
   /** Interpret the merged readings for the chosen kind: each line keeps its best reading. */
@@ -338,7 +346,42 @@
     page.rows = MONEY.has(kind) ? best.filter((r) => !r.header && (r.cid || (r.amount != null && letters(r.desc) >= 2) || (letters(r.desc) >= 4 && r.conf >= 45)))
       : best.filter((r) => !r.header && (r.pid || (letters(r.name) >= 4 && r.conf >= 45)));
     if (MONEY.has(kind) && page.total != null) fixByTotal(page.rows, page.total);
+    page.printed = null;
+    if (kind === "bill") { const pb = printedBill(groups); if (pb) { page.printed = pb; page.total = null; page.rows = [{ raw: `${pb.name || "Bill"} · amount due ${pb.amount.toFixed(2)}${pb.due ? " · due " + pb.due : ""}`, desc: pb.name || "Bill", amount: pb.amount, cat: pb.cat, due: pb.due || page.date, conf: 90 }]; } }
     if (!page.rows.length) page.rows.push(blankRow());
+  }
+  /** A printed bill (Meralco, water, phone/internet…): one bill — the biller, the amount due and the due date — instead of every line on it. */
+  // [name, category, other ways it's written on the bill]
+  const BILLERS = [["Meralco", "power", ["manila electric"]], ["VECO", "power", ["visayan electric"]], ["Davao Light", "power", ["davao light and power"]], ["Maynilad", "water", ["maynilad water"]],
+    ["Manila Water", "water", []], ["PrimeWater", "water", ["prime water"]], ["Laguna Water", "water", []], ["PLDT", "load", ["philippine long distance"]], ["Globe", "load", ["globe telecom", "globe at home"]],
+    ["Smart", "load", ["smart communications"]], ["Converge", "load", ["converge ict"]], ["DITO", "load", ["dito telecommunity"]], ["Sky", "load", ["sky cable", "skycable"]], ["Cignal", "load", []]];
+  const MONTH_RE = "(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*";
+  function moneyIn(t) { // amounts with centavos ("6,216.45", "P 6 216.45") — account numbers and dates have none
+    const out = []; const re = /(?:₱|php|p)?\s*(\d{1,3}(?:[,\s]\d{3})+|\d+)\.(\d{2})\b/gi; let m;
+    while ((m = re.exec(t))) out.push(Number(m[1].replace(/[,\s]/g, "") + "." + m[2]));
+    return out;
+  }
+  function dateIn(t) {
+    const f = t.toLowerCase(); let m;
+    if ((m = f.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))) return `${m[1]}-${m[2]}-${m[3]}`;
+    if ((m = f.match(new RegExp("\\b" + MONTH_RE + "\\.?\\s*(\\d{1,2}),?\\s*(\\d{4})")))) return `${m[3]}-${String(MONTHS.indexOf(m[1].slice(0, 3)) + 1).padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    if ((m = f.match(new RegExp("\\b(\\d{1,2})\\s*" + MONTH_RE + "\\.?,?\\s*(\\d{4})")))) return `${m[3]}-${String(MONTHS.indexOf(m[2].slice(0, 3)) + 1).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+    if ((m = f.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/))) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+    return null;
+  }
+  function printedBill(groups) {
+    const lines = groups.map((g) => [...g.lines].sort((a, b) => b.conf - a.conf)[0]?.text || "").filter(Boolean);
+    if (lines.length < 6) return null; // a short handwritten list, not a printed bill
+    // the biller: in any reading of any line, also as its company name, and forgiving one misread letter ("MERALC0")
+    const words = fold(groups.flatMap((g) => g.lines.map((l) => l.text)).join(" ")), toks = words.split(" ");
+    const bl = BILLERS.find(([n, , alts]) => [n, ...alts].some((a) => { const fa = fold(a); return (" " + words + " ").includes(" " + fa + " ") || (!fa.includes(" ") && fa.length >= 5 && toks.some((t) => t.length >= 5 && lev(t, fa) <= 1)); }));
+    let amount = null, due = null;
+    lines.forEach((l, i) => {
+      if (amount == null && /(total\s*)?amount\s*due|total\s*due|please\s*pay|amount\s*to\s*pay|kabuuang\s*bayarin|total\s*bill/i.test(l)) { const v = [l, lines[i + 1] || "", lines[i + 2] || ""].map(moneyIn).find((x) => x.length); if (v) amount = v[0]; }
+      if (!due && /due\s*date|on\s*or\s*before|due\s*on|pay\s*before|deadline/i.test(l)) due = [l, lines[i + 1] || ""].map(dateIn).find(Boolean) || null;
+    });
+    if (amount == null || amount <= 0) return null;
+    return { name: bl ? bl[0] : "", cat: bl ? bl[1] : "other", amount, due };
   }
   /** The page's written total says what the amounts should add up to: if swapping handwriting look-alike digits
    *  (1↔7, 3↔8, 4↔9, 5↔6, 0↔8) in one or two amounts makes them add up exactly, use that and mark those lines. */
@@ -401,6 +444,7 @@
             el("button", { type: "button", class: "btn sm", id: "lbKindBtn", onclick: ask }, `${(KINDS.find((x) => x[0] === kind) || [])[1] || ""} ${kindName(kind)} · change`),
             el("label", { class: "small" }, kind === "bill" ? "Written on " : "Date ", el("input", { type: "date", id: "lbDate", value: page.date, max: today(), onchange: (e) => { page.date = e.target.value || today(); } })))),
         page.error ? el("p", { class: "warn", text: page.error }) : null,
+        page.printed ? el("p", { class: "lb-ok", id: "lbPrinted", text: `Read as a printed bill${page.printed.name ? " (" + page.printed.name + ")" : ""}: the amount due${page.printed.due ? " and due date" : ""} were taken from it. Check them before sending.` }) : null,
         totalNote ? el("p", { class: totalNote.startsWith("⚠") ? "warn" : "lb-ok", id: "lbTotal", text: totalNote }) : null,
         el("p", { class: "muted small", style: "margin:0", text: `${ok} line(s) ready${open ? ` · ${open} need ${money ? (kind === "credit" ? "a customer and amount" : "a name and amount") : "a product"} (or ✕ to skip)` : ""}.` + (money ? "" : " KWADERNO learns from your fixes.") }),
         el("ul", { class: "lb-rows", id: "lbRows" }, page.rows.map(rowEl)),
@@ -453,5 +497,5 @@
   }
   window.addEventListener("online", renderCam);
   renderCam();
-  window.__kwLogbookTest = { parseLine, parseMoney, guessCat, fixByTotal, cleanPage, readPage, get page() { return page; }, setCatalog(c) { catalog = c; store.set(CAT_KEY, c); renderCam(); } };
+  window.__kwLogbookTest = { parseLine, parseMoney, guessCat, fixByTotal, printedBill, dateIn, moneyIn, cleanPage, readPage, get page() { return page; }, setCatalog(c) { catalog = c; store.set(CAT_KEY, c); renderCam(); } };
 })();

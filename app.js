@@ -217,6 +217,7 @@
   let caps = {}, torchOn = false, last = { text: "", at: 0 }, holdUntil = 0;
   const GONE_MS = 1000; // how long a code must be out of view before the same code counts again
   let lastPhase = -1; // which way of looking found the last code
+  let seen2 = { text: "", at: 0 }; // the last code seen once (waiting for a second sighting)
   const video = $("video");
 
   async function startCamera() {
@@ -297,7 +298,9 @@
             else r = t === 3 ? zxRegion(v, 0, 0, v.videoWidth, v.videoHeight, false) : t === 2 ? zxRegion(v, w.x, w.y, w.w, w.h, true) : zxRegion(v, w.x, w.y, w.w, w.h, false);
             if (r && goodCode(r.text, r.format)) { hit = r; lastPhase = t; }
           }
-          if (hit) found(hit, "camera");
+          // a code counts only when the camera sees it twice within 0.8 s: a one-off misread (glare, text, patterns) never gets through
+          if (hit) { const t = String(hit.text).trim(), now = Date.now();
+            if (seen2.text === t && now - seen2.at < 800) { seen2.at = now; found(hit, "camera"); } else seen2 = { text: t, at: now }; }
         } finally { busy = false; }
       }
       loop();

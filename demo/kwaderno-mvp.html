@@ -6066,7 +6066,7 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     const island = hit ? hit[1] : islandFromPos(Number(st.lat), Number(st.lng));
     return { barangay: brgy || "Barangay not set", city: city || "City not set", region: hit ? hit[0] : "Region not set", island: island || "Not set", approx: !hit && !!island };
   }
-  let mkLevel = "city", mkMeasure = "sales", mkWhat = "co", mkIsland = "", mkRegion = "", mkCity = "", mkCat = "";
+  let mkLevel = "city", mkMeasure = "sales", mkWhat = "co", mkIsland = "", mkRegion = "", mkCity = "", mkCat = "", mkCo = "";
   const MK_LEVELS = [["island", "Luzon · Visayas · Mindanao"], ["region", "Region"], ["city", "City"], ["barangay", "Barangay"]];
   /** One row per thing sold or seen: from store records (sales) and from shelf-audit photos (on the shelf). */
   function marketData() {
@@ -6121,8 +6121,93 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     try { const dl = await window.claude?.use?.("downloads"); if (!dl) throw new Error("none"); await dl.save({ filename: name, data: body }); toast("Saved " + name); }
     catch { try { await navigator.clipboard.writeText(body); toast("Couldn't save a file here — copied the table instead"); } catch { toast("Couldn't export here"); } }
   }
+  /** Company view: every company, and the islands / regions / cities / barangays where it is #1 (combined sales + shelf share). */
+  function companyDominance(data) {
+    const keep = [mkLevel, mkWhat], cos = new Map(), co = (n) => { let c = cos.get(n); if (!c) cos.set(n, (c = { co: n, overall: 0, sales: null, shelf: null, wins: {}, places: {}, top: new Map() })); return c; };
+    try {
+      mkWhat = "co";
+      mkLevel = "__all"; const all = marketAreas(data)[0]; // everything in the current filters as one area
+      for (const n of all?.ranked || []) Object.assign(co(n.label), { overall: n.score, sales: n.sales, shelf: n.shelf });
+      for (const [lv] of MK_LEVELS) {
+        mkLevel = lv;
+        for (const a of marketAreas(data)) a.ranked.forEach((n, i) => {
+          const c = co(n.label); (c.places[lv] = c.places[lv] || []).push({ area: a.name, g: a.g, rank: i + 1, share: n.score, next: i === 0 ? a.ranked[1] || null : a.ranked[0], stores: a.sStores.size + a.aStores.size });
+          if (i === 0 && n.score > 0) c.wins[lv] = (c.wins[lv] || 0) + 1;
+        });
+      }
+    } finally { [mkLevel, mkWhat] = keep; }
+    for (const r of data.sales) if (cos.has(r.co)) { const t = cos.get(r.co).top; t.set(r.product, (t.get(r.product) || 0) + (mkMeasure === "units" ? r.units : r.rev)); }
+    const w = { island: 1000, region: 100, city: 10, barangay: 1 };
+    return [...cos.values()].filter((c) => c.co !== "Unassigned")
+      .sort((a, b) => Object.entries(b.wins).reduce((s, [k, v]) => s + v * w[k], 0) - Object.entries(a.wins).reduce((s, [k, v]) => s + v * w[k], 0) || b.overall - a.overall);
+  }
+  function companyPlaces(c) {
+    const pct = (v) => (v == null ? "—" : (v * 100).toFixed(1) + "%");
+    const sect = (lv, label) => {
+      const ps = (c.places[lv] || []).slice().sort((a, b) => a.rank - b.rank || b.share - a.share), lead = ps.filter((x) => x.rank === 1), close = ps.filter((x) => x.rank > 1 && x.rank <= 3);
+      if (!ps.length) return null;
+      const row = (x) => h("li", {}, h("div", { style: "display:flex;justify-content:space-between;gap:8px" }, h("span", { text: x.area + (lv === "barangay" ? ` · ${x.g.city}` : lv === "city" ? ` · ${x.g.region}` : "") }), h("b", { class: "num", text: pct(x.share) })),
+        h("div", { class: "small muted", text: x.rank === 1 ? (x.next ? `#1 · next: ${x.next.label} ${pct(x.next.score)}` : "#1 · no competitor in the data") : `#${x.rank} · leader: ${x.next?.label || "—"} ${pct(x.next?.score)}` }));
+      return h("div", { class: "card", style: "margin:0", id: "coPl-" + lv }, h("h2", { style: "margin:0 0 6px;font-size:1.02rem", text: `${label}: #1 in ${lead.length} of ${ps.length}` }),
+        lead.length ? h("ol", { style: "margin:0;padding-left:20px;display:grid;gap:6px" }, lead.slice(0, 80).map(row)) : h("p", { class: "muted small", style: "margin:0", text: "Not #1 anywhere at this level." }),
+        close.length ? h("details", { style: "margin-top:8px" }, h("summary", { class: "small", text: `Close behind (#2–#3) in ${close.length}` }), h("ol", { style: "margin:6px 0 0;padding-left:20px;display:grid;gap:6px" }, close.slice(0, 60).map(row))) : null);
+    };
+    const top = [...c.top].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([n]) => n);
+    openDialog(`Where ${c.co} dominates`, h("div", { class: "grid", id: "coPlaces" },
+      h("p", { class: "muted small", style: "margin:0", text: `Overall share ${pct(c.overall)} (sales ${pct(c.sales)} · shelf ${pct(c.shelf)}) in the current filters.` + (top.length ? ` Top products: ${top.join(", ")}.` : "") }),
+      ...MK_LEVELS.map(([lv, label]) => sect(lv, label)).filter(Boolean)));
+  }
+  function dominanceCard(data, list) {
+    list = list || companyDominance(data); const pct = (v) => (v == null ? "—" : (v * 100).toFixed(1) + "%");
+    const cell = (c, lv) => { const n = c.wins[lv] || 0, of = (c.places[lv] || []).length; return h("td", { class: "num" }, n ? h("b", { text: String(n) }) : h("span", { class: "muted", text: "0" }), h("span", { class: "muted small", text: ` / ${of}` })); };
+    return h("div", { class: "card", id: "mkDominance", style: "margin:0" },
+      h("h2", { style: "margin:0 0 4px", text: "Who dominates where — by company" }),
+      h("p", { class: "muted small", style: "margin:0 0 8px", text: "Number of places where each company is #1 (combined sales + shelf share), out of the places where it sells. Tap a company (or pick one in “Research a company”) to study it." }),
+      list.length ? h("div", { style: "overflow-x:auto" }, h("table", { class: "tbl", style: "width:100%;border-collapse:collapse" },
+        h("thead", {}, h("tr", {}, ["Company", "Share", "Island groups", "Regions", "Cities", "Barangays"].map((t, i) => h("th", { style: `text-align:${i ? "right" : "left"};padding:6px 8px;white-space:nowrap`, text: t })))),
+        h("tbody", {}, list.slice(0, 40).map((c) => h("tr", { style: "cursor:pointer;border-top:1px solid var(--line)", tabindex: 0, onclick: () => { mkCo = c.co; render(); }, onkeydown: (e) => { if (e.key === "Enter") { mkCo = c.co; render(); } } },
+          h("td", { style: "padding:8px;font-weight:600", text: c.co }), h("td", { class: "num", style: "text-align:right;padding:8px", text: pct(c.overall) }),
+          ...["island", "region", "city", "barangay"].map((lv) => { const td = cell(c, lv); td.style.cssText = "text-align:right;padding:8px;white-space:nowrap"; return td; })))))) : h("div", { class: "empty", text: "No company data for this filter yet." }));
+  }
+  /** Research one company: its rank and share in every area at the chosen level, the leader it faces, and the gap. */
+  function companyResearchCard(data, list) {
+    const c = list.find((x) => x.co === mkCo), pct = (v) => (v == null ? "—" : (v * 100).toFixed(1) + "%");
+    const lvName = MK_LEVELS.find(([k]) => k === mkLevel)[1];
+    if (!c) return h("div", { class: "card", id: "mkResearch", style: "margin:0" }, h("h2", { style: "margin:0", text: mkCo }), h("p", { class: "muted", text: "No sales or shelf data for this company in the current filters." }));
+    const ps = (c.places[mkLevel] || []).slice().sort((a, b) => b.share - a.share);
+    const lead = ps.filter((x) => x.rank === 1).length, close = ps.filter((x) => x.rank > 1 && x.rank <= 3).length, weak = ps.length - lead - close;
+    const top = [...c.top].sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const csv = async () => {
+      const cell = (v) => { let t = String(v ?? ""); if (/^[=+\-@]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };
+      const lines = [["Company", "Level", "Area", "City", "Region", "Island group", "Rank", "Combined share %", "Leader / next", "Leader / next share %", "Stores"].map(cell).join(",")];
+      for (const x of ps) lines.push([c.co, mkLevel, x.area, x.g.city, x.g.region, x.g.island, x.rank, (x.share * 100).toFixed(1), x.next?.label || "", x.next ? (x.next.score * 100).toFixed(1) : "", x.stores].map(cell).join(","));
+      const body = "\uFEFF" + lines.join("\r\n"), name = `company-${fold(c.co).replace(/ /g, "-").slice(0, 30)}-${mkLevel}-${todayKey()}.csv`;
+      try { const dl = await window.claude?.use?.("downloads"); if (!dl) throw new Error("none"); await dl.save({ filename: name, data: body }); toast("Saved " + name); }
+      catch { try { await navigator.clipboard.writeText(body); toast("Couldn't save a file here — copied the table instead"); } catch { toast("Couldn't export here"); } }
+    };
+    return h("div", { class: "card grid", id: "mkResearch", style: "margin:0;gap:10px" },
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline" }, h("h2", { style: "margin:0", text: `Research: ${c.co}` }),
+        h("div", { class: "pills" }, h("button", { class: "btn sm", onclick: () => companyPlaces(c) }, "All levels"), h("button", { class: "btn sm", id: "mkCoCsv", onclick: csv }, "⬇️ CSV"), h("button", { class: "btn sm", onclick: () => { mkCo = ""; render(); } }, "✕ Clear"))),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px" },
+        kpiBox("Overall share", pct(c.overall), `sales ${pct(c.sales)} · shelf ${pct(c.shelf)}`),
+        kpiBox(`#1 in (${lvName})`, `${lead} of ${ps.length}`, "dominates"),
+        kpiBox("Close behind", String(close), "#2–#3: can win"),
+        kpiBox("Weak", String(weak), "#4 or lower: opportunity")),
+      top.length ? h("p", { class: "small", style: "margin:0" }, h("b", { text: "Top products: " }), top.map(([n]) => n).join(" · ")) : null,
+      ps.length ? h("div", { style: "overflow-x:auto" }, h("table", { style: "width:100%;border-collapse:collapse" },
+        h("thead", {}, h("tr", {}, [lvName, "Rank", "Share", "Leader / next", "Gap"].map((t, i) => h("th", { style: `text-align:${i ? "right" : "left"};padding:6px 8px;white-space:nowrap`, text: t })))),
+        h("tbody", {}, ps.slice(0, 150).map((x) => { const gap = x.next ? x.share - x.next.score : null;
+          return h("tr", { style: "border-top:1px solid var(--line)" },
+            h("td", { style: "padding:7px 8px" }, h("div", { text: x.area }), h("div", { class: "muted small", text: [mkLevel === "barangay" ? x.g.city : null, mkLevel !== "region" && mkLevel !== "island" ? x.g.region : null, mkLevel !== "island" ? x.g.island : null].filter(Boolean).join(" · ") })),
+            h("td", { style: "text-align:right;padding:7px 8px;font-weight:700;color:" + (x.rank === 1 ? "var(--ok)" : x.rank <= 3 ? "var(--warn)" : "var(--muted)"), text: "#" + x.rank }),
+            h("td", { class: "num", style: "text-align:right;padding:7px 8px", text: pct(x.share) }),
+            h("td", { style: "text-align:right;padding:7px 8px" }, x.next ? `${x.next.label} ${pct(x.next.score)}` : "—"),
+            h("td", { class: "num", style: "text-align:right;padding:7px 8px;color:" + (gap == null ? "inherit" : gap >= 0 ? "var(--ok)" : "var(--bad)"), text: gap == null ? "—" : (gap >= 0 ? "+" : "") + (gap * 100).toFixed(1) + " pts" }));
+        })))) : h("div", { class: "empty", text: "Not sold in this area filter." }));
+  }
   function viewMarket() {
-    const data = marketData(), areas = marketAreas(data);
+    const data = marketData(), areas = marketAreas(data), coList = companyDominance(data);
+    if (mkCo && !coList.some((c) => c.co === mkCo) && !Object.values(S.mfrMap || {}).includes(mkCo)) mkCo = "";
     const allGeo = [...S.stores.filter((x) => adminSample || !x.sample).map(geoOf), ...auditPhotos().map((a) => geoOf({ city: a.city, barangay: a.barangay }))];
     const regions = [...new Set(allGeo.filter((g) => !mkIsland || g.island === mkIsland).map((g) => g.region))].sort();
     const cities = [...new Set(allGeo.filter((g) => (!mkIsland || g.island === mkIsland) && (!mkRegion || g.region === mkRegion)).map((g) => g.city))].sort();
@@ -6143,12 +6228,14 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
           sel("mkRegion", "All regions", mkRegion, regions, (v) => { mkRegion = v; mkCity = ""; }),
           sel("mkCity", "All cities", mkCity, cities, (v) => { mkCity = v; }),
           sel("mkCat", "All categories", mkCat, cats, (v) => { mkCat = v; }),
+          sel("mkCo", "🔎 Research a company…", mkCo, [...new Set([...coList.map((c) => c.co), ...MFR_BRANDS.map(([c]) => c), ...Object.values(S.mfrMap || {})])].filter((c) => c && c !== "Unassigned").sort((a, b) => a.localeCompare(b)), (v) => { mkCo = v; }),
           h("button", { class: "btn", id: "mkCsv", onclick: () => marketCsv(areas) }, "⬇️ Export CSV"))),
       h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px" },
         kpiBox("Areas", String(areas.length), MK_LEVELS.find(([k]) => k === mkLevel)[1]),
         kpiBox("Stores with sales data", String(data.salesStores.size), "store records · last 30 days"),
         kpiBox("Stores shelf-audited", String(data.auditStores.size), "latest photo visit per store"),
         kpiBox("Locations not mapped", String(unmapped), unmapped ? "city not in the region list" : "all mapped to a region")),
+      mkCo ? companyResearchCard(data, coList) : dominanceCard(data, coList),
       h("p", { class: "muted small", style: "margin:0", text: `“Combined” = the average of sales share (what stores sold) and shelf share (facings in the shelf-audit photos). The leader in each area is the ${what} with the highest combined share. Shares are within the area.` }),
       areas.length ? h("div", { class: "grid", id: "mkAreas", style: "grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px" }, areas.slice(0, 60).map((a) => {
         const top = a.ranked.slice(0, 5), lead = top[0];

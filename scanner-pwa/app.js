@@ -276,7 +276,7 @@
     clearTimeout(loopT);
     loopT = setTimeout(async () => {
       if (!running) return;
-      if (!paused && !busy && !document.hidden && video.videoWidth && Date.now() > holdUntil) {
+      if (!paused && !busy && !logbook && !document.hidden && video.videoWidth && Date.now() > holdUntil) {
         busy = true;
         try {
           let hit = null;
@@ -354,7 +354,8 @@
   }
 
   // ---------- GROCERY MODE ----------
-  let grocery = store.get("kwscan-mode", "grocery") !== "camera", qrDetour = false; // qrDetour: switched to the camera only for a QR code
+  const startMode = params.get("mode") === "logbook" ? "logbook" : store.get("kwscan-mode", "grocery"); // KWADERNO's Logbook page opens it with ?mode=logbook
+  let grocery = startMode !== "camera" && startMode !== "logbook", qrDetour = false; // qrDetour: switched to the camera only for a QR code
   const names = new Map(); // code → product name (Open Food Facts), looked up once
   function lookupName(code) {
     if (names.has(code) || !/^\d{8,14}$/.test(code)) return;
@@ -362,12 +363,15 @@
     fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,quantity`).then((r) => (r.ok ? r.json() : null))
       .then((d) => { const p = d && d.status === 1 ? d.product : null; if (p?.product_name) { names.set(code, p.product_name + (p.quantity ? " " + p.quantity : "")); renderHud(); if ($("popCode").textContent === code) $("popName").textContent = names.get(code); } }).catch(() => {});
   }
+  let logbook = false; // Logbook mode: photo of a handwritten page (logbook.js); barcode reading pauses
   function setMode(m, quiet) {
-    grocery = m !== "camera"; store.set("kwscan-mode", grocery ? "grocery" : "camera");
-    document.body.classList.toggle("grocery", grocery); document.body.classList.remove("peek"); $("hudPeek").setAttribute("aria-pressed", "false");
-    $("modeGrocery").setAttribute("aria-selected", String(grocery)); $("modeCamera").setAttribute("aria-selected", String(!grocery));
+    logbook = m === "logbook"; grocery = m === "grocery" || (m !== "camera" && m !== "logbook");
+    store.set("kwscan-mode", logbook ? "logbook" : grocery ? "grocery" : "camera");
+    document.body.classList.toggle("grocery", grocery); document.body.classList.toggle("logbook", logbook); document.body.classList.remove("peek"); $("hudPeek").setAttribute("aria-pressed", "false");
+    $("modeGrocery").setAttribute("aria-selected", String(grocery)); $("modeCamera").setAttribute("aria-selected", String(!grocery && !logbook)); $("modeLogbook")?.setAttribute("aria-selected", String(logbook));
     renderHud(); renderBatch();
-    if (!quiet) toast(grocery ? "Barcode: no camera picture — point and it counts" : "QR Camera: camera picture on screen");
+    window.__kwLogbook?.shown(logbook);
+    if (!quiet) toast(logbook ? "Logbook: take a photo of the page" : grocery ? "Barcode: no camera picture — point and it counts" : "QR Camera: camera picture on screen");
   }
   /** Loud two-tone chirp (louder than the normal beep). */
   function chirp() {
@@ -603,8 +607,10 @@
   $("hudPeek").onclick = () => { const on = !document.body.classList.contains("peek"); document.body.classList.toggle("peek", on); $("hudPeek").setAttribute("aria-pressed", String(on)); $("hudPeek").textContent = on ? "👁 Hide camera" : "👁 Show camera"; };
   $("hudUndo").onclick = undoLast;
   $("hudClear").onclick = () => { if (!batchCodes.length) return; batchCodes = []; renderHud(); renderBatch(); toast("New count"); };
-  setMode(grocery ? "grocery" : "camera", true);
+  $("modeLogbook").onclick = () => setMode("logbook");
+  setMode(startMode === "logbook" ? "logbook" : grocery ? "grocery" : "camera", true);
 
+  window.__kwscanApi = { get video() { return video; }, get track() { return track; }, get caps() { return caps; }, KW, KW_MODE, RETURN, get opener() { return opener; }, toast, store, beep, chirp, setMode };
   window.__kwscan = { history, startCamera, stopCamera, found, get detector() { return !!detector; } }; // for tests
   renderBatch();
   startCamera();

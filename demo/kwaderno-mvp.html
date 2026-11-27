@@ -762,7 +762,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     let raw = location.hash.slice(1);
     // #scan-sell-<codes> / #scan-stock-<codes>: codes sent back by the live scanner (comma = several)
     const lm = raw.match(/^logbook-([A-Za-z0-9_-]+)$/);
-    if (lm) { try { const j = JSON.parse(decodeURIComponent(escape(atob(lm[1].replace(/-/g, "+").replace(/_/g, "/"))))); pendingLog = { mode: j.m, date: j.d, rows: (j.r || []).map(([pid, name, qty, amount, auto, rawTxt]) => ({ pid, name, qty, amount, auto, raw: rawTxt })) }; } catch { pendingLog = null; }
+    if (lm) { try { const j = JSON.parse(decodeURIComponent(escape(atob(lm[1].replace(/-/g, "+").replace(/_/g, "/")))));
+        pendingLog = j.v === 2 ? { kind: j.kind, mode: j.kind === "stock" ? "stock" : "sale", date: j.date, rows: Array.isArray(j.rows) ? j.rows : [] }
+          : { mode: j.m, date: j.d, rows: (j.r || []).map(([pid, name, qty, amount, auto, rawTxt]) => ({ pid, name, qty, amount, auto, raw: rawTxt })) }; } catch { pendingLog = null; }
       raw = "home-logbook"; history.replaceState(null, "", "#home"); }
     const sm = raw.match(/^scan-(sell|stock)-(.+)$/);
     if (sm) { const codes = decodeURIComponent(sm[2]).split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50); pendingScan = { mode: sm[1], codes }; raw = sm[1] === "sell" ? "sell" : "products"; history.replaceState(null, "", "#" + raw); }
@@ -1226,6 +1228,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (!ok) return;
     if (d.type === "kw-hello") { // the scanner asks for the product list (kept on the phone so its Logbook matches offline)
       try { e.source?.postMessage({ type: "kw-catalog", products: activeProducts().map((p) => ({ id: p.id, name: p.name, price: p.price || 0, cost: p.cost || 0, sold: (typeof D !== "undefined" && D.sold?.get(p.id)) || 0 })),
+        customers: (S.customers || []).filter((c) => !c.archived).map((c) => ({ id: c.id, name: c.name })),
         learned: (S.ocrLearn?.pairs || []).slice(-300), dict: (S.ocrDict?.entries || []).filter((x) => x.from && x.to).map((x) => ({ from: x.from, to: x.to })).slice(0, 500) }, e.origin); } catch { /* scanner closed */ }
       return;
     }
@@ -2610,6 +2613,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   /** Lines from the scanner's Logbook (sent live, or later by link): save straight away when every line has a product, else open the review here. */
   function importLogbook(pl) {
     if (!pl || !Array.isArray(pl.rows) || !pl.rows.length) return;
+    if (["bill", "expense", "credit"].includes(pl.kind)) return importMoneyPage(pl);
     const rows = pl.rows.slice(0, 80).map((r) => {
       let pid = r.pid && productById(String(r.pid)) && !productById(String(r.pid)).archived ? String(r.pid) : "";
       const name = String(r.name || r.raw || "").slice(0, 80);
@@ -2621,6 +2625,38 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     if (!open) { saveLogbook(null); return; }
     go("home", "logbook"); scanBeep(false);
     toast(L(`${open} linya ang kailangang piliin ang paninda`, `${open} line(s) need a product — pick it, then Save`));
+  }
+  /** Bills, expenses and credit (utang) pages from the scanner: saved straight away (the lines were checked there). */
+  async function importMoneyPage(pl) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(pl.date || "") ? pl.date : todayKey(), at = new Date(date + "T12:00:00").toISOString(), cats = new Set(EXP_CATS.map(([k]) => k));
+    let n = 0, newCust = 0, total = 0;
+    try {
+      for (const r of pl.rows.slice(0, 80)) {
+        const amount = toCentavos(String(r.amount ?? "")); if (!(amount > 0)) continue;
+        const cat = cats.has(r.cat) ? r.cat : "other", text = String(r.desc || r.raw || "").trim().slice(0, 60);
+        if (pl.kind === "bill") {
+          if (!text) continue;
+          const due = /^\d{4}-\d{2}-\d{2}$/.test(r.due || "") ? r.due : date;
+          await write("expenses/" + uid(), { kind: "bill", name: text, category: cat, amount, due, repeat: "none", paid: false, deleted: false, at: new Date().toISOString(), by: S.me || null, source: "logbook" });
+        } else if (pl.kind === "expense") {
+          if (!text) continue;
+          await write("expenses/" + uid(), { kind: "expense", amount, category: cat, method: "cash", note: text, date, at, by: S.me || null, deleted: false, source: "logbook" });
+        } else {
+          let c = r.cid ? S.customers.find((x) => x.id === String(r.cid)) : null;
+          const nm = String(r.cname || r.desc || "").trim().slice(0, 60);
+          if (!c && nm) c = S.customers.find((x) => fold(x.name) === fold(nm)) || null;
+          if (!c) { if (!nm) continue; const id = uid(); await write("customers/" + id, { name: nm, phone: null, limit: null, createdAt: new Date().toISOString(), source: "logbook" }); c = { id, name: nm }; newCust++; }
+          await write("sales/" + uid(), { at, by: S.me || null, method: "credit", subtotal: amount, discount: 0, total: amount, tendered: null, ref: null, customerId: c.id, voided: false,
+            lines: [{ productId: null, name: L("Utang (kwaderno)", "Credit (logbook)") + (r.raw ? " · " + String(r.raw).slice(0, 60) : ""), qty: 1, price: amount, cost: 0, custom: true }], source: "logbook" });
+        }
+        n++; total += amount;
+      }
+    } catch (e) { toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); return; }
+    if (!n) return toast(L("Walang linyang may halaga", "No lines with an amount"));
+    scanBeep(true);
+    const what = pl.kind === "bill" ? L("bayarin", "bill(s)") : pl.kind === "expense" ? L("gastos", "expense(s)") : L("utang", "credit line(s)");
+    toast(L(`Na-save: ${n} ${what} · ${peso(total)}`, `Saved ${n} ${what} · ${peso(total)}`) + (newCust ? L(` · ${newCust} bagong customer`, ` · ${newCust} new customer(s)`) : ""));
+    go("home", pl.kind === "credit" ? null : pl.kind === "bill" ? "bills" : "expenses");
   }
   function viewLogbook() {
     const prods = activeProducts();

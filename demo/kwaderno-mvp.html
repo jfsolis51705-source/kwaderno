@@ -482,12 +482,27 @@ dialog .db * { min-width: 0; }
 .vcard { padding: 0; overflow: hidden; text-align: left; cursor: pointer; display: grid; color: inherit; font: inherit; }
 .vcard img, .vphoto img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--surface-2); }
 .vcard .vb { padding: 12px 14px; display: grid; gap: 2px; }
-.vphoto { padding: 0; overflow: hidden; display: grid; }
+.vphoto { padding: 0; overflow: hidden; display: grid; align-content: start; }
+.vphoto > button { height: auto; align-self: start; }
 .vphoto .vb { padding: 10px 12px; display: grid; gap: 8px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { font-size: .78rem; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); }
 .chip b { font-weight: 700; color: var(--accent); margin-left: 4px; }
 .bigphoto { width: 100%; max-height: 70vh; object-fit: contain; display: block; border-radius: 8px; background: #000; }
+/* LVM product boxes (yellow) drawn over shelf photos; positions are fractions of the photo */
+.boxwrap { position: relative; line-height: 0; }
+.boxwrap > img { display: block; width: 100%; height: auto; }
+.boxwrap.small { aspect-ratio: 4 / 3; background: #0d1416; overflow: hidden; }
+.boxwrap.small > .boxlayer { position: absolute; left: 50%; top: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%); }
+.boxwrap.small > .boxlayer > img, .vphoto .boxwrap.small img { display: block; width: 100%; height: 100%; aspect-ratio: auto; object-fit: fill; }
+.boxwrap.big { display: inline-block; max-width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
+.boxwrap.big > img { width: auto; max-width: 100%; max-height: 72vh; }
+.lvm-box { position: absolute; border: 2px solid #ccff00; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0,0,0,.55), inset 0 0 0 1px rgba(0,0,0,.35); pointer-events: none; }
+.lvm-box > span { position: absolute; left: -2px; bottom: 100%; max-width: 220px; background: #ccff00; color: #1a1400; font: 700 11px/1.3 system-ui, sans-serif; padding: 1px 5px; border-radius: 3px 3px 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lvm-box.low > span { top: 100%; bottom: auto; border-radius: 0 3px 3px 3px; }
+.boxwrap.small .lvm-box > span { font-size: 9px; padding: 0 3px; max-width: 110px; }
+.boxlegend { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.boxlegend i { width: 12px; height: 12px; border: 2px solid #ccff00; border-radius: 2px; display: inline-block; }
 a.btn { text-decoration: none; }
 .kpis.wide { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
 .cart.desktop * { min-width: 0; }
@@ -5257,8 +5272,8 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const NS = "http://www.w3.org/2000/svg"; const el = (t, at, txt) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); if (txt != null) e.textContent = txt; return e; };
     const overlay = el("svg", { viewBox: "0 0 1000 1000", preserveAspectRatio: "none", style: "position:absolute;inset:0;width:100%;height:100%;pointer-events:none", "aria-hidden": "true" });
     (cur.p.items || []).forEach((it, n) => { if (!it.box) return; const [x, y, w, hh] = it.box.map((v) => v * 1000);
-      overlay.append(el("rect", { x, y, width: w, height: hh, fill: "none", stroke: "#22c55e", "stroke-width": 4, "vector-effect": "non-scaling-stroke" }));
-      overlay.append(el("rect", { x, y: Math.max(0, y - 34), width: 46, height: 34, fill: "#22c55e" })); overlay.append(el("text", { x: x + 23, y: Math.max(0, y - 34) + 25, "text-anchor": "middle", fill: "#fff", "font-size": 26, "font-weight": 700 }, String(n + 1))); });
+      overlay.append(el("rect", { x, y, width: w, height: hh, fill: "none", stroke: "#ccff00", "stroke-width": 3, "vector-effect": "non-scaling-stroke" }));
+      overlay.append(el("rect", { x, y: Math.max(0, y - 34), width: 46, height: 34, fill: "#ccff00" })); overlay.append(el("text", { x: x + 23, y: Math.max(0, y - 34) + 25, "text-anchor": "middle", fill: "#1a1400", "font-size": 26, "font-weight": 700 }, String(n + 1))); });
     const hasBoxes = (cur.p.items || []).some((it) => it.box);
     const editFacings = new Map();
     const saveFacings = async () => { if (!editFacings.size) return toast("Nothing changed"); const items = (cur.p.items || []).map((it) => (editFacings.has(itemKey(it)) ? { ...it, facings: editFacings.get(itemKey(it)) } : it)); try { await cur.save({ ...cur.p, items, counted: true }); toast("Saved"); } catch { toast("Could not save"); } };
@@ -5272,7 +5287,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
           h("div", { class: "card", style: "padding:10px" },
             h("div", { class: "pills", style: "margin-bottom:8px" },
               h("button", { class: "btn sm", "aria-label": "Zoom in", onclick: () => { drillZoom = Math.min(3, drillZoom + 0.5); render(); } }, "+"), h("button", { class: "btn sm", "aria-label": "Zoom out", onclick: () => { drillZoom = Math.max(1, drillZoom - 0.5); render(); } }, "−"),
-              h("button", { class: "btn sm", onclick: () => openDialog(a.store, h("img", { class: "bigphoto", src: cur.p.url, alt: "Shelf photo" })) }, "Preview"),
+              h("button", { class: "btn sm", onclick: () => openDialog(a.store, h("div", { class: "grid", style: "justify-items:center" }, boxedPhoto(cur.p, { big: true }), boxToggle())) }, "Preview"),
               h("button", { class: "btn sm primary", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI counting facings…"); await scanAuditPhoto(cur); } }, cur.p.counted ? "Re-scan (AI)" : "Count facings (AI)")),
             h("div", { style: "overflow:auto;max-height:560px;border-radius:8px" }, h("div", { style: `position:relative;width:${drillZoom * 100}%` }, h("img", { src: cur.p.url, alt: `Shelf photo of ${a.store}`, style: "display:block;width:100%" }), overlay)),
             !hasBoxes ? h("div", { class: "muted small", style: "margin-top:6px", text: cur.p.counted ? "AI gave no boxes for this photo." : "Numbered boxes appear after “Count facings (AI)”." }) : null,
@@ -6467,23 +6482,20 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     const q = visQ.trim().toLowerCase();
     const list = all.filter((v) => !q || (v.name + " " + (v.barangay || "") + " " + seenItems(v).map((x) => x.name).join(" ")).toLowerCase().includes(q));
     const photos = all.reduce((a, v) => a + (v.photos || []).length, 0), scanned = all.reduce((a, v) => a + (v.photos || []).filter((p) => p.items).length, 0);
+    const real = all.flatMap((v) => (v.photos || []).filter((p) => !p.sample)), realN = real.length, sampleN = photos - realN, boxedN = real.filter((p) => boxCount(p)).length;
     const products = new Set(all.flatMap((v) => seenItems(v).map((x) => x.name.toLowerCase())));
     const brgys = new Set(all.map((v) => v.barangay).filter(Boolean));
     return h("div", { class: "view" },
       h("div", { class: "grid kpis wide" },
         kpiBox("Stores with photos", String(all.length), `${brgys.size} barangays`),
-        kpiBox("Photos in app", String(photos), `${all.reduce((a, v) => a + (v.drivePhotoCount || 0), 0)} in the Drive folders`),
-        kpiBox("Photos read by AI", `${scanned} / ${photos}`, "tap a store → Identify products"),
+        kpiBox("Real photos in app", String(realN), `${all.reduce((a, v) => a + (v.drivePhotoCount || 0), 0)} in the Drive folders${sampleN ? ` · +${sampleN} SAMPLE check-ins` : ""}`),
+        kpiBox("With product boxes", `${boxedN} / ${realN}`, "yellow boxes from the AI reading"),
         kpiBox("Different products seen", String(products.size))),
       h("div", { class: "toolbar" },
         h("input", { type: "search", id: "visSearch", placeholder: "Search store, barangay or product seen", value: visQ, "aria-label": "Search visual inventory",
           oninput: (e) => { visQ = e.target.value; render(); const el = $("#visSearch"); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } } }),
         h("button", { class: "btn", onclick: newAlbum }, "+ New store album"),
-        photos - scanned ? h("button", { class: "btn primary", onclick: async (e) => {
-          e.currentTarget.disabled = true; const todo = all.flatMap((v) => (v.photos || []).map((p, i) => (p.items ? null : [v, i])).filter(Boolean)); let ok = 0;
-          for (const [n, [v, i]] of todo.entries()) { toast(`AI scanning photo ${n + 1} of ${todo.length} — ${v.name}`); if (await identifyPhoto(v, i, true)) ok++; }
-          toast(`Scan done: ${ok} of ${todo.length} photo(s) read`);
-        } }, `Scan all ${photos - scanned} photo(s) (AI)`) : null),
+        readAllBtn(), boxToggle()),
       scanned ? shelfPresence(all) : null,
       list.length ? h("div", { class: "vgrid" }, list.map((v) => {
         const cover = (v.photos || [])[0]; const seen = seenItems(v);
@@ -6496,8 +6508,8 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
   // Shelf presence across all scanned photos: in how many stores each brand / product is on display.
   function shelfPresence(all) {
     const brands = new Map(), prods = new Map(), cats = new Map(), brandStores = new Map(); let scannedStores = 0;
-    const lastPhoto = (v) => (v.photos || []).map((p) => p.date).filter(Boolean).sort().at(-1) || null;
-    const surveyRows = (list) => list.map(({ v, it, items }) => ({ ...storeRef("v:" + v.id), date: lastPhoto(v), photos: (v.photos || []).length, seen: it ? it.n : items.reduce((a, x) => a + x.n, 0), what: it ? null : items.map((x) => x.name).slice(0, 4).join(", ") }));
+    const lastPhoto = (v) => (v.photos || []).filter((p) => !p.sample).map((p) => p.date).filter(Boolean).sort().at(-1) || null; // real visits only (not SAMPLE check-ins)
+    const surveyRows = (list) => list.map(({ v, it, items }) => ({ ...storeRef("v:" + v.id), date: lastPhoto(v), photos: (v.photos || []).filter((p) => !p.sample).length, seen: it ? it.n : items.reduce((a, x) => a + x.n, 0), what: it ? null : items.map((x) => x.name).slice(0, 4).join(", ") }));
     const surveyCols = (brand) => [{ k: "date", label: "Last photo", fmt: (v) => (v ? fmtDate(v) : "—") }, { k: "seen", label: "Times seen", short: "seen" }, { k: "photos", label: "Photos", short: "photos" }, ...(brand ? [{ k: "what", label: "Products seen", sort: false }] : [])];
     const prodStores = (x) => storeList({ title: `${x.name} — on the shelf in ${x.n} store(s)`, rows: surveyRows(x.at), cols: surveyCols(false), sort: "date", file: "shelf-" + fold(x.name).replace(/ /g, "-").slice(0, 30), summary: "Seen in the shelf photos of your field survey", note: "Tap a store to open its photos and shelf list." });
     const brandList = (b) => storeList({ title: `${b} — on display in ${brands.get(b)} store(s)`, rows: surveyRows(brandStores.get(b) || []), cols: surveyCols(true), sort: "date", file: "shelf-" + fold(b).replace(/ /g, "-").slice(0, 30), summary: "Seen in the shelf photos of your field survey", note: "Tap a store to open its photos and shelf list." });
@@ -6542,31 +6554,51 @@ Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", 
     try { await saveVisual(cur, [...added, ...(cur.photos || [])]); toast(`${added.length} photo(s) added`); } catch (e) { toast("Could not save: " + (e?.code || "try again")); }
   }
   const CATS = ["Canned goods", "Noodles", "Coffee & milk", "Snacks", "Drinks", "Personal care", "Laundry & cleaning", "Condiments & cooking", "Others"];
+  /** Album photos are read the same way as the shelf audit: products, facings and a box around each one. */
   async function identifyPhoto(v, idx, quiet) {
-    const sample = await window.claude?.use?.("sample");
-    if (!sample) { if (!quiet) toast("AI is not available here"); return false; }
-    const ph = (S.visual.find((x) => x.id === v.id) || v).photos[idx];
-    try {
-      const blob = await (await fetch(ph.url)).blob();
-      const out = await sample.json(`This is a photo of shelves or a fridge in a Filipino sari-sari store. List the distinct products you can clearly read (brand + product + variant or size when readable).
-Reply with JSON only: {"items":[{"name":"Brand Product Variant","brand":"Brand","category":"${CATS.join('" | "')}"}],"note":"one short sentence describing the shelf"}.
-At most 40 items. Skip anything you cannot read clearly; do not guess.`, { images: [blob], modelTier: "default" });
-      const items = (Array.isArray(out?.items) ? out.items : []).filter((x) => x && typeof x.name === "string" && x.name.trim()).slice(0, 40)
-        .map((x) => ({ name: x.name.trim().slice(0, 80), brand: typeof x.brand === "string" && x.brand.trim() ? x.brand.trim().slice(0, 40) : x.name.trim().split(" ")[0], category: CATS.includes(x.category) ? x.category : "Others" }));
-      const cur = S.visual.find((x) => x.id === v.id) || v;
-      const photos = cur.photos.map((p, i) => (i === idx ? { ...p, items, note: typeof out?.note === "string" ? out.note.slice(0, 200) : null, scannedAt: new Date().toISOString() } : p));
-      await saveVisual(cur, photos);
-      if (!quiet) toast(`${items.length} product(s) found`);
-      return true;
-    } catch (e) { if (!quiet) toast(e?.code === "not_granted" ? "AI was not allowed" : e?.code === "rate_limited" ? "AI is busy, try again in a minute" : "Could not read the photo"); return false; }
+    const cur = S.visual.find((x) => x.id === v.id) || v, ph = cur.photos[idx]; if (!ph) return false;
+    const a = auditPhotos().find((x) => x.uid === `v~${v.id}~${ph.id}`); if (!a) return false;
+    return scanAuditPhoto(a, quiet);
   }
+  // ---------- LVM boxes: where the AI found each product on a shelf photo ----------
+  let showBoxes = (() => { try { return localStorage.getItem("kw-boxes") !== "0"; } catch { return true; } })();
+  const okBox = (b) => Array.isArray(b) && b.length === 4 && b.every((v) => typeof v === "number" && v >= 0 && v <= 1) && b[2] > 0.005 && b[3] > 0.005;
+  const boxCount = (p) => (p?.items || []).filter((it) => okBox(it.box)).length;
+  function boxedPhoto(p, { big = false, small = false, alt = "Shelf photo", numbered = false } = {}) {
+    const img = h("img", { src: p.url, alt, loading: big ? null : "lazy" });
+    const wrap = h("div", { class: "boxwrap" + (big ? " big" : "") + (small ? " small" : "") }), layer = small ? h("div", { class: "boxlayer" }, img) : null;
+    wrap.append(layer || img);
+    if (layer) { const fit = () => { const r = img.naturalWidth / img.naturalHeight; if (!r) return; const F = 4 / 3;
+        if (r >= F) { layer.style.width = "100%"; layer.style.height = `${(F / r) * 100}%`; } else { layer.style.height = "100%"; layer.style.width = `${(r / F) * 100}%`; } };
+      if (img.complete) fit(); else img.addEventListener("load", fit, { once: true }); } // whole photo in a 4:3 frame, boxes stay on the photo
+    const host = layer || wrap;
+    if (!showBoxes) return wrap;
+    (p.items || []).forEach((it, n) => { if (!okBox(it.box)) return; const [x, y, w, hh] = it.box;
+      const lab = numbered ? `${n + 1}` : small ? it.brand || it.name.split(" ")[0] : `${it.name}${it.facings > 1 ? " ×" + it.facings : ""}`;
+      host.append(h("div", { class: "lvm-box" + (y < 0.06 ? " low" : ""), style: `left:${(x * 100).toFixed(2)}%;top:${(y * 100).toFixed(2)}%;width:${(Math.min(w, 1 - x) * 100).toFixed(2)}%;height:${(Math.min(hh, 1 - y) * 100).toFixed(2)}%`, title: it.name }, h("span", { text: lab }))); });
+    return wrap;
+  }
+  const boxToggle = () => h("label", { class: "small boxlegend", style: "cursor:pointer" }, h("input", { type: "checkbox", id: "boxToggle", checked: showBoxes || null, onchange: (e) => { showBoxes = e.target.checked; try { localStorage.setItem("kw-boxes", showBoxes ? "1" : "0"); } catch { /* fine */ } render(); } }), h("i"), "Show product boxes (AI)");
+  /** Read every real (non-sample) shelf photo that has no product boxes yet. One tap = the admin's approval; it can be stopped. */
+  let readAllRun = null;
+  async function readAllPhotos() {
+    if (readAllRun) { readAllRun.stop = true; return; }
+    const todo = auditPhotos().filter((a) => a.p.url && !a.p.sample && !boxCount(a.p)); if (!todo.length) return toast("Every photo already has product boxes");
+    if (!(await askYes("Read all shelf photos with AI?", `${todo.length} photo(s) without product boxes. Claude reads each one: products, facings and a yellow box around each. It takes about 15–30 seconds a photo; you can stop any time.`, "Yes, read them", "Not now"))) return;
+    readAllRun = { stop: false, done: 0, ok: 0, total: todo.length }; render();
+    for (const a of todo) { if (readAllRun.stop) break; if (await scanAuditPhoto(a, true)) readAllRun.ok++; readAllRun.done++; const b = $("#readAllBtn"); if (b) b.textContent = `⏹ Stop · read ${readAllRun.done} of ${readAllRun.total}`; }
+    toast(`Read ${readAllRun.ok} of ${readAllRun.total} photo(s)` + (readAllRun.stop ? " — stopped" : "")); readAllRun = null; render();
+  }
+  const readAllBtn = () => { const n = auditPhotos().filter((a) => a.p.url && !a.p.sample && !boxCount(a.p)).length;
+    return readAllRun ? h("button", { class: "btn", id: "readAllBtn", onclick: readAllPhotos }, `⏹ Stop · read ${readAllRun.done} of ${readAllRun.total}`)
+      : n ? h("button", { class: "btn primary", id: "readAllBtn", onclick: readAllPhotos }, `✨ Read ${n} photo(s) with AI — product boxes`) : h("span", { class: "muted small", text: "✓ Every real photo has product boxes" }); };
   function viewVisualStore(v) {
     const seen = seenItems(v); const byCat = new Map(); for (const it of seen) byCat.set(it.category, [...(byCat.get(it.category) || []), it]);
     const unscanned = (v.photos || []).map((p, i) => (p.items ? -1 : i)).filter((i) => i >= 0);
     return h("div", { class: "view" },
       h("div", { class: "muted", text: [[v.barangay, v.city].filter(Boolean).join(", "), v.folder && v.folder !== v.name ? `Drive folder: ${v.folder}` : null, v.drivePhotoCount ? `${v.drivePhotoCount} photo(s) in Drive` : null].filter(Boolean).join(" · ") }),
       h("div", { class: "pills" },
-        h("button", { class: "btn primary", onclick: () => addVisualPhotos(v) }, upIcon(), "Add photos"),
+        h("button", { class: "btn primary", onclick: () => addVisualPhotos(v) }, upIcon(), "Add photos"), boxToggle(),
         unscanned.length ? h("button", { class: "btn", onclick: async (e) => {
           e.currentTarget.disabled = true; let ok = 0;
           for (const [n, i] of unscanned.entries()) { toast(`AI reading photo ${n + 1} of ${unscanned.length}…`); if (await identifyPhoto(v, i, true)) ok++; }
@@ -6578,10 +6610,10 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
           : h("div", { class: "muted", text: "Not read yet. Tap “Identify products (AI)” to list the brands visible in these photos." }),
         seen.length ? h("p", { class: "muted small", style: "margin:10px 0 0", text: "Read by AI from the photos — check before relying on it. It shows what is on display, not exact stock counts." }) : null),
       h("div", { class: "vgrid" }, (v.photos || []).map((p, i) => h("div", { class: "card vphoto" },
-        h("button", { style: "padding:0;border:0;background:none", onclick: () => openDialog(`${v.name} · ${fmtDate(p.date)}`, h("div", { class: "grid" }, h("img", { class: "bigphoto", src: p.url, alt: "Shelf photo" }), p.note ? h("p", { class: "muted small", text: p.note }) : null)), "aria-label": "Enlarge photo" },
-          h("img", { src: p.url, alt: `Shelf photo of ${v.name}`, loading: "lazy" })),
+        h("button", { style: "padding:0;border:0;background:none;display:block;width:100%", title: "Open the shelf breakdown (numbered boxes, facings, MSL / OSA)", onclick: () => go("admin", "audit-d-" + encodeURIComponent(`v~${v.id}~${p.id}`)), "aria-label": "Open the shelf breakdown" },
+          boxedPhoto(p, { small: true, numbered: true, alt: `Shelf photo of ${v.name}` })),
         h("div", { class: "vb" },
-          h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center" }, h("span", { class: "small", style: "font-weight:600", text: fmtDate(p.date) }),
+          h("div", { style: "display:flex;justify-content:space-between;gap:8px;align-items:center" }, h("span", { class: "small", style: "font-weight:600" }, fmtDate(p.date), p.sample ? h("span", { class: "sample-tag", title: "Made-up check-in for the demo charts — not a real visit", text: "sample" }) : null, boxCount(p) ? h("div", { class: "muted small", style: "font-weight:400", text: `▣ ${boxCount(p)} boxed` }) : null),
             h("span", { class: "pills" },
               h("button", { class: "btn sm", onclick: async (e) => { e.currentTarget.disabled = true; toast("AI reading the photo…"); await identifyPhoto(v, i); } }, p.items ? "Read again" : "Identify products"),
               h("button", { class: "btn sm danger", "aria-label": "Delete photo", onclick: () => openDialog("Delete this photo?", h("div", { class: "grid" },

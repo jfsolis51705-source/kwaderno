@@ -716,7 +716,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     document.documentElement.classList.add("lockwait"); setTimeout(() => { if (!S.branchDocLoaded) { S.branchDocLoaded = true; checkOpenLock(); } }, 8000);
     db.collection("library").onSnapshot((snap) => { S.library = snap.docs.map((d) => ({ id: d.id, ...d.data() })); render(); }, () => {});
     if (S.owner) db.collection("visual").onSnapshot((snap) => { S.visual = snap.docs.map((d) => ({ id: d.id, ...d.data() })); if (view === "admin") render(); }, () => {});
-    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); try { watchAdminOrders(); } catch { /* later */ } scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
+    if (S.owner) db.collection("stores").onSnapshot((snap) => { S.stores = snap.docs.map((d) => ({ id: d.id, ...d.data() })); try { watchAdminOrders(); } catch { /* later */ } try { autoLearnOcr(); } catch { /* later */ } scheduleAuto(); clearTimeout(insightsT); insightsT = setTimeout(publishInsights, 4000); if (view === "admin") render(); }, () => {});
     db.doc("network/rules").onSnapshot((d) => { S.rules = d.exists ? d.data() : null; render(); }, () => {});
     db.doc("network/ocr").onSnapshot((d) => { S.ocrDict = d.exists ? { entries: [], ...d.data() } : { entries: [] }; if (view === "admin") render(); }, () => {});
     rootRef("store/ocrlearn").onSnapshot((d) => { S.ocrLearn = d.exists ? { pairs: [], ...d.data() } : { pairs: [] }; queueSummary(); }, () => {});
@@ -763,7 +763,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     // #scan-sell-<codes> / #scan-stock-<codes>: codes sent back by the live scanner (comma = several)
     const lm = raw.match(/^logbook-([A-Za-z0-9_-]+)$/);
     if (lm) { try { const j = JSON.parse(decodeURIComponent(escape(atob(lm[1].replace(/-/g, "+").replace(/_/g, "/")))));
-        pendingLog = j.v === 2 ? { kind: j.kind, mode: j.kind === "stock" ? "stock" : "sale", date: j.date, rows: Array.isArray(j.rows) ? j.rows : [] }
+        pendingLog = j.v === 2 ? { kind: j.kind, mode: j.kind === "stock" ? "stock" : "sale", date: j.date, rows: Array.isArray(j.rows) ? j.rows : [], miss: Array.isArray(j.miss) ? j.miss : [] }
           : { mode: j.m, date: j.d, rows: (j.r || []).map(([pid, name, qty, amount, auto, rawTxt]) => ({ pid, name, qty, amount, auto, raw: rawTxt })) }; } catch { pendingLog = null; }
       raw = "home-logbook"; history.replaceState(null, "", "#home"); }
     const sm = raw.match(/^scan-(sell|stock)-(.+)$/);
@@ -2432,7 +2432,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   const OCR_IGNORE = new Set(["pcs", "pc", "piraso", "x", "php", "p", "pesos", "peso", "each", "bawat", "ea", "at"]);
   const OCR_SKIP = new Set(["total", "kabuuan", "date", "petsa", "benta", "sales", "stock", "in", "page", "pahina", "sub", "subtotal"]);
   const DIGITISH = { o: "0", d: "0", q: "9", l: "1", i: "1", "|": "1", "!": "1", z: "2", s: "5", b: "8", g: "9", t: "7" };
-  const ocrDictAll = () => { const m = new Map(OCR_SEED.map(([f, t]) => [f, { from: f, to: t, src: "built-in" }])); for (const e of S.ocrDict.entries || []) if (e.from) m.set(fold(e.from), { ...e, from: fold(e.from), to: fold(e.to || ""), src: "KELSON" }); return [...m.values()].filter((e) => e.to); };
+  const ocrDictAll = () => { const m = new Map(OCR_SEED.map(([f, t]) => [f, { from: f, to: t, src: "built-in" }])); for (const e of S.ocrDict.entries || []) if (e.from) m.set(fold(e.from), { ...e, from: fold(e.from), to: fold(e.to || ""), src: e.auto ? "auto · " + (e.why || "learned") : "KELSON" }); return [...m.values()].filter((e) => e.to); };
   function asNumber(tok) {
     let t = String(tok).replace(/^(₱|php|p)(?=[\dOoIl|])/i, "").replace(/^[x@×]+|[x×]+$/gi, "").replace(/[.,\-]+$/, "");
     if (!t) return null;
@@ -2605,7 +2605,9 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       }
       // learn from the owner's corrections: next time the same writing maps to the right product, and KELSON sees the pair
       const fixes = rows.filter((r) => r.name && r.pid !== r.auto).map((r) => ({ raw: fold(r.name).slice(0, 60), to: productById(r.pid).name, at: new Date().toISOString() }));
-      if (fixes.length) await rootRef("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
+      // words nothing matched (left without a product) go to KELSON so the dictionary can learn them; customer names are removed first
+      const miss = lb.rows.filter((r) => r.name && !r.pid).map((r) => ({ raw: fold(redact(r.name)).replace(/customer \d+/g, "").trim().slice(0, 40), at: new Date().toISOString() })).filter((x) => x.raw.length >= 3);
+      if (fixes.length || miss.length) await rootRef("store/ocrlearn").set({ ...S.ocrLearn, pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100), miss: [...(S.ocrLearn.miss || []), ...miss].slice(-60) }).catch(() => {});
       toast(lb.mode === "sale" ? L(`Na-save: ${rows.length} item bilang benta`, `Saved ${rows.length} item(s) as sales`) : L(`Na-save: ${rows.length} item bilang stock-in`, `Saved ${rows.length} item(s) as stock-in`));
       Object.assign(lb, { stage: "start", rows: [], preview: "", err: "", errDetail: "" }); go("home");
     } catch (e) { if (btn) btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
@@ -2614,6 +2616,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   function importLogbook(pl) {
     if (!pl || !Array.isArray(pl.rows) || !pl.rows.length) return;
     if (["bill", "expense", "credit"].includes(pl.kind)) return importMoneyPage(pl);
+    if (Array.isArray(pl.miss) && pl.miss.length) { // product words the scanner couldn't match: kept so KELSON can learn them (customer names removed)
+      const miss = pl.miss.slice(0, 20).map((w) => ({ raw: fold(redact(String(w))).replace(/customer \d+/g, "").trim().slice(0, 40), at: new Date().toISOString() })).filter((x) => x.raw.length >= 3);
+      if (miss.length) rootRef("store/ocrlearn").set({ ...S.ocrLearn, miss: [...(S.ocrLearn.miss || []), ...miss].slice(-60) }).catch(() => {});
+    }
     const rows = pl.rows.slice(0, 80).map((r) => {
       let pid = r.pid && productById(String(r.pid)) && !productById(String(r.pid)).archived ? String(r.pid) : "";
       const name = String(r.name || r.raw || "").slice(0, 80);
@@ -4553,7 +4559,7 @@ ${catalog}`;
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
       days, mix, lastActiveAt: events[0]?.at || S.store.createdAt || null, recent: events.slice(0, 10), items,
       exp: activeExpiries().slice(0, 60).map((e) => ({ name: productById(e.productId)?.name || "Product", date: e.date, qty: e.qty || null })),
-      ocrfix: (S.ocrLearn.pairs || []).slice(-40),
+      ocrfix: (S.ocrLearn.pairs || []).slice(-40), ocrmiss: (S.ocrLearn.miss || []).slice(-30),
       asks: [...S.questions].sort((x, y) => String(y.at).localeCompare(String(x.at))).slice(0, 40).map((x) => ({ q: x.q, at: x.at, kind: x.kind || null, intent: x.intent || null, kb: x.kb || null, helpful: x.helpful ?? null })),
     };
   }
@@ -5720,6 +5726,61 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
   }
   // ---------- SUPER ADMIN · LOGBOOK DICTIONARY: misspellings and shorthand → the right words, shared with every store ----------
   let dictFilter = "";
+  // ---------- SUPER ADMIN · the dictionary learns by itself (no AI): from store owners' fixes and the admin's own history ----------
+  // A fix (what was written → the product) is added for every store when 2+ stores made it, one store made it 3+ times,
+  // or it is one letter away from a word the admin already approved for the same product. Conflicting fixes wait for the admin.
+  function ocrFixGroups() {
+    const ignored = new Set(S.kbMeta.ocrIgnored || []), dict = new Map(ocrDictAll().map((e) => [e.from, e.to])), g = new Map();
+    for (const st of S.stores) for (const x of st.ocrfix || []) {
+      const to = fold(x.to), k = x.raw + "→" + to; if (!x.raw || ignored.has(k) || dict.get(x.raw) === to) continue;
+      const y = g.get(k) || { k, raw: x.raw, to, toName: x.to, n: 0, stores: new Set(), last: "" }; y.n++; y.stores.add(st.id); if (x.at > y.last) y.last = x.at; g.set(k, y);
+    }
+    return [...g.values()];
+  }
+  function autoReason(x, all) {
+    const rivals = all.filter((y) => y.raw === x.raw && y.to !== x.to);
+    if (rivals.some((y) => y.stores.size >= x.stores.size)) return null; // stores disagree: the admin decides
+    if (x.stores.size >= 2) return `${x.stores.size} stores`;
+    if (x.n >= 3) return `${x.n}× in one store`;
+    const mine = (S.ocrDict.entries || []).filter((e) => !e.auto);
+    if (x.raw.length >= 4 && mine.some((e) => fold(e.to) === x.to && lev(fold(e.from), x.raw) <= 1)) return "like a word you approved";
+    return null;
+  }
+  let autoLearnT = null, autoLearnBusy = false;
+  function autoLearnOcr() {
+    clearTimeout(autoLearnT);
+    autoLearnT = setTimeout(async () => {
+      if (!S.owner || !S.db || autoLearnBusy || S.kbMeta.ocrAuto === false) return;
+      const all = ocrFixGroups(), add = all.map((x) => ({ x, why: autoReason(x, all) })).filter((a) => a.why);
+      if (!add.length) return;
+      autoLearnBusy = true;
+      const now = new Date().toISOString(), keep = (S.ocrDict.entries || []).filter((e) => !add.some((a) => fold(e.from) === a.x.raw));
+      try { await S.db.doc("network/ocr").set({ entries: [...keep, ...add.map(({ x, why }) => ({ from: x.raw, to: x.to, at: now, by: "auto", auto: true, why }))].slice(0, 3000), updatedAt: now, by: "auto" }); }
+      catch { /* try again on the next update */ } finally { autoLearnBusy = false; }
+    }, 1500);
+  }
+  /** Words store owners left unmatched (after the dictionary and their own fixes) — the only place AI may help, and only when the admin asks. */
+  function ocrMissGroups() {
+    const ignored = new Set(S.kbMeta.ocrIgnored || []), dict = new Set(ocrDictAll().map((e) => e.from)), g = new Map();
+    for (const st of S.stores) for (const x of st.ocrmiss || []) {
+      if (!x.raw || dict.has(x.raw) || ignored.has("miss:" + x.raw)) continue;
+      const y = g.get(x.raw) || { raw: x.raw, n: 0, stores: new Set(), last: "" }; y.n++; y.stores.add(st.id); if (x.at > y.last) y.last = x.at; g.set(x.raw, y);
+    }
+    return [...g.values()].sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+  }
+  const aiSuggest = new Map(); // raw → { to, why, conf } | { err }
+  async function askAiForWord(raw) {
+    aiSuggest.set(raw, { busy: true }); render();
+    const known = [...new Set([...S.stores.flatMap((st) => (st.items || []).map((i) => i.name)), ...ocrDictAll().map((e) => e.to)])].slice(0, 400);
+    try {
+      const r = await askClaudeJson(`A sari-sari store owner in the Philippines wrote this in a handwritten logbook, and a phone handwriting reader read it as: "${raw.slice(0, 40)}".
+It may be a misspelling, Tagalog, a brand nickname or shorthand. Using the list of products and words stores use, say what it most likely means.
+Known products and words: ${JSON.stringify(known)}
+Return ONLY JSON: {"to": "the correct word(s) in lowercase, or null if unsure", "confidence": 0.0-1.0, "why": "one short reason"}`);
+      aiSuggest.set(raw, { to: r?.to ? fold(String(r.to)).slice(0, 80) : null, conf: Number(r?.confidence) || 0, why: String(r?.why || "").slice(0, 160) });
+    } catch (e) { aiSuggest.set(raw, { err: claudeError(e) }); }
+    render();
+  }
   async function saveOcrDict(entries) {
     try { await S.db.doc("network/ocr").set({ entries: entries.slice(0, 3000), updatedAt: new Date().toISOString(), by: S.me || null }); toast("Dictionary saved for all stores"); }
     catch (e) { toast("Could not save: " + (e?.code || "try again")); }
@@ -5732,13 +5793,21 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
       const y = g.get(k) || { k, raw: x.raw, to, toName: x.to, n: 0, stores: new Set(), last: "" }; y.n++; y.stores.add(st.id); if (x.at > y.last) y.last = x.at; g.set(k, y);
     }
     const fixes = [...g.values()].sort((a, b) => b.stores.size - a.stores.size || b.n - a.n);
+    autoLearnOcr();
+    const misses = ocrMissGroups(), autoN = (S.ocrDict.entries || []).filter((e) => e.auto).length, ignoreMiss = async (raw) => { try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, ocrIgnored: [...ignored, "miss:" + raw].slice(-2000) }); toast("Ignored"); } catch (e) { toast("Could not save: " + (e?.code || "try again")); } };
     const f = fold(dictFilter), entries = ocrDictAll().filter((e) => !f || (e.from + " " + e.to).includes(f)).sort((a, b) => a.from.localeCompare(b.from));
     const from = h("input", { type: "text", id: "dictFrom", placeholder: "Misspelling or shorthand, e.g. koke" }), to = h("input", { type: "text", id: "dictTo", placeholder: "Correct word(s), e.g. coca cola" });
     return h("div", { class: "grid", style: "gap:16px" },
       h("div", { class: "grid kpis wide" },
         kpiBox("Dictionary words", String(ocrDictAll().length), `${(S.ocrDict.entries || []).length} added by KELSON`),
         kpiBox("Corrections from stores", String(fixes.reduce((a, x) => a + x.n, 0)), `${new Set(fixes.flatMap((x) => [...x.stores])).size} store(s)`),
-        kpiBox("Waiting for review", String(fixes.length))),
+        kpiBox("Waiting for review", String(fixes.length)),
+        kpiBox("Learned by itself", String(autoN), "from store fixes — no AI"),
+        kpiBox("Nothing could match", String(misses.length), "words left by stores")),
+      h("div", { class: "card", style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" },
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:center;flex:1;min-width:240px" }, h("input", { type: "checkbox", id: "ocrAuto", checked: S.kbMeta.ocrAuto !== false, onchange: async (e) => { try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, ocrAuto: e.target.checked }); toast(e.target.checked ? "Learning by itself: on" : "Learning by itself: off"); } catch { toast("Could not save"); } } }),
+          "Learn by itself: add a fix for every store when 2+ stores made it, one store made it 3+ times, or it's one letter from a word you approved. Works without AI."),
+        h("span", { class: "chip", text: "AI: only the last option, and only when you ask" })),
       h("div", { class: "banner small", text: "Stores read logbook photos on the phone (no cloud AI). Each line is corrected with this dictionary, then matched to the store's products. When an owner fixes a line, the pair (what was read → the product) arrives here. Add good pairs so every store reads that writing correctly next time." }),
       h("div", { class: "card" }, h("h2", { text: `Corrections from stores (${fixes.length})`, style: "margin-bottom:6px" }),
         fixes.length ? h("ul", { class: "list" }, fixes.slice(0, 200).map((x) => h("li", { style: "flex-wrap:wrap" },
@@ -5746,6 +5815,18 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
           h("div", { class: "pills" }, h("button", { class: "btn sm primary", onclick: () => addDict(x.raw, x.to) }, "Add to dictionary"),
             h("button", { class: "btn sm", onclick: async () => { try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, ocrIgnored: [...ignored, x.k].slice(-2000) }); toast("Ignored"); } catch (e) { toast("Could not save: " + (e?.code || "try again")); } } }, "Ignore")))))
           : h("div", { class: "empty", text: "No corrections waiting. They appear when store owners fix a logbook line." })),
+      h("div", { class: "card" }, h("h2", { text: `Words nothing could match (${misses.length})`, style: "margin-bottom:4px" }),
+        h("p", { class: "muted small", style: "margin:0 0 8px", text: "Written in store logbooks and left without a product, after the dictionary and the stores' own fixes. Add the meaning yourself, or — as the last option — ask AI for a suggestion you approve." }),
+        misses.length ? h("ul", { class: "list", id: "ocrMiss" }, misses.slice(0, 100).map((x) => { const a = aiSuggest.get(x.raw);
+          return h("li", { style: "flex-wrap:wrap" },
+            h("div", { class: "grow" }, h("div", { style: "font-weight:600;font-family:ui-monospace,monospace", text: x.raw }), h("div", { class: "muted small", text: `${x.n}× · ${x.stores.size} store(s) · ${relTime(x.last)}` }),
+              a?.busy ? h("div", { class: "small", text: "Asking AI…" }) : a?.err ? h("div", { class: "small", style: "color:var(--bad)", text: a.err }) : a ? h("div", { class: "small note", style: "margin-top:4px" }, a.to ? `AI suggests: ${x.raw} → ${a.to} (${Math.round(a.conf * 100)}% sure) — ${a.why}` : `AI isn't sure: ${a.why || "no good match"}`) : null),
+            h("div", { class: "pills" },
+              a?.to ? h("button", { class: "btn sm primary", onclick: () => addDict(x.raw, a.to) }, "Add AI's suggestion") : null,
+              h("button", { class: "btn sm", onclick: () => { const fi = document.getElementById("dictFrom"); if (fi) { fi.value = x.raw; document.getElementById("dictTo")?.focus(); fi.scrollIntoView({ block: "center" }); } } }, "Add a meaning"),
+              h("button", { class: "btn sm", onclick: () => askAiForWord(x.raw), disabled: !!a?.busy }, "✨ Ask AI (last option)"),
+              h("button", { class: "btn sm", onclick: () => ignoreMiss(x.raw) }, "Ignore")));
+        })) : h("div", { class: "empty", text: "Nothing left unmatched." })),
       h("div", { class: "card grid" }, h("h2", { text: "Add a word" }),
         h("div", { class: "form" }, h("label", { class: "f" }, "What the logbook says", from), h("label", { class: "f" }, "What it means", to)),
         h("button", { class: "btn primary", style: "justify-self:start", onclick: () => addDict(from.value, to.value) }, "Add for all stores")),
@@ -5754,7 +5835,9 @@ Return ONLY JSON: {"offtopic": false, "q": "question title in Taglish", "cat": o
         h("ul", { class: "list" }, entries.slice(0, 400).map((e) => h("li", {},
           h("span", { class: "grow" }, h("span", { style: "font-family:ui-monospace,monospace", text: e.from }), " → ", e.to),
           h("span", { class: "chip", text: e.src }),
-          e.src === "KELSON" ? h("button", { class: "btn sm", onclick: () => saveOcrDict((S.ocrDict.entries || []).filter((x) => fold(x.from) !== e.from)) }, "Remove") : null)))));
+          e.src !== "built-in" ? h("button", { class: "btn sm", onclick: async () => {
+            if (e.src.startsWith("auto")) { try { await S.db.doc("admin/kbmeta").set({ ...S.kbMeta, ocrIgnored: [...(S.kbMeta.ocrIgnored || []), e.from + "→" + e.to].slice(-2000) }); } catch { /* ignore */ } } // so it isn't learned again
+            saveOcrDict((S.ocrDict.entries || []).filter((x) => fold(x.from) !== e.from)); } }, "Remove") : null)))));
   }
   // ---------- SUPER ADMIN · RULES: one place to keep discount law current for every store ----------
   function viewRules() {

@@ -336,7 +336,7 @@
     holdUntil = now + 10 * 60 * 1000; // hold until the person goes back to scanning
     status("Found it", false);
     setTimeout(() => {
-      if (KW) { const how = sendToKwaderno([text]); if (how === "message") { showResult(item, true); toast("Sent to KWADERNO ✓"); } return; }
+      if (KW) { const how = sendToKwaderno([text]); if (how === "message") lookupName(text); if (how === "message") { showResult(item, true); toast("Sent to KWADERNO ✓"); } return; }
       showResult(item);
     }, 350);
   }
@@ -359,12 +359,40 @@
   // ---------- GROCERY MODE ----------
   const startMode = params.get("mode") === "logbook" ? "logbook" : store.get("kwscan-mode", "grocery"); // KWADERNO's Logbook page opens it with ?mode=logbook
   let grocery = startMode !== "camera" && startMode !== "logbook", qrDetour = false; // qrDetour: switched to the camera only for a QR code
-  const names = new Map(); // code → product name (Open Food Facts), looked up once
-  function lookupName(code) {
+  const names = new Map(), photos = new Map(); // code → product name / real photo (open product databases, any country), looked up once
+  const PRODUCT_DBS = [["https://world.openfoodfacts.org", "Open Food Facts"], ["https://world.openbeautyfacts.org", "Open Beauty Facts"], ["https://world.openproductsfacts.org", "Open Products Facts"]];
+  const PHOTO_API = window.__kwPhotoApi || {}; // tests swap the network
+  const getJson = (u) => PHOTO_API.getJson ? PHOTO_API.getJson(u) : fetch(u).then((r) => (r.ok ? r.json() : null));
+  const getBlob = (u) => PHOTO_API.getBlob ? PHOTO_API.getBlob(u) : fetch(u).then((r) => { if (!r.ok) throw new Error(); return r.blob(); });
+  async function squareJpeg(blob, max) {
+    const bmp = await createImageBitmap(blob); const side = Math.min(bmp.width, bmp.height), k = Math.min(1, max / side);
+    const c = document.createElement("canvas"); c.width = Math.round(side * k); c.height = Math.round(side * k);
+    const g = c.getContext("2d"); g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, c.width, c.height);
+    return new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
+  }
+  /** Barcode → real product name + photo. Only the barcode number leaves the phone. The photo is shown here and,
+   *  when KWADERNO opened this scanner, sent back to it (Add stock / Add product show it; Super Admin saves it for all stores). */
+  async function lookupName(code) {
     if (names.has(code) || !/^\d{8,14}$/.test(code)) return;
     names.set(code, "");
-    fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,quantity`).then((r) => (r.ok ? r.json() : null))
-      .then((d) => { const p = d && d.status === 1 ? d.product : null; if (p?.product_name) { names.set(code, p.product_name + (p.quantity ? " " + p.quantity : "")); renderHud(); if ($("popCode").textContent === code) $("popName").textContent = names.get(code); } }).catch(() => {});
+    for (const [host, label] of PRODUCT_DBS) {
+      let p = null; try { const d = await getJson(`${host}/api/v2/product/${encodeURIComponent(code)}.json?fields=product_name,brands,quantity,image_front_url,image_front_small_url`); p = d && d.status === 1 ? d.product : null; } catch { p = null; }
+      if (!p || !(p.product_name || p.image_front_url)) continue;
+      const name = [String(p.brands || "").split(",")[0], p.product_name, p.quantity].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+      if (name) names.set(code, name);
+      const img = p.image_front_url || p.image_front_small_url;
+      if (img && /^https:\/\//.test(img)) {
+        try { const blob = await squareJpeg(await getBlob(img), 640); photos.set(code, URL.createObjectURL(blob));
+          if (KW && opener) { try { opener.postMessage({ type: "kw-scan-photo", code, name, blob, source: label, link: `${host}/product/${code}` }, "*"); } catch { /* KWADERNO closed */ } }
+        } catch { /* name only */ }
+      }
+      renderHud(); if ($("popCode").textContent === code) showPopInfo(code);
+      return;
+    }
+  }
+  function showPopInfo(code) {
+    $("popName").textContent = names.get(code) || $("popName").textContent;
+    const im = $("popImg"); if (!im) return; const u = photos.get(code); im.hidden = !u; if (u) im.src = u;
   }
   let logbook = false; // Logbook mode: photo of a handwritten page (logbook.js); barcode reading pauses
   function setMode(m, quiet) {
@@ -399,7 +427,7 @@
   function groceryHit(item) {
     chirp(); torchFlash(); lookupName(item.value);
     const total = batchCodes.length, same = batchCodes.filter((x) => x.value === item.value).length;
-    const p = $("pop"); $("popName").textContent = names.get(item.value) || item.format; $("popCode").textContent = item.value;
+    const p = $("pop"); $("popName").textContent = names.get(item.value) || item.format; $("popCode").textContent = item.value; showPopInfo(item.value);
     $("popTotal").textContent = `×${same} · ${total} item${total === 1 ? "" : "s"}`;
     p.hidden = false; p.classList.remove("show"); void p.offsetWidth; p.classList.add("show");
     clearTimeout(popT); popT = setTimeout(() => { p.hidden = true; p.classList.remove("show"); }, 900);
@@ -418,7 +446,9 @@
     for (const g of groups.values()) {
       const li = document.createElement("li"), n = document.createElement("span"), c = document.createElement("span"), x = document.createElement("span");
       n.className = "n"; n.textContent = names.get(g.value) || g.format; c.className = "c"; c.textContent = g.value; x.className = "x"; x.textContent = "×" + g.n;
-      if (g.value === fresh || (!fresh && last && g.value === last.value)) li.className = "fresh"; li.append(n, x, c); ul.append(li);
+      if (g.value === fresh || (!fresh && last && g.value === last.value)) li.className = "fresh";
+      const ph = photos.get(g.value); if (ph) { const im = document.createElement("img"); im.className = "ph"; im.alt = ""; im.src = ph; li.classList.add("has-ph"); li.append(im); }
+      li.append(n, x, c); ul.append(li);
     }
     $("hudUndo").disabled = !batchCodes.length;
     $("hudUndo").textContent = last ? `↶ Remove last scan (${names.get(last.value) || last.value})` : "↶ Remove last scan";

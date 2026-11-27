@@ -92,14 +92,16 @@
     }
     send({ type: "kw-photo-done", found, total: items.length });
     document.querySelector("h1").textContent = "Done";
-    $("st").textContent = `Found ${found} of ${items.length}. Check them in KWADERNO and tap Save — you can close this tab.`;
+    $("st").textContent = AUTO ? `Found ${found} of ${items.length}. Sure matches were saved in KWADERNO by themselves — this tab closes now.` : `Found ${found} of ${items.length}. Check them in KWADERNO and tap Save — you can close this tab.`;
+    if (AUTO) setTimeout(() => { try { window.close(); } catch { /* the browser keeps it */ } }, 2500);
   }
+  let AUTO = location.hash === "#auto";
 
   let started = false;
   window.addEventListener("message", (e) => {
     if (!opener || e.source !== opener) return; // only the KWADERNO page that opened us
     const d = e.data; if (!d || d.type !== "kw-photo-list" || started || !Array.isArray(d.items)) return;
-    started = true; run(d.items.filter((x) => x && typeof x.name === "string").map((x) => ({ name: x.name.slice(0, 120), bc: typeof x.bc === "string" ? x.bc.slice(0, 20) : "" })));
+    started = true; if (d.auto) AUTO = true; run(d.items.filter((x) => x && typeof x.name === "string").map((x) => ({ name: x.name.slice(0, 120), bc: typeof x.bc === "string" ? x.bc.slice(0, 20) : "" })));
   });
   if (!opener) $("st").textContent = "Open this from KWADERNO → Super Admin → Photo library → Find photos online.";
   else { const hello = () => { if (!started) { send({ type: "kw-photo-hello" }); setTimeout(hello, 1000); } }; hello(); }

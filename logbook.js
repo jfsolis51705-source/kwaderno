@@ -421,10 +421,12 @@
       ? { desc: String(r.desc || "").slice(0, 80), cat: r.cat || "other", due: r.due || null, cid: r.cid || "", cname: String(r.cname || "").slice(0, 60), amount: Number(r.amount) || 0, raw: String(r.raw || "").slice(0, 120) }
       : { pid: r.pid || "", name: String(r.name || "").slice(0, 80), raw: String(r.raw || "").slice(0, 120), qty: Number(r.qty) || 1, amount: r.amount == null || r.amount === "" ? null : Number(r.amount), auto: r.auto || "" })
       .filter((r) => (money ? r.amount > 0 && (kind === "credit" ? r.cid || r.cname.trim() : r.desc.trim()) : (r.pid || r.name) && r.qty > 0)).slice(0, 80);
-    return { type: "kw-logbook", v: 2, kind, mode: kind === "stock" ? "stock" : "sale", date: pg.date, rows };
+    // words nothing matched (skipped product lines) go along so KWADERNO / the Super Admin can learn them
+    const miss = money ? [] : pg.rows.filter((r) => r.skip && !r.pid && (r.name || "").replace(/[^a-z]/gi, "").length >= 3).map((r) => String(r.name).slice(0, 40)).slice(0, 20);
+    return { type: "kw-logbook", v: 2, kind, mode: kind === "stock" ? "stock" : "sale", date: pg.date, rows, miss };
   }
   const b64 = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  const linkOf = (pl) => APP_BASE + "#logbook-" + b64(JSON.stringify({ v: 2, kind: pl.kind, date: pl.date, rows: pl.rows }));
+  const linkOf = (pl) => APP_BASE + "#logbook-" + b64(JSON.stringify({ v: 2, kind: pl.kind, date: pl.date, rows: pl.rows, miss: pl.miss || [] }));
   function send() {
     const pl = payloadOf(page); if (!pl.rows.length) return;
     let sent = false;

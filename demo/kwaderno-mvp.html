@@ -756,10 +756,14 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
 
   // ---------- routing ----------
   function go(v, s = null) { formPhoto = null; view = v; sub = s; location.hash = s ? `${v}-${s}` : v; render(); window.scrollTo(0, 0); document.getElementById("screen")?.scrollTo(0, 0); }
+  var pendingLog = null; // a logbook page sent by link from the scanner
   var pendingScan = null; // codes from a #scan-… link, handled once the products are loaded
   function readHash() {
     let raw = location.hash.slice(1);
     // #scan-sell-<codes> / #scan-stock-<codes>: codes sent back by the live scanner (comma = several)
+    const lm = raw.match(/^logbook-([A-Za-z0-9_-]+)$/);
+    if (lm) { try { const j = JSON.parse(decodeURIComponent(escape(atob(lm[1].replace(/-/g, "+").replace(/_/g, "/"))))); pendingLog = { mode: j.m, date: j.d, rows: (j.r || []).map(([pid, name, qty, amount, auto, rawTxt]) => ({ pid, name, qty, amount, auto, raw: rawTxt })) }; } catch { pendingLog = null; }
+      raw = "home-logbook"; history.replaceState(null, "", "#home"); }
     const sm = raw.match(/^scan-(sell|stock)-(.+)$/);
     if (sm) { const codes = decodeURIComponent(sm[2]).split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50); pendingScan = { mode: sm[1], codes }; raw = sm[1] === "sell" ? "sell" : "products"; history.replaceState(null, "", "#" + raw); }
     if (raw === "phone" || raw === "phone-land" || raw === "tablet" || raw === "tablet-land" || raw === "desktop") { setLayout(raw); history.replaceState(null, "", "#home"); view = "home"; sub = null; return; }
@@ -874,6 +878,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   langBtn.addEventListener("click", () => { lang = lang === "en" ? "tl" : "en"; try { localStorage.setItem("kw-lang", lang); } catch { /* ignore */ } lastRoute = ""; render(); });
   function render() {
     if (pendingScan && S.ready) setTimeout(takePendingScan, 0);
+    if (pendingLog && S.ready) { const pl = pendingLog; pendingLog = null; setTimeout(() => importLogbook(pl), 0); }
     applyLayout();
     document.documentElement.lang = lang === "en" ? "en" : "fil";
     langBtn.replaceChildren(...[["en", "English"], ["tl", "Tagalog"]].map(([k, l]) => { const x = document.createElement("span"); x.textContent = l; if (lang === k) x.className = "on"; return x; }));
@@ -1216,9 +1221,16 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     } else if (hit) { scanBeep(true); go("products", "p-" + hit.id); } else unknownBarcode(code, (np) => go("products", "p-" + np.id));
   }
   window.addEventListener("message", (e) => {
-    const d = e.data; if (!d || (d.type !== "kw-scan" && d.type !== "kw-unscan") || typeof d.code !== "string") return;
+    const d = e.data; if (!d || !["kw-scan", "kw-unscan", "kw-hello", "kw-logbook"].includes(d.type)) return;
     let ok = false; try { ok = new URL(SCANNER_URL()).origin === e.origin; } catch { ok = false; }
     if (!ok) return;
+    if (d.type === "kw-hello") { // the scanner asks for the product list (kept on the phone so its Logbook matches offline)
+      try { e.source?.postMessage({ type: "kw-catalog", products: activeProducts().map((p) => ({ id: p.id, name: p.name, price: p.price || 0, cost: p.cost || 0, sold: (typeof D !== "undefined" && D.sold?.get(p.id)) || 0 })),
+        learned: (S.ocrLearn?.pairs || []).slice(-300), dict: (S.ocrDict?.entries || []).filter((x) => x.from && x.to).map((x) => ({ from: x.from, to: x.to })).slice(0, 500) }, e.origin); } catch { /* scanner closed */ }
+      return;
+    }
+    if (d.type === "kw-logbook") { importLogbook(d); return; }
+    if (typeof d.code !== "string") return;
     if (d.type === "kw-unscan") { // the scanner took back its last scan (a mistake): one less in the sale
       const p = byBarcode(d.code.trim()); if (!p) return;
       const i = cart.lines.findIndex((l) => l.productId === p.id); if (i < 0) return;
@@ -2578,7 +2590,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
   async function saveLogbook(btn) {
     const rows = lb.rows.filter((r) => r.pid && !r.skip && Number(r.qty) > 0);
     if (!rows.length) return toast(L("Pumili ng produkto sa kahit isang linya", "Pick a product on at least one line"));
-    btn.disabled = true;
+    if (btn) btn.disabled = true;
     const at = new Date((lb.date || todayKey()) + "T12:00:00").toISOString();
     try {
       if (lb.mode === "sale") {
@@ -2593,7 +2605,22 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
       if (fixes.length) await rootRef("store/ocrlearn").set({ pairs: [...(S.ocrLearn.pairs || []), ...fixes].slice(-100) }).catch(() => {});
       toast(lb.mode === "sale" ? L(`Na-save: ${rows.length} item bilang benta`, `Saved ${rows.length} item(s) as sales`) : L(`Na-save: ${rows.length} item bilang stock-in`, `Saved ${rows.length} item(s) as stock-in`));
       Object.assign(lb, { stage: "start", rows: [], preview: "", err: "", errDetail: "" }); go("home");
-    } catch (e) { btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
+    } catch (e) { if (btn) btn.disabled = false; toast(L("Hindi na-save: ", "Could not save: ") + (e?.code || e?.message || "")); }
+  }
+  /** Lines from the scanner's Logbook (sent live, or later by link): save straight away when every line has a product, else open the review here. */
+  function importLogbook(pl) {
+    if (!pl || !Array.isArray(pl.rows) || !pl.rows.length) return;
+    const rows = pl.rows.slice(0, 80).map((r) => {
+      let pid = r.pid && productById(String(r.pid)) && !productById(String(r.pid)).archived ? String(r.pid) : "";
+      const name = String(r.name || r.raw || "").slice(0, 80);
+      if (!pid && name) pid = ocrMatch(name).p?.id || "";
+      return { raw: String(r.raw || name).slice(0, 120), name, conf: 100, qty: Number(r.qty) > 0 ? Number(r.qty) : 1, amount: r.amount == null || r.amount === "" ? null : Number(r.amount), auto: String(r.auto || ""), pid, score: pid ? 1 : 0 };
+    });
+    Object.assign(lb, { mode: pl.mode === "stock" || pl.mode === "stockin" ? "stockin" : "sale", date: /^\d{4}-\d{2}-\d{2}$/.test(pl.date || "") ? pl.date : todayKey(), stage: "review", rows, preview: "", err: "", errDetail: "" });
+    const open = rows.filter((r) => !r.pid).length;
+    if (!open) { saveLogbook(null); return; }
+    go("home", "logbook"); scanBeep(false);
+    toast(L(`${open} linya ang kailangang piliin ang paninda`, `${open} line(s) need a product — pick it, then Save`));
   }
   function viewLogbook() {
     const prods = activeProducts();
@@ -2642,7 +2669,10 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
           [["sale", L("Benta", "Sales")], ["stockin", "Stock-in"]].map(([k, l]) => h("button", { role: "radio", "aria-checked": String(lb.mode === k), onclick: () => { lb.mode = k; render(); } }, l))),
         h("label", { class: "f" }, L("Petsa sa pahina", "Date on the page"), h("input", { type: "date", id: "lbDate", max: todayKey(), value: lb.date || todayKey(), oninput: (e) => { lb.date = e.target.value; } })),
         h("div", { class: "small muted", text: ocrReady ? L("✅ Handa na ang pambasa", "✅ Reader ready") : L("⏳ Inihahanda ang pambasa (unang beses lang, ~7 MB). Puwede nang kumuha ng litrato.", "⏳ Getting the reader ready (first time only, ~7 MB). You can take the photo now.") }),
-        pick(true), pick(false),
+        h("a", { class: "btn primary big", id: "lbScanner", href: SCANNER_URL() + "?kw=1&mode=logbook&lbmode=" + (lb.mode === "stockin" ? "stockin" : "sale") + "&return=" + encodeURIComponent(APP_URL + "#scan-stock-"), target: "kwscanner", rel: "opener" },
+          svgIcon(IC.logbook), L("I-scan ang pahina (gumagana kahit offline)", "Scan the page (works offline)")),
+        h("p", { class: "muted small", style: "margin:0", text: L("Bubukas ang KWADERNO Scan → Logbook: kunan ang pahina, suriin ang mga linya, at babalik dito bilang benta o stock-in.", "Opens KWADERNO Scan → Logbook: photograph the page, check the lines, and they come back here as sales or stock-in.") }),
+        h("details", {}, h("summary", { class: "small", text: L("O basahin dito sa app", "Or read it here in the app") }), h("div", { class: "grid", style: "margin-top:8px" }, pick(true), pick(false))),
         h("div", { class: "banner small" }, h("b", { text: L("Para mas tama ang basa:", "For better reading:") }),
           h("ul", { style: "margin:6px 0 0;padding-left:18px" }, [L("Isang item bawat linya: dami, pangalan, halaga — hal. 2 Coke 30", "One item per line: qty, name, amount — e.g. 2 Coke 30"), L("Malalaking letra, malinaw na numero", "Large letters, clear numbers"), L("Maliwanag, diretso sa itaas ng pahina, walang anino", "Good light, straight above the page, no shadows")].map((t) => h("li", { text: t }))))));
   }

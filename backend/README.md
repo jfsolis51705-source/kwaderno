@@ -42,7 +42,6 @@ The SQL test was run inside a transaction and rolled back.
 
 ## Open items
 - Security advisor: clean (0 warnings) after migrations 0003 and 0004 moved the helper functions into a private schema.
-- Make yourself Super Admin: sign up once, then in the Supabase dashboard SQL editor run
-  `insert into public.admins(user_id) select id from auth.users where email = '<your email>';`
+- Super Admin: the owner's email is on a private list (migration 0005). The account becomes Super Admin automatically once it signs up and the email is confirmed. Fastest way: Supabase dashboard → Authentication → Users → Add user → Create new user, with "Auto Confirm User" ticked. To add another admin email: `insert into private.admin_emails(email) values ('<email, lowercase>');`
 - Sign-in: email sign-in is on by default in new Supabase projects; phone (SMS) sign-in needs an SMS provider in Auth settings.
 - Connecting the app: the KWADERNO artifact runs inside claude.ai and keeps using its built-in database. A standalone build or the scanner app connects with `@supabase/supabase-js`, the project URL and the publishable key (Settings → API).

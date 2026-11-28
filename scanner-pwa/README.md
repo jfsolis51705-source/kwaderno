@@ -1,4 +1,4 @@
-# KWADERNO Scan — QR & barcode scanner (PWA)
+# KELSON Scan — QR & barcode scanner (PWA)
 
 One web app that scans **QR codes and product barcodes** with the phone or computer camera. Works on Android (Chrome), iPhone/iPad (Safari) and desktop browsers, and can be installed to the home screen.
 
@@ -15,9 +15,9 @@ One web app that scans **QR codes and product barcodes** with the phone or compu
 - **History.** Kept on the device (`localStorage`: id, value, format, source, timestamp), with search, delete, Clear all and **Export CSV** (formula-safe).
 - **Error messages** for: not HTTPS, permission refused (steps for iPhone, Android and desktop), no camera, camera busy, in-app browsers (Facebook, Messenger…). The camera is released when the app goes to the background (`track.stop()`).
 
-## Used from KWADERNO
+## Used from KELSON
 
-KWADERNO runs inside claude.ai, which doesn't allow the live camera there. Its **Scan** button therefore opens this scanner in a new tab:
+KELSON runs inside claude.ai, which doesn't allow the live camera there. Its **Scan** button therefore opens this scanner in a new tab:
 
 ```
 https://<pages-host>/kwaderno/?kw=1&return=https://claude.ai/artifact/<id>#scan-sell-
@@ -25,8 +25,8 @@ https://<pages-host>/kwaderno/?kw=1&return=https://claude.ai/artifact/<id>#scan-
 
 The code is sent back in one of two ways:
 
-1. **Message.** `postMessage({ type: "kw-scan", code, mode })` to the KWADERNO tab that opened the scanner. KWADERNO only accepts messages from the scanner's origin.
-2. **Link.** If there's no opener, the scanner opens `…#scan-sell-<code>`. KWADERNO reads it and adds the item.
+1. **Message.** `postMessage({ type: "kw-scan", code, mode })` to the KELSON tab that opened the scanner. KELSON only accepts messages from the scanner's origin.
+2. **Link.** If there's no opener, the scanner opens `…#scan-sell-<code>`. KELSON reads it and adds the item.
 
 `return` must be a `https://claude.ai/artifact/…#scan-(sell|stock)-` link, so the scanner can't be used to redirect to other sites.
 
@@ -63,7 +63,7 @@ The app is then at `https://<owner>.github.io/<repo>/`.
 ```
 index.html            page
 styles.css            full-screen camera, wide scan window, result and history sheets
-app.js                camera, auto-capture, Bluetooth/USB scanner, KWADERNO return, history, CSV, errors
+app.js                camera, auto-capture, Bluetooth/USB scanner, KELSON return, history, CSV, errors
 sw.js                 offline cache
 manifest.webmanifest  PWA manifest (192, 512, maskable icons)
 icons/                app icons

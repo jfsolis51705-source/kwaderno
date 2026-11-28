@@ -1,6 +1,6 @@
 {
-  "name": "KWADERNO Scan — QR & Barcode",
-  "short_name": "KW Scan",
+  "name": "KELSON Scan — QR & Barcode",
+  "short_name": "KELSON Scan",
   "description": "Scan QR codes and barcodes with your camera. History stays on your device.",
   "id": "./",
   "start_url": "./",

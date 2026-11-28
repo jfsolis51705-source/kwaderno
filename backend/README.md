@@ -41,8 +41,8 @@ The SQL test was run inside a transaction and rolled back.
 - **After a deletion request:** sync was refused.
 
 ## Open items
-
-- **Security advisor warnings:** the helper functions (`is_admin`, `is_member`, `is_store_owner`) and the trigger functions sit in the `public` schema. That makes them callable through `/rest/v1/rpc`. They only report the caller's own membership, and the trigger functions do nothing when called directly. The planned fix is to move them into a private schema; that migration was not applied (declined).
-- **Making someone a Super Admin:** add their `auth.users` id to `admins` from the Supabase dashboard (SQL editor).
-- **Connecting the app:** the KWADERNO artifact runs inside claude.ai and keeps using its built-in database for now. Connect the scanner app or a standalone build with `@supabase/supabase-js` and the project's publishable key (Settings → API).
-- **Sign-in:** turn on email or phone sign-in in Supabase Auth settings.
+- Security advisor: clean (0 warnings) after migrations 0003 and 0004 moved the helper functions into a private schema.
+- Make yourself Super Admin: sign up once, then in the Supabase dashboard SQL editor run
+  `insert into public.admins(user_id) select id from auth.users where email = '<your email>';`
+- Sign-in: email sign-in is on by default in new Supabase projects; phone (SMS) sign-in needs an SMS provider in Auth settings.
+- Connecting the app: the KWADERNO artifact runs inside claude.ai and keeps using its built-in database. A standalone build or the scanner app connects with `@supabase/supabase-js`, the project URL and the publishable key (Settings → API).

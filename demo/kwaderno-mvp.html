@@ -2434,7 +2434,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     const profitToday = salesToday - sum(today, saleCost) - spentToday;
     const T = computeTips();
     const stat = (l, v, onclick) => h(onclick ? "button" : "div", { onclick }, h("div", { class: "l", text: l }), h("div", { class: "v num", text: v }));
-    return h("div", { class: "view home" },
+    return h("div", { class: "view home" }, consentBanner(),
       h("section", { class: "hero", "aria-label": "Today" },
         h("div", { class: "top" }, h("span", { class: "trunc", text: `${S.branches.length ? "🏬 " : ""}${S.store.name} · ${new Date().toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" })}` }),
           h("button", { class: "eye", "aria-pressed": String(hideMoney), onclick: () => { hideMoney = !hideMoney; try { localStorage.setItem("kw-hide-money", hideMoney ? "1" : "0"); } catch { /* ignore */ } render(); } }, hideMoney ? "Show ₱" : "Hide ₱")),
@@ -2808,7 +2808,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
         h("div", { class: "muted small", text: L(`${R.bnpcRate}% Senior/PWD discount sa mga kategoryang ito (hanggang ₱${R.bnpcWeeklyPurchase} na bili at ₱${R.bnpcWeeklyDiscount} na discount bawat linggo).`, `${R.bnpcRate}% Senior/PWD discount on these categories (up to ₱${R.bnpcWeeklyPurchase} of purchases and ₱${R.bnpcWeeklyDiscount} of discount a week).`) }),
         cats.length ? checks(bnSel, cats) : h("div", { class: "muted small", text: L("Wala pang produkto.", "No products yet.") })),
       h("div", { class: "card grid" }, h("h2", { text: L("Gamot", "Medicines") }), h("div", { class: "muted small", text: L(`${R.rate20}% + VAT exemption para sa Senior/PWD.`, `${R.rate20}% + VAT exemption for Senior/PWD.`) }), cats.length ? checks(medSel, cats) : null),
-      dataCard(),
+      privacyCard(), dataCard(),
       alertSettingsCard(),
       h("div", { class: "banner small" }, h("b", { text: L(`Batas na sinusunod (ayon sa KELSON, as of ${R.asOf}): `, `Rules followed (kept by KELSON, as of ${R.asOf}): `) }), R.basis),
       h("button", { class: "btn primary big", onclick: (e) => save(e.currentTarget) }, L("I-save", "Save")));
@@ -4619,7 +4619,7 @@ ${catalog}`;
     ].filter((e) => e.at).sort((a, b) => b.at.localeCompare(a.at));
     return {
       name: S.store.name || "Unnamed store", barangay: S.store.barangay || null, city: S.store.city || null,
-      joinedAt: S.store.createdAt || null, ownerStore: S.owner,
+      joinedAt: S.store.createdAt || null, ownerStore: S.owner, privacy: S.store.privacy || null, aiPhotos: !!S.store.aiPhotos,
       products: prods.length, lowStock: prods.filter((p) => stockOf(p.id) <= (p.reorder || 0)).length,
       stockValue: prods.reduce((a, p) => a + Math.max(0, stockOf(p.id)) * (p.cost || 0), 0),
       customers: S.customers.length, utang: owed.reduce((a, b) => a + b, 0), debtors: owed.length,
@@ -4634,6 +4634,7 @@ ${catalog}`;
     return { name: body.name, today: d.find((x) => x.d === t)?.t || 0, d7: sum(7), d30: sum(30), n30: d.reduce((a, x) => a + (x.n || 0), 0), products: body.products, lowStock: body.lowStock, utang: body.utang, stockValue: body.stockValue, lastActiveAt: body.lastActiveAt, at: new Date().toISOString() };
   }
   async function writeSummary() {
+    if (S.store?.sharingStopped && !S.owner) return; // the owner asked KELSON to delete their data: nothing more is sent
     const body = buildSummary(); const key = (S.branch || "main") + JSON.stringify(body);
     if (key === lastSummary) return;
     try {
@@ -4645,6 +4646,55 @@ ${catalog}`;
   }
 
   // ---------- new merchant: set up the store ----------
+  // ---------- PRIVACY (Data Privacy Act of 2012, RA 10173): notice, consent, the owner's rights ----------
+  // Draft for legal review. Bump PRIVACY_VERSION whenever the notice changes: every store is asked to review it again.
+  const PRIVACY_VERSION = "2026-11-28";
+  const consentOk = () => S.store?.privacy?.version === PRIVACY_VERSION;
+  function privacyNotice() {
+    const sec = (tl, en, tlT, enT) => h("div", {}, h("b", { text: L(tl, en) }), h("p", { style: "margin:4px 0 0", text: L(tlT, enT) }));
+    openDialog(L("Abiso sa Privacy ng KWADERNO", "KWADERNO Privacy Notice"), h("div", { class: "grid", id: "privacyNotice", style: "gap:12px" },
+      h("p", { class: "muted small", style: "margin:0", text: L(`Bersyon ${PRIVACY_VERSION} · Ayon sa Data Privacy Act of 2012 (RA 10173). Draft — susuriin ng abogado.`, `Version ${PRIVACY_VERSION} · Under the Data Privacy Act of 2012 (RA 10173). Draft for legal review.`) }),
+      sec("Sino kami", "Who we are", "Ang KWADERNO ay pinapatakbo ng KELSON. Kami ang may pananagutan sa datos na ipinapadala sa amin ng app.", "KWADERNO is operated by KELSON. We are responsible for the data the app sends to us."),
+      sec("Ano ang nananatili sa phone mo", "What stays on your phone", "Ang listahan ng paninda, bawat benta, mga customer at utang (pangalan, numero) ay nasa device mo lang. Hindi namin ito nakikita.", "Your product list, each sale, your customers and credit (names, numbers) stay on your device. We do not see them."),
+      sec("Ano ang ipinapadala sa KELSON", "What is sent to KELSON", "Pangalan at lugar ng tindahan (barangay, lungsod), at mga kabuuan: benta bawat araw, stock, bilang ng utang — walang pangalan ng customer.", "Your store name and area (barangay, city) and totals: daily sales, stock, number of credit accounts — no customer names."),
+      sec("Bakit", "Why", "Para sa mga tip sa pagbenta, ulat ng merkado ayon sa lugar, at para mapabuti ang app.", "To give you selling tips, to make area market reports, and to improve the app."),
+      sec("Mga larawan ng estante at AI (opsyonal)", "Shelf photos and AI (optional)", "Kung papayag ka, ang mga larawan ng estante na ipinadala mo ay magagamit para turuan ang AI ng KWADERNO. Puwede mong i-off anumang oras. Huwag kumuha ng larawan ng tao, ID o resibo na may pangalan.", "If you agree, shelf photos you send may be used to teach KWADERNO's AI. You can turn this off anytime. Do not photograph people, IDs or receipts with names."),
+      sec("Pagbabahagi", "Sharing", "Sa mga brand at partner, pinagsama-samang datos lang ang ibinabahagi (hal. bahagi ng merkado sa barangay) — hindi ang datos ng iisang tindahan maliban kung pumayag ka.", "Brands and partners only get combined data (e.g. market share in a barangay) — never one store's data unless you agree."),
+      sec("Saan iniimbak", "Where it is stored", "Sa mga secure na cloud server, maaaring nasa labas ng Pilipinas. Kami pa rin ang mananagot.", "On secure cloud servers that may be outside the Philippines. We remain accountable."),
+      sec("Gaano katagal", "How long", "Habang aktibo ang account mo; buburahin o gagawing anonymous kapag hiniling mo o hindi na ginagamit.", "While your account is active; deleted or made anonymous when you ask or stop using the app."),
+      sec("Ang mga karapatan mo", "Your rights", "Malaman, makita, itama, i-download at ipabura ang datos mo, at bawiin ang pahintulot — sa Settings → Privacy at ang datos ko. Puwede ka ring magreklamo sa National Privacy Commission.", "To be informed, to see, correct, download and have your data deleted, and to withdraw consent — in Settings → Privacy & my data. You may also complain to the National Privacy Commission."),
+      sec("Data Protection Officer", "Data Protection Officer", "Contact ng DPO: [ilalagay ng KELSON].", "DPO contact: [to be added by KELSON]."),
+      h("p", { class: "muted small", style: "margin:0", text: L("Kapag may pagbabago, ipapakita ulit ito para suriin mo.", "When this changes, you will be asked to review it again.") })));
+  }
+  async function saveConsent(aiPhotos) {
+    const consent = { version: PRIVACY_VERSION, at: new Date().toISOString() };
+    await write("store/profile", { ...S.store, privacy: consent, aiPhotos: !!aiPhotos, updatedAt: new Date().toISOString() });
+    try { if (S.me && !S.owner) await S.db.doc("stores/" + S.me).update?.({ privacy: consent, aiPhotos: !!aiPhotos }); } catch { /* next sync carries it */ }
+  }
+  function consentBanner() {
+    if (!S.store?.name || consentOk()) return null;
+    return h("div", { class: "note", id: "consentBanner", style: "margin:0 0 12px;display:grid;gap:8px" },
+      h("b", { text: L("Pakisuri ang Abiso sa Privacy", "Please review the Privacy Notice") }),
+      h("span", { class: "small", text: L("Para sumunod sa Data Privacy Act, kailangan namin ang pahintulot mo.", "To follow the Data Privacy Act, we need your consent.") }),
+      h("div", { class: "pills" }, h("button", { class: "btn sm", onclick: privacyNotice }, L("Basahin", "Read it")),
+        h("button", { class: "btn sm primary", id: "consentAgree", onclick: async () => { try { await saveConsent(S.store.aiPhotos); toast(L("Salamat — naitala ang pahintulot", "Thank you — consent recorded")); render(); } catch { toast(L("Hindi na-save", "Could not save")); } } }, L("Sumasang-ayon ako", "I agree"))));
+  }
+  function privacyCard() {
+    const c = S.store?.privacy, ai = !!S.store?.aiPhotos;
+    return h("div", { class: "card grid", id: "privacyCard", style: "gap:10px" },
+      h("h2", { style: "margin:0", text: L("Privacy at ang datos ko", "Privacy & my data") }),
+      h("div", { class: "small", text: c ? L(`Pumayag ka sa Abiso sa Privacy (bersyon ${c.version}) noong ${fmtDate(c.at)}.`, `You agreed to the Privacy Notice (version ${c.version}) on ${fmtDate(c.at)}.`) + (consentOk() ? "" : L(" May bagong bersyon — pakisuri.", " A newer version is available — please review.")) : L("Hindi pa naitatala ang pahintulot mo.", "Your consent is not recorded yet.") }),
+      h("label", { class: "small", style: "display:flex;gap:8px;align-items:flex-start" }, h("input", { type: "checkbox", id: "aiPhotosToggle", checked: ai || null, onchange: async (e) => { try { await saveConsent(e.target.checked); toast(e.target.checked ? L("Salamat! Makakatulong ang mga larawan mo sa AI.", "Thank you! Your shelf photos can help teach the AI.") : L("Hindi na gagamitin ang mga larawan mo sa AI.", "Your photos will no longer be used to teach the AI.")); } catch { e.target.checked = ai; toast(L("Hindi na-save", "Could not save")); } } }),
+        h("span", { text: L("Payagan ang mga larawan ng estante ko na turuan ang AI ng KWADERNO (opsyonal, puwedeng i-off anumang oras)", "Allow my shelf photos to teach KWADERNO's AI (optional, you can turn it off anytime)") })),
+      h("div", { class: "pills" },
+        h("button", { class: "btn sm", onclick: privacyNotice }, L("Basahin ang Abiso sa Privacy", "Read the Privacy Notice")),
+        !consentOk() ? h("button", { class: "btn sm primary", onclick: async () => { try { await saveConsent(ai); toast(L("Naitala ang pahintulot", "Consent recorded")); render(); } catch { toast(L("Hindi na-save", "Could not save")); } } }, L("Sumasang-ayon ako", "I agree")) : null,
+        S.owner ? null : h("button", { class: "btn sm danger", id: "deleteRequest", onclick: async () => {
+          if (!(await askYes(L("Ipabura ang datos mo sa KELSON?", "Ask KELSON to delete your data?"), L("Buburahin ng KELSON ang mga kabuuan ng tindahan mo na nasa amin at hihinto ang pagpapadala. Ang datos sa phone mo ay hindi gagalawin — i-download muna ang backup kung gusto mo.", "KELSON will delete your store totals that we hold and sharing will stop. Data on your phone is not touched — download a backup first if you want one."), L("Oo, ipabura", "Yes, delete it"), L("Huwag", "No")))) return;
+          try { await write("store/profile", { ...S.store, sharingStopped: true, deletionRequestedAt: new Date().toISOString() }); await S.db.doc("stores/" + S.me).update?.({ deletionRequestedAt: new Date().toISOString() }); toast(L("Naipadala ang kahilingan", "Request sent")); render(); } catch { toast(L("Hindi naipadala — subukan ulit", "Could not send — try again")); } } }, L("Ipabura ang datos ko sa KELSON", "Delete my data at KELSON"))),
+      S.store?.deletionRequestedAt ? h("div", { class: "note small", style: "margin:0", text: L(`Hiniling mong ipabura noong ${fmtDate(S.store.deletionRequestedAt)}. Hindi na nagpapadala ang tindahan mo.`, `You asked for deletion on ${fmtDate(S.store.deletionRequestedAt)}. Your store no longer sends data.`) }) : null,
+      h("p", { class: "muted small", style: "margin:0", text: L("Para sa kopya ng lahat ng datos mo, gamitin ang backup sa ibaba.", "For a copy of all your data, use the backup below.") }));
+  }
   function viewSetup() {
     const f = (id, label, ph, req) => h("label", { class: "f" }, label, h("input", { type: "text", id, placeholder: ph, required: req || null, maxlength: 80 }));
     return h("div", { class: "view", style: "max-width:520px" },
@@ -4653,12 +4703,18 @@ ${catalog}`;
       h("form", { class: "card grid", style: "gap:14px", onsubmit: async (e) => {
         e.preventDefault();
         const name = $("#su-name").value.trim(); if (!name) return toast("Enter your store name");
-        try { await write("store/profile", { name, barangay: $("#su-brgy").value.trim() || null, city: $("#su-city").value.trim() || null, createdAt: new Date().toISOString() }); toast("Store ready!"); go("home"); }
+        if (!$("#su-consent").checked) return toast(L("Kailangan ang pahintulot sa Abiso sa Privacy", "Please agree to the Privacy Notice to continue"));
+        try { await write("store/profile", { name, barangay: $("#su-brgy").value.trim() || null, city: $("#su-city").value.trim() || null, createdAt: new Date().toISOString(),
+          privacy: { version: PRIVACY_VERSION, at: new Date().toISOString() }, aiPhotos: !!$("#su-ai").checked }); toast("Store ready!"); go("home"); }
         catch (err) { toast(err?.code === "permission_denied" ? "Ask the app owner to give you access to use the app (not just view)" : "Could not save: " + (err?.code || "try again")); }
       } },
         f("su-name", "Store name", "e.g. Aling Nena Sari-sari Store", true),
         f("su-brgy", "Barangay", "e.g. Bagong Pag-asa"),
         f("su-city", "City / municipality", "e.g. Quezon City"),
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:flex-start" }, h("input", { type: "checkbox", id: "su-consent", required: true }),
+          h("span", {}, L("Nabasa ko at sumasang-ayon ako sa ", "I have read and agree to the "), h("a", { href: "#", onclick: (e) => { e.preventDefault(); privacyNotice(); } }, L("Abiso sa Privacy", "Privacy Notice")), L(" (kailangan)", " (required)"))),
+        h("label", { class: "small", style: "display:flex;gap:8px;align-items:flex-start" }, h("input", { type: "checkbox", id: "su-ai" }),
+          h("span", { text: L("Payagan ang mga larawan ng estante ko na turuan ang AI ng KWADERNO (opsyonal)", "Allow my shelf photos to teach KWADERNO's AI (optional)") })),
         h("button", { class: "btn primary big", type: "submit" }, "Start using KWADERNO")));
   }
 
@@ -4697,6 +4753,14 @@ ${catalog}`;
     const k30 = lastKeys(30), keys30 = k30.map((x) => x.key), keys7 = keys30.slice(-7), today = todayKey();
     const samples = S.stores.filter((x) => x.sample).length;
     const stores = S.stores.filter((x) => adminSample || !x.sample).map((x) => ({ ...x, st: storeStats(x, keys7, keys30, today) }));
+    const realStores = S.stores.filter((x) => !x.sample && !x.ownerStore), consented = realStores.filter((x) => x.privacy?.version === PRIVACY_VERSION).length, aiOk = realStores.filter((x) => x.aiPhotos).length, delReq = S.stores.filter((x) => x.deletionRequestedAt);
+    const complianceCard = h("div", { class: "card", id: "complianceCard" },
+      h("h2", { style: "margin:0 0 6px", text: "Privacy & compliance (RA 10173)" }),
+      h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px" },
+        kpiBox("Consent on the current notice", `${consented} / ${realStores.length}`, `version ${PRIVACY_VERSION}`), kpiBox("Shelf photos allowed for AI", `${aiOk} / ${realStores.length}`, "opt-in only"), kpiBox("Deletion requests", String(delReq.length), delReq.length ? "act within 30 days" : "none open")),
+      delReq.length ? h("ul", { class: "list", style: "margin-top:8px" }, delReq.map((x) => h("li", {}, h("div", { class: "grow" }, h("b", { text: x.name || "Store" }), h("div", { class: "muted small", text: `Asked ${fmtDate(x.deletionRequestedAt)} · ${[x.barangay, x.city].filter(Boolean).join(", ")}` })),
+        h("button", { class: "btn sm danger", onclick: async () => { if (!(await askYes("Delete this store's data at KELSON?", `Removes ${x.name}'s totals from the network. The store's phone data is not touched.`, "Delete", "Cancel"))) return; try { await S.db.doc("stores/" + x.id).delete(); toast("Deleted — keep a note of the date for your records"); } catch { toast("Could not delete"); } } }, "Delete their data")))) : null,
+      h("p", { class: "muted small", style: "margin:8px 0 0", text: "Shelf photos teach the AI only from stores that opted in; field-survey albums need the stores' written permission on file. A weekly legal check updates the compliance plan." }));
     if (sub && sub.startsWith("s-")) { const one = stores.find((x) => x.id === sub.slice(2)) || S.stores.find((x) => x.id === sub.slice(2)); if (one) return adminStore(one.st ? one : { ...one, st: storeStats(one, keys7, keys30, today) }, k30); }
     const sum = (a, f) => a.reduce((x, y) => x + f(y), 0);
     const kpi = (label, value, hint) => h("div", { class: "card kpi" }, h("div", { class: "label", text: label }), h("div", { class: "value num", text: value }), hint ? h("div", { class: "muted small", text: hint }) : null);
@@ -4733,6 +4797,7 @@ ${catalog}`;
         h("span", { class: "pills" },
           h("button", { class: "btn sm", onclick: () => { adminSample = !adminSample; render(); } }, adminSample ? "Hide sample stores" : "Show sample stores"),
           h("button", { class: "btn sm danger", onclick: removeSamples }, "Delete sample stores"))) : null,
+      complianceCard,
       h("div", { class: "grid kpis wide" },
         kpi("Stores", String(stores.length), `${newMonth} joined in 30 days`),
         kpi("Active today", String(activeToday), `${active7} active in 7 days`),
@@ -5272,7 +5337,8 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   const seScratch = (() => { let c; return () => (c ||= Object.assign(document.createElement("canvas"), { width: 16, height: 16 })); })();
   /** Photos the engine may learn from: checked by a person, or (while teaching) read by the AI with boxes. */
   function teacherPhotos(ai = useAiTeacher()) {
-    return auditPhotos().filter((a) => a.p.url && !a.p.sample && boxCount(a.p) && (a.p.checked || (ai && a.p.counted && !a.p.engine)))
+    const okStore = (a) => !a.app || S.stores.find((x) => x.id === a.app.storeId)?.aiPhotos === true; // store photos only with the store's AI consent
+    return auditPhotos().filter((a) => a.p.url && !a.p.sample && boxCount(a.p) && okStore(a) && (a.p.checked || (ai && a.p.counted && !a.p.engine)))
       .map((a) => ({ a, by: a.p.checked ? "team" : "ai" }));
   }
   function seFeat(src, x, y, w, hh) { // a fingerprint of one box

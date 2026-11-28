@@ -23,10 +23,14 @@
   // ---------- the store's products (from KWADERNO, kept on this phone) ----------
   let catalog = store.get(CAT_KEY, null); // { products:[{id,name,price,cost,sold}], learned:[{raw,to}], dict:[{from,to}], at }
   const opener = api.opener;
+  // Logbook pages can hold customer names (utang), so they go only to the KWADERNO tab that answered our hello,
+  // at the address it answered from — never to whatever page happened to open the scanner.
+  let openerOrigin = null;
   if (opener) {
-    try { opener.postMessage({ type: "kw-hello" }, "*"); } catch { /* KWADERNO closed */ }
+    try { opener.postMessage({ type: "kw-hello" }, "*"); } catch { /* KWADERNO closed */ } // the hello carries no data
     window.addEventListener("message", (e) => {
       if (e.source !== opener || !e.data || e.data.type !== "kw-catalog" || !Array.isArray(e.data.products)) return;
+      openerOrigin = e.origin;
       catalog = { products: e.data.products.slice(0, 5000).map((p) => ({ id: String(p.id), name: String(p.name || "").slice(0, 120), price: Number(p.price) || 0, cost: Number(p.cost) || 0, sold: Number(p.sold) || 0 })),
         learned: (e.data.learned || []).slice(-300), dict: (e.data.dict || []).slice(0, 500), at: Date.now(),
         customers: (e.data.customers || []).slice(0, 3000).map((c) => ({ id: String(c.id), name: String(c.name || "").slice(0, 80) })) };
@@ -474,7 +478,7 @@
   function send() {
     const pl = payloadOf(page); if (!pl.rows.length) return;
     let sent = false;
-    if (opener && !opener.closed) { try { opener.postMessage(pl, "*"); sent = true; } catch { sent = false; } }
+    if (opener && !opener.closed && openerOrigin) { try { opener.postMessage(pl, openerOrigin); sent = true; } catch { sent = false; } }
     if (sent) { api.beep(true); toast(`Sent ${pl.rows.length} line(s) to KWADERNO ✓`); sheet.hidden = true; return; }
     // KWADERNO isn't open here (or no internet): keep the page and send it from the "waiting" list
     const pend = store.get(PEND_KEY, []); pend.push({ ...pl, at: Date.now() }); store.set(PEND_KEY, pend.slice(-20));

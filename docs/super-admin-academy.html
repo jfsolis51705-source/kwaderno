@@ -1,0 +1,363 @@
+<title>Super Admin Academy</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700&display=swap">
+<style>
+/* Layout: a lesson book — sticky progress bar, level cards stacked top to bottom, each with steps you tick */
+:root{
+  --bg:#F3F7F6; --paper:#FFFFFF; --ink:#16302E; --soft:#55706C; --line:#D5E3E0;
+  --teal:#0E7C76; --teal-soft:#DDF1EE; --mango:#F2A516; --mango-soft:#FFF1D3;
+  --good:#2E8B4F; --good-soft:#E1F3E7; --warn:#B4531A; --warn-soft:#FBE6D8;
+  --display:'Baloo 2', 'Trebuchet MS', system-ui, sans-serif;
+  --body:'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F1B1A; --paper:#162624; --ink:#E6F2EF; --soft:#9DB8B3; --line:#294240;
+  --teal:#3CC4BA; --teal-soft:#173733; --mango:#F5B53A; --mango-soft:#3A2D12;
+  --good:#5CCB83; --good-soft:#173322; --warn:#F09A62; --warn-soft:#3B2415; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0F1B1A; --paper:#162624; --ink:#E6F2EF; --soft:#9DB8B3; --line:#294240;
+  --teal:#3CC4BA; --teal-soft:#173733; --mango:#F5B53A; --mango-soft:#3A2D12;
+  --good:#5CCB83; --good-soft:#173322; --warn:#F09A62; --warn-soft:#3B2415; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:17px/1.6 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:860px;margin:0 auto;padding-block:20px 60px;display:grid;gap:22px}
+h1,h2,h3{font-family:var(--display);line-height:1.15;text-wrap:balance;margin:0}
+h1{font-size:clamp(2rem,6vw,2.9rem);font-weight:800}
+h2{font-size:1.6rem;font-weight:700}
+h3{font-size:1.15rem;font-weight:700}
+p{margin:0}
+a{color:var(--teal);font-weight:700}
+.top{display:grid;gap:10px}
+.lead{font-size:1.1rem;color:var(--soft);max-width:62ch}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.track{flex:1 1 200px;height:14px;background:var(--line);border-radius:99px;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--mango));transition:width .4s}
+.pct{font-family:var(--display);font-weight:700;font-variant-numeric:tabular-nums}
+.btn{font:700 .95rem var(--body);border:2px solid var(--line);background:var(--paper);color:var(--ink);border-radius:12px;padding:8px 14px;cursor:pointer}
+.btn:hover{border-color:var(--teal)}
+.btn:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid var(--mango);outline-offset:2px}
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.map a{display:grid;gap:2px;text-decoration:none;color:var(--ink);background:var(--paper);border:2px solid var(--line);border-radius:14px;padding:10px 12px}
+.map a b{font-family:var(--display);font-size:1rem}
+.map a span{font-size:.85rem;color:var(--soft);font-weight:600}
+.map a.done{border-color:var(--good);background:var(--good-soft)}
+.level{background:var(--paper);border:2px solid var(--line);border-radius:20px;padding:20px;display:grid;gap:14px;scroll-margin-top:70px}
+.lvhead{display:flex;gap:14px;align-items:center}
+.badge{flex:none;width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.5rem;background:var(--teal-soft);color:var(--teal)}
+.diff{font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.steps li label{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:12px;background:var(--bg);cursor:pointer}
+.steps input{width:24px;height:24px;flex:none;margin-top:2px;accent-color:var(--good)}
+.steps li label:has(input:checked){background:var(--good-soft)}
+.steps li label:has(input:checked) .t{color:var(--soft)}
+.path{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center}
+.path i{font-style:normal;background:var(--teal-soft);color:var(--teal);border-radius:8px;padding:0 8px;font-weight:700;font-size:.92rem}
+.tip,.warn,.note{border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start}
+.tip{background:var(--mango-soft)}
+.warn{background:var(--warn-soft)}
+.note{background:var(--teal-soft)}
+.tip b,.warn b,.note b{white-space:nowrap}
+.tbl{overflow-x:auto;border:2px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:.95rem}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--bg);font-family:var(--display);font-size:1rem}
+tr:last-child td{border-bottom:0}
+.copy{display:grid;gap:6px}
+.copy pre{margin:0;white-space:pre-wrap;background:var(--bg);border:2px dashed var(--line);border-radius:12px;padding:10px 12px;font:600 .92rem/1.5 var(--body)}
+.copyrow{display:flex;gap:8px;flex-wrap:wrap}
+.check-title{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.status{font-weight:700;color:var(--soft)}
+.status.ok{color:var(--good)}
+details{background:var(--bg);border-radius:12px;padding:10px 14px}
+summary{cursor:pointer;font-weight:700}
+.quiz{display:grid;gap:8px}
+.quiz button{text-align:left}
+.quiz .right{border-color:var(--good);background:var(--good-soft)}
+.quiz .wrong{border-color:var(--warn);background:var(--warn-soft)}
+.cheer{font-family:var(--display);font-size:1.2rem;color:var(--good)}
+footer{color:var(--soft);font-size:.9rem}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <p class="diff">KWADERNO · for the Super Admin (the queen bee 👑)</p>
+    <h1>Super Admin Academy</h1>
+    <p class="lead">Learn the whole Super Admin step by step, from easy to hard. Tick each step when you have done it. Your ticks are saved on this device.</p>
+  </header>
+
+  <div class="bar" aria-label="Your progress">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <span class="pct" id="pct">0%</span>
+    <button class="btn" id="reset" type="button">Start over</button>
+  </div>
+
+  <nav class="map" id="map" aria-label="Levels">
+    <a href="#lv1"><b>1 · Get in</b><span>Very easy</span></a>
+    <a href="#lv2"><b>2 · Look around</b><span>Very easy</span></a>
+    <a href="#lv3"><b>3 · Check stores</b><span>Easy</span></a>
+    <a href="#lv4"><b>4 · Read reports</b><span>Easy</span></a>
+    <a href="#lv5"><b>5 · Help stores</b><span>Medium</span></a>
+    <a href="#lv6"><b>6 · Shelf photos</b><span>Medium</span></a>
+    <a href="#lv7"><b>7 · Teach the AI</b><span>Harder</span></a>
+    <a href="#lv8"><b>8 · Test the LVM</b><span>Harder</span></a>
+    <a href="#lv9"><b>9 · Fix problems</b><span>Hard</span></a>
+    <a href="#lv10"><b>10 · Checklists</b><span>Every day</span></a>
+  </nav>
+
+  <!-- LEVEL 1 -->
+  <section class="level" id="lv1" data-level="1">
+    <div class="lvhead"><div class="badge">1</div><div><p class="diff">Very easy · 5 minutes</p><h2>Get in safely</h2></div></div>
+    <p>Super Admin is the control room for every store. Only you, the owner, can open it.</p>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s1-1"><span class="t">Open <a href="https://claude.ai/artifact/8JVsaCApj6gs8P2kSzpASY" target="_blank" rel="noopener">the KWADERNO app</a> while signed in to claude.ai with <b>your own</b> account.</span></label></li>
+      <li><label><input type="checkbox" id="s1-2"><span class="t">At the top, tap <span class="path"><i>Super Admin</i></span>. If you see it, you are the owner. Other people never see this button.</span></label></li>
+      <li><label><input type="checkbox" id="s1-3"><span class="t">It works on phone, tablet and computer at the same time. Open it on two devices to try.</span></label></li>
+      <li><label><input type="checkbox" id="s1-4"><span class="t">Turn on <b>2-step sign-in</b> for your claude.ai account and your Google account, so a stolen password alone can't get in.</span></label></li>
+      <li><label><input type="checkbox" id="s1-5"><span class="t">Lock your phone with your fingerprint, and never let others use it while Super Admin is open.</span></label></li>
+    </ol>
+    <div class="note"><b>Today</b><span>Super Admin is protected by your claude.ai sign-in: only the owner account opens it.</span></div>
+    <div class="tip"><b>Next</b><span>Your own login (username and password) with a fingerprint check on your phone is being built on the new KWADERNO backend. Your Super Admin account there is already made. Until then, use the sign-in above.</span></div>
+    <div class="warn"><b>Never</b><span>Never share your password, codes or a screenshot of a login page with anyone, even someone who says they are from KWADERNO.</span></div>
+  </section>
+
+  <!-- LEVEL 2 -->
+  <section class="level" id="lv2" data-level="2">
+    <div class="lvhead"><div class="badge">2</div><div><p class="diff">Very easy · 10 minutes</p><h2>Look around the 6 rooms</h2></div></div>
+    <p>Super Admin has six rooms in the menu. Open each one once. You can't break anything by looking.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Room</th><th>What you find there</th><th>Think of it as</th></tr></thead>
+      <tbody>
+        <tr><td>🏪 Stores &amp; sales</td><td>All stores, the store directory, products in every store</td><td>Your list of worker bees</td></tr>
+        <tr><td>📊 Reports</td><td>Market by area, manufacturers, best sellers, out of stock</td><td>The big map of what sells where</td></tr>
+        <tr><td>📦 Orders</td><td>Supplier orders sent by stores</td><td>The order basket</td></tr>
+        <tr><td>🤖 AI data</td><td>Questions stores asked, the logbook dictionary</td><td>What stores want to know</td></tr>
+        <tr><td>📷 Vision (LVM) data</td><td>Shelf photos, shelf audit, photo library, the 3 engines</td><td>The eyes of KWADERNO</td></tr>
+        <tr><td>⚙️ Rules</td><td>Senior/PWD discount rules for all stores</td><td>The rule book</td></tr>
+      </tbody>
+    </table></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s2-1"><span class="t">Open 🏪 Stores &amp; sales.</span></label></li>
+      <li><label><input type="checkbox" id="s2-2"><span class="t">Open 📊 Reports.</span></label></li>
+      <li><label><input type="checkbox" id="s2-3"><span class="t">Open 📦 Orders.</span></label></li>
+      <li><label><input type="checkbox" id="s2-4"><span class="t">Open 🤖 AI data.</span></label></li>
+      <li><label><input type="checkbox" id="s2-5"><span class="t">Open 📷 Vision (LVM) data.</span></label></li>
+      <li><label><input type="checkbox" id="s2-6"><span class="t">Open ⚙️ Rules.</span></label></li>
+    </ol>
+    <div class="quiz" data-quiz="q2">
+      <h3>Quick quiz: where do you see which product sells most in Quezon City?</h3>
+      <button class="btn" type="button" data-ok="0">⚙️ Rules</button>
+      <button class="btn" type="button" data-ok="1">📊 Reports → Market by area</button>
+      <button class="btn" type="button" data-ok="0">📦 Orders</button>
+    </div>
+  </section>
+
+  <!-- LEVEL 3 -->
+  <section class="level" id="lv3" data-level="3">
+    <div class="lvhead"><div class="badge">3</div><div><p class="diff">Easy · 10 minutes</p><h2>Check your stores</h2></div></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s3-1"><span class="t">Go to <span class="path"><i>🏪 Stores &amp; sales</i><i>All stores</i></span>. Read the big numbers at the top: stores, active today, sales.</span></label></li>
+      <li><label><input type="checkbox" id="s3-2"><span class="t">Find the <b>Privacy &amp; compliance</b> card. It shows how many stores share Level 1, Level 2, and any credit applications or deletion requests.</span></label></li>
+      <li><label><input type="checkbox" id="s3-3"><span class="t">Tap one store's name. You see its sales, stock and branches.</span></label></li>
+      <li><label><input type="checkbox" id="s3-4"><span class="t">If a store says <b>"Not shared"</b>, that's correct: the owner chose to keep money private. It is not broken.</span></label></li>
+      <li><label><input type="checkbox" id="s3-5"><span class="t">Tap a number of stores (for example "12 stores") anywhere in reports to see the store names behind it.</span></label></li>
+    </ol>
+    <div class="warn"><b>Rule</b><span>A deletion request must be handled within 30 days. If the card shows one, tell Claude: "Handle the deletion request for [store]".</span></div>
+  </section>
+
+  <!-- LEVEL 4 -->
+  <section class="level" id="lv4" data-level="4">
+    <div class="lvhead"><div class="badge">4</div><div><p class="diff">Easy · 15 minutes</p><h2>Read the reports</h2></div></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s4-1"><span class="t">Open <span class="path"><i>📊 Reports</i><i>Market by area</i></span>. Choose a level: Luzon/Visayas/Mindanao, Region, City or Barangay.</span></label></li>
+      <li><label><input type="checkbox" id="s4-2"><span class="t">Switch between <b>Company</b> and <b>Product</b> to see who leads in each place.</span></label></li>
+      <li><label><input type="checkbox" id="s4-3"><span class="t">Use <b>Research a company</b>: pick one company and see where it wins and where it is weak.</span></label></li>
+      <li><label><input type="checkbox" id="s4-4"><span class="t">Open <span class="path"><i>Best sellers</i></span> and <span class="path"><i>Out of stock</i></span>.</span></label></li>
+      <li><label><input type="checkbox" id="s4-5"><span class="t">Tap <b>Download CSV</b> to save a report. Areas with fewer than 5 stores are left out on purpose, to protect privacy.</span></label></li>
+    </ol>
+    <div class="tip"><b>Tip</b><span>A report is only as good as the stores that share. More stores sharing Level 2 means better money numbers.</span></div>
+  </section>
+
+  <!-- LEVEL 5 -->
+  <section class="level" id="lv5" data-level="5">
+    <div class="lvhead"><div class="badge">5</div><div><p class="diff">Medium · 15 minutes</p><h2>Help the stores</h2></div></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s5-1"><span class="t"><span class="path"><i>📦 Orders</i></span>: open new supplier orders and update their status.</span></label></li>
+      <li><label><input type="checkbox" id="s5-2"><span class="t"><span class="path"><i>🤖 AI data</i><i>Knowledge</i></span>: read questions stores asked. Publish good answers so every store gets them.</span></label></li>
+      <li><label><input type="checkbox" id="s5-3"><span class="t"><span class="path"><i>🤖 AI data</i><i>Logbook dictionary</i></span>: approve new words the notebook reader learned (for example "pancit cntn" → Lucky Me Pancit Canton).</span></label></li>
+      <li><label><input type="checkbox" id="s5-4"><span class="t"><span class="path"><i>⚙️ Rules</i></span>: check the senior/PWD discount is 20% and VAT-exempt where the law says.</span></label></li>
+      <li><label><input type="checkbox" id="s5-5"><span class="t"><span class="path"><i>📷 Vision</i><i>Photo library</i></span>: add or fix product photos. Stores get them automatically.</span></label></li>
+    </ol>
+  </section>
+
+  <!-- LEVEL 6 -->
+  <section class="level" id="lv6" data-level="6">
+    <div class="lvhead"><div class="badge">6</div><div><p class="diff">Medium · 20 minutes</p><h2>Shelf photos and lime boxes</h2></div></div>
+    <p>Shelf photos are how KWADERNO "sees". Each product gets a lime box around it.</p>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s6-1"><span class="t">Open <span class="path"><i>📷 Vision (LVM) data</i><i>Visual inventory</i></span>. Tap a store, then a photo.</span></label></li>
+      <li><label><input type="checkbox" id="s6-2"><span class="t">Photos with no boxes: tap <b>✨ Read with AI</b>. AI draws the boxes (admin only, stores never call AI).</span></label></li>
+      <li><label><input type="checkbox" id="s6-3"><span class="t">Look at each box. Wrong name? Fix it. Then tap <b>✓ Mark checked</b>. Checked photos are the best teachers.</span></label></li>
+      <li><label><input type="checkbox" id="s6-4"><span class="t">Open <span class="path"><i>Shelf audit</i></span> to see availability, out-of-stock and share of shelf.</span></label></li>
+    </ol>
+    <div class="tip"><b>Goal</b><span>Check at least 10 photos by hand. Your checks teach the engines more than AI readings do.</span></div>
+  </section>
+
+  <!-- LEVEL 7 -->
+  <section class="level" id="lv7" data-level="7">
+    <div class="lvhead"><div class="badge">7</div><div><p class="diff">Harder · 20 minutes</p><h2>Teach the 3 engines</h2></div></div>
+    <div class="tbl"><table>
+      <thead><tr><th>Engine</th><th>Job</th><th>Button</th></tr></thead>
+      <tbody>
+        <tr><td>♍ Virgo · scout</td><td>Finds and names products on a shelf photo</td><td>⚙️ Read all with our engine</td></tr>
+        <tr><td>♎ Libra · guard</td><td>Checks Virgo's answers and picks the best setting</td><td>🧭 Run the Coach (Libra)</td></tr>
+        <tr><td>♒ Aquarius · nurse</td><td>Trains a small neural network on your checked photos</td><td>🧠 Train the neural network</td></tr>
+      </tbody>
+    </table></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s7-1"><span class="t">Find the card <b>KWADERNO offline AI</b> in <span class="path"><i>📷 Vision</i><i>Visual inventory</i></span>.</span></label></li>
+      <li><label><input type="checkbox" id="s7-2"><span class="t">First time only: tap <b>▶ Start the teaching week</b>.</span></label></li>
+      <li><label><input type="checkbox" id="s7-3"><span class="t">Tap <b>🧭 Run the Coach</b>. Wait until it says the score.</span></label></li>
+      <li><label><input type="checkbox" id="s7-4"><span class="t">Tap <b>🧠 Train the neural network</b>. Keep the page open until it says "Trained". It can take a few minutes.</span></label></li>
+      <li><label><input type="checkbox" id="s7-5"><span class="t">Tap <b>📤 Send to stores</b>. Stores now get the new "engine pack" for Check my shelf.</span></label></li>
+    </ol>
+    <div class="note"><b>Graduate</b><span>When Virgo agrees with your checks 85% or more for 3 days in a row, the card shows 🎓 Graduated. Then it needs AI much less.</span></div>
+  </section>
+
+  <!-- LEVEL 8 -->
+  <section class="level" id="lv8" data-level="8">
+    <div class="lvhead"><div class="badge">8</div><div><p class="diff">Harder · 15 minutes</p><h2>Test the LVM</h2></div></div>
+    <ol class="steps">
+      <li><label><input type="checkbox" id="s8-1"><span class="t">Tap <b>Test accuracy</b>. Read two numbers: <b>correct</b> (when it names a product, is it right?) and <b>found</b> (how many products it finds).</span></label></li>
+      <li><label><input type="checkbox" id="s8-2"><span class="t">Tap <b>📊 Learning report</b>. Look at "weak products" and "teach next". Check more photos of those.</span></label></li>
+      <li><label><input type="checkbox" id="s8-3"><span class="t">Real test: open the store app on a phone, <span class="path"><i>Home</i><i>Shelf photo</i><i>Check my shelf</i></span>, and photograph a real shelf.</span></label></li>
+      <li><label><input type="checkbox" id="s8-4"><span class="t">Compare what it says with what you see. Write down 3 right and 3 wrong.</span></label></li>
+      <li><label><input type="checkbox" id="s8-5"><span class="t">Send the screenshots to Claude: "Here is my shelf test, please tune the engines".</span></label></li>
+    </ol>
+    <div class="tbl"><table>
+      <thead><tr><th>Score (correct / found)</th><th>What it means</th><th>What to do</th></tr></thead>
+      <tbody>
+        <tr><td>85% or more</td><td>🟢 Good, ready for stores</td><td>Keep checking a few photos each week</td></tr>
+        <tr><td>60% to 84%</td><td>🟡 Learning</td><td>Check 10 more photos of the weak products, then Coach and Train again</td></tr>
+        <tr><td>Below 60%</td><td>🔴 Too early</td><td>Read more photos with AI, check them, then Coach and Train</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- LEVEL 9 -->
+  <section class="level" id="lv9" data-level="9">
+    <div class="lvhead"><div class="badge">9</div><div><p class="diff">Hard · read when something goes wrong</p><h2>Fix problems</h2></div></div>
+    <p>Most problems are fixed in 3 tries: <b>1)</b> refresh the page, <b>2)</b> check your internet, <b>3)</b> sign out and in again. If it still fails, ask Claude with a ready message below.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>What you see</th><th>Try this first</th></tr></thead>
+      <tbody>
+        <tr><td>No Super Admin button</td><td>You are signed in with another account. Sign out of claude.ai and sign in as the owner.</td></tr>
+        <tr><td>A page is empty or spinning</td><td>Refresh. Wait 10 seconds. Check internet.</td></tr>
+        <tr><td>Store shows "Not shared"</td><td>Not a problem: the owner keeps money private (Level 2 off).</td></tr>
+        <tr><td>Product photo missing</td><td>📷 Photo library → add the photo. Stores get it automatically.</td></tr>
+        <tr><td>"Check my shelf" button is grey</td><td>Super Admin hasn't sent the engine pack. Do Level 7, step 5.</td></tr>
+        <tr><td>Training stopped</td><td>Keep the screen on and the page open. Use a computer if the phone is slow. Try again.</td></tr>
+        <tr><td>Scanner won't open the camera</td><td>Open the scanner in Chrome or Safari (not inside Facebook/Messenger) and allow the camera.</td></tr>
+        <tr><td>"Could not save"</td><td>Check internet. Make sure you are signed in as the owner.</td></tr>
+      </tbody>
+    </table></div>
+    <h3>Ask Claude to fix it (copy, then paste in your Claude chat)</h3>
+    <div class="copy">
+      <pre id="m1">KWADERNO problem: [what you see]. It happens when I [what you tapped]. Device: [phone / tablet / computer]. Screenshot attached. Please fix it and tell me when it's live.</pre>
+      <div class="copyrow"><button class="btn" type="button" data-copy="m1">Copy</button></div>
+      <pre id="m2">Please run a full KWADERNO health check: app, Super Admin, scanner, backend security, legal check, and the engines. Fix anything broken and send me a short report.</pre>
+      <div class="copyrow"><button class="btn" type="button" data-copy="m2">Copy</button></div>
+      <pre id="m3">Please undo the last KWADERNO change. Something stopped working after it.</pre>
+      <div class="copyrow"><button class="btn" type="button" data-copy="m3">Copy</button></div>
+    </div>
+    <div class="note"><b>Safe</b><span>Every change Claude makes is saved in GitHub, so an older working version can always be brought back.</span></div>
+  </section>
+
+  <!-- LEVEL 10 -->
+  <section class="level" id="lv10" data-level="10">
+    <div class="lvhead"><div class="badge">10</div><div><p class="diff">Every day · 5 minutes</p><h2>Is everything working? Checklists</h2></div></div>
+
+    <div class="check-title"><h3>☀️ Every day</h3><span class="status" id="st-day"></span></div>
+    <ol class="steps" data-group="day">
+      <li><label><input type="checkbox" id="d-1"><span class="t">Super Admin opens and shows the store list.</span></label></li>
+      <li><label><input type="checkbox" id="d-2"><span class="t">"Active today" is more than 0.</span></label></li>
+      <li><label><input type="checkbox" id="d-3"><span class="t">📦 Orders: no new order waiting more than 1 day.</span></label></li>
+      <li><label><input type="checkbox" id="d-4"><span class="t">Privacy card: no deletion request older than 30 days.</span></label></li>
+      <li><label><input type="checkbox" id="d-5"><span class="t">Open the store app on your phone and make one test sale, then void it.</span></label></li>
+    </ol>
+    <button class="btn" type="button" data-clear="day">New day: clear ticks</button>
+
+    <div class="check-title"><h3>📅 Every week (Monday)</h3><span class="status" id="st-week"></span></div>
+    <ol class="steps" data-group="week">
+      <li><label><input type="checkbox" id="w-1"><span class="t">Run the Coach, then Test accuracy. Write the score here on paper.</span></label></li>
+      <li><label><input type="checkbox" id="w-2"><span class="t">Check 5 new shelf photos by hand.</span></label></li>
+      <li><label><input type="checkbox" id="w-3"><span class="t">Tap 📤 Send to stores (the date under the card should be today).</span></label></li>
+      <li><label><input type="checkbox" id="w-4"><span class="t">Open the <a href="https://jfsolis51705-source.github.io/kwaderno/" target="_blank" rel="noopener">scanner</a> and scan one barcode.</span></label></li>
+      <li><label><input type="checkbox" id="w-5"><span class="t">Read the Monday legal check message (it arrives by phone notification) and do any action it lists.</span></label></li>
+      <li><label><input type="checkbox" id="w-6"><span class="t">Answer new questions in 🤖 AI data → Knowledge.</span></label></li>
+    </ol>
+    <button class="btn" type="button" data-clear="week">New week: clear ticks</button>
+
+    <div class="check-title"><h3>🗓️ Every month</h3><span class="status" id="st-month"></span></div>
+    <ol class="steps" data-group="month">
+      <li><label><input type="checkbox" id="m-1"><span class="t">Paste the "full health check" message from Level 9 to Claude.</span></label></li>
+      <li><label><input type="checkbox" id="m-2"><span class="t">Download the market report CSV and keep it.</span></label></li>
+      <li><label><input type="checkbox" id="m-3"><span class="t">Check your claude.ai, Google and Supabase accounts still have 2-step sign-in on.</span></label></li>
+      <li><label><input type="checkbox" id="m-4"><span class="t">Make sure the Supabase project is green: <a href="https://supabase.com/dashboard/project/njzuhthfvlaapzgzosbu" target="_blank" rel="noopener">open dashboard</a>.</span></label></li>
+    </ol>
+    <button class="btn" type="button" data-clear="month">New month: clear ticks</button>
+  </section>
+
+  <p class="cheer" id="cheer" hidden>🎉 You finished the Academy. You are a real Super Admin!</p>
+  <footer>Levels 1 to 9 count toward your progress. Checklists repeat. Ticks live only on this device.</footer>
+</div>
+
+<script>
+(() => {
+  const KEY = "kw-academy-v1";
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { saved = {}; }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch { /* private mode */ } };
+  const boxes = [...document.querySelectorAll('.steps input[type=checkbox]')];
+  boxes.forEach((b) => { b.checked = !!saved[b.id]; b.addEventListener("change", () => { saved[b.id] = b.checked; save(); update(); }); });
+
+  function update() {
+    const lessons = boxes.filter((b) => /^s\d/.test(b.id));
+    const done = lessons.filter((b) => b.checked).length, pct = Math.round((done / lessons.length) * 100);
+    document.getElementById("fill").style.width = pct + "%";
+    document.getElementById("pct").textContent = pct + "%";
+    document.getElementById("cheer").hidden = pct < 100;
+    document.querySelectorAll("#map a").forEach((a, i) => {
+      const lv = document.querySelector(`[data-level="${i + 1}"]`); if (!lv || i >= 9) return;
+      const own = [...lv.querySelectorAll('.steps input')]; a.classList.toggle("done", own.length > 0 && own.every((b) => b.checked));
+    });
+    for (const g of ["day", "week", "month"]) {
+      const own = [...document.querySelectorAll(`[data-group="${g}"] input`)], n = own.filter((b) => b.checked).length, el = document.getElementById("st-" + g);
+      el.textContent = n === own.length ? "✅ All good" : `${n} of ${own.length} done`; el.classList.toggle("ok", n === own.length);
+    }
+  }
+  document.querySelectorAll("[data-clear]").forEach((btn) => btn.addEventListener("click", () => {
+    document.querySelectorAll(`[data-group="${btn.dataset.clear}"] input`).forEach((b) => { b.checked = false; saved[b.id] = false; }); save(); update();
+  }));
+  const reset = document.getElementById("reset");
+  reset.addEventListener("click", () => {
+    if (reset.dataset.armed) { saved = {}; save(); boxes.forEach((b) => (b.checked = false)); update(); reset.textContent = "Start over"; delete reset.dataset.armed; return; }
+    reset.dataset.armed = "1"; reset.textContent = "Tap again to clear all";
+    setTimeout(() => { if (reset.dataset.armed) { delete reset.dataset.armed; reset.textContent = "Start over"; } }, 4000);
+  });
+  document.querySelectorAll(".quiz button").forEach((b) => b.addEventListener("click", () => {
+    b.parentElement.querySelectorAll("button").forEach((x) => x.classList.remove("right", "wrong"));
+    b.classList.add(b.dataset.ok === "1" ? "right" : "wrong");
+    b.textContent = b.textContent.replace(/ [✅❌]$/, "") + (b.dataset.ok === "1" ? " ✅" : " ❌");
+  }));
+  document.querySelectorAll("[data-copy]").forEach((b) => b.addEventListener("click", async () => {
+    const pre = document.getElementById(b.dataset.copy);
+    try { await navigator.clipboard.writeText(pre.textContent); b.textContent = "Copied ✓"; }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent = "Selected — copy it"; }
+    setTimeout(() => (b.textContent = "Copy"), 2500);
+  }));
+  update();
+})();
+</script>

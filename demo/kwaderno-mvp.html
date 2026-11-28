@@ -740,6 +740,7 @@ th.sort { cursor: pointer; user-select: none; } th.sort[aria-sort] { color: var(
     db.collection("network/kb/items").onSnapshot((snap) => { S.kbDb = snap.docs.map((d) => ({ id: d.id, ...d.data() })); kbIdx = null; bizSet = null; if (view === "home" || view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/kbmeta").onSnapshot((d) => { S.kbMeta = d.exists ? { dismissed: [], ...d.data() } : { dismissed: [] }; scheduleAuto(); if (view === "admin") render(); }, () => {});
     db.doc("network/insights").onSnapshot((d) => { S.insights = d.exists ? d.data() : null; if (view === "home") render(); }, () => {});
+    db.doc("network/enginepack").onSnapshot((d) => { S.enginePack = d.exists ? d.data() : null; }, () => {});
     if (S.owner) db.doc("admin/manufacturers").onSnapshot((d) => { S.mfrMap = d.exists ? d.data().map || {} : {}; mfrIdx = null; if (view === "admin") render(); }, () => {});
     if (S.owner) db.doc("admin/photofinder").onSnapshot((d) => { S.photoFinder = d.exists ? { auto: true, tried: {}, ...d.data() } : { auto: true, tried: {} }; setTimeout(() => { try { maybeAutoFind(); } catch { /* later */ } }, 1500); }, () => { S.photoFinder = { auto: true, tried: {} }; });
     if (S.owner) db.doc("admin/engine").onSnapshot((d) => { S.engine = d.exists ? d.data() : null; if (S.engine?.model?.id !== SE.nnKey) SE.nn = null; if (view === "admin" && !SE.busy) render(); }, () => {});
@@ -5468,8 +5469,8 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     if (SE.cands.size > 200) SE.cands.clear(); SE.cands.set(k, v); return v;
   }
   /** Name each candidate: neural network first (when trained and sure), fingerprints second. */
-  async function seLabel(cands, refs, P, skipUid) {
-    const nnOut = SE.nn ? await nnPredict(cands.im, cands.list.map((c) => c.b)) : null;
+  async function seLabel(cands, refs, P, skipUid, nn = SE.nn) {
+    const nnOut = nn ? await nnPredict(cands.im, cands.list.map((c) => c.b), nn) : null;
     return cands.list.map((c, i) => {
       let best = null, second = null;
       for (const r of refs) { if (r.from === skipUid) continue; const sc = seSim(c.f, r.f, P.w);
@@ -5528,6 +5529,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       await S.db.doc("admin/engine").set({ ...prev, cfg: { ...(prev.cfg || {}), params: best.P }, startedAt: prev.startedAt || new Date().toISOString(), history: hist.slice(-120), weak, tried: tried.sort((a, b) => b.f1 - a.f1).slice(0, 8),
         status: graduated ? "graduated" : prev.status === "graduated" && final.f1 < 0.75 ? "teaching" : prev.status || "teaching", coachAt: new Date().toISOString() });
       if (!quiet) toast(`Coach: best setting scores ${Math.round(final.f1 * 100)}% agreement with the teacher`);
+      enginePackPublish(true);
     } catch (e) { if (!quiet) toast("Coach stopped: " + (e?.message || "error")); } finally { SE.busy = null; render(); }
   }
   // ----- Aquarius · Strategist: a small neural network trained here, in the browser (TensorFlow.js, Apache-2.0) -----
@@ -5587,6 +5589,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         experiments: results, teachNext: counts.slice(0, 8), trainedAt: new Date().toISOString() });
       SE.nn = { m: best.m, labels, size: best.ex.size }; SE.nnKey = up.id;
       say(`Trained: ${classes.length} products, winner ${best.ex.id}, ${Math.round(best.acc * 100)}% on photos it had not seen`);
+      enginePackPublish(true);
     } catch (e) { say("Training stopped: " + (e?.message || "error")); } finally { SE.busy = null; render(); }
   }
   /** Load the saved neural network once (quiet: never fails loudly; the fingerprints still work). */
@@ -5596,10 +5599,98 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       const m = await tf.loadLayersModel(tf.io.fromMemory({ modelTopology: j.topology, weightSpecs: j.specs, weightData: bin })); SE.nn = { m, labels: j.labels, size: j.size }; SE.nnKey = md.id; return SE.nn;
     } catch (e) { if (!quiet) toast("Could not load the neural network"); return null; }
   }
-  async function nnPredict(im, boxes) {
-    const nn = SE.nn, tf = window.tf; if (!nn || !tf || !boxes.length) return null; const W = im.naturalWidth, H = im.naturalHeight;
+  async function nnPredict(im, boxes, nn = SE.nn) {
+    const tf = window.tf; if (!nn || !tf || !boxes.length) return null; const W = im.naturalWidth, H = im.naturalHeight;
     const X = tf.stack(boxes.map((b) => nnTensor(tf, im, [b[0] * W, b[1] * H, b[2] * W, b[3] * H], nn.size, false))), P = nn.m.predict(X), d = await P.data(); X.dispose(); P.dispose();
     const n = nn.labels.length; return boxes.map((_, i) => { let k = 0; for (let j = 1; j < n; j++) if (d[i * n + j] > d[i * n + k]) k = j; return { name: nn.labels.at(k), p: d[i * n + k] }; });
+  }
+  // ---------- THE QUEEN SHARES: the engine pack stores use offline (fingerprints + the trained network + Libra's best setting) ----------
+  // Fingerprints are numbers taken from product crops (no photos); store crops are only included when the store opted in (teacherPhotos).
+  async function enginePackPublish(quiet) {
+    try {
+      const refs = await seRefs(); if (!refs.length) { if (!quiet) toast("Nothing to send yet: check or read a few shelf photos first"); return; }
+      const r3 = (a, k) => Array.from(a, (v) => Math.round(v * k) / k);
+      const per = new Map(), list = [];
+      for (const r of refs) { const k = fold(r.name), n = per.get(k) || 0; if (n >= 12) continue; per.set(k, n + 1);
+        list.push({ n: r.name, b: r.brand || null, c: r.category || null, h: r3(r.f.hist, 1000), l: r3(r.f.lay, 100), g: Array.from(r.f.hash, (v) => (v > 0 ? "1" : "0")).join("") }); }
+      const md = engineDoc().model || null;
+      const pack = { v: 1, at: new Date().toISOString(), cfg: engineCfg(), refs: list.slice(0, 2500), model: md ? { url: md.url, id: md.id, size: md.size, valAcc: md.valAcc } : null };
+      const assets = await window.claude?.use?.("assets"); if (!assets) { if (!quiet) toast("Sending needs Editor access"); return; }
+      const up = await assets.upload(new Blob([JSON.stringify(pack)], { type: "application/json" })), prev = S.enginePack;
+      await S.db.doc("network/enginepack").set({ url: up.url, id: up.id, at: pack.at, products: per.size, refs: pack.refs.length, model: pack.model ? { valAcc: md.valAcc, products: md.products } : null, f1: engineDoc().history?.at(-1)?.f1 ?? null });
+      if (prev?.id && prev.id !== up.id) assets.delete(prev.id).catch(() => {});
+      if (!quiet) toast(`Sent to stores: ${per.size} products`); if (view === "admin") render();
+    } catch (e) { if (!quiet) toast("Could not send the engine pack: " + (e?.message || "error")); }
+  }
+
+  // ---------- STORE SIDE: "Check my shelf" — the three engines on the store's own phone, offline, no AI ----------
+  // ♍ Virgo finds the packs and names them · ♒ Aquarius's network names what it learned · ♎ Libra checks the shelf against the app's stock.
+  // The photo never leaves the phone.
+  const ST = { pack: null, packId: "", nn: null, nnId: "", busy: false };
+  async function cachedJson(url) {
+    try { if (window.caches) { const c = await caches.open("kw-engine"), hit = await c.match(url); if (hit) return await hit.json(); const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status); await c.put(url, r.clone()); return await r.json(); } } catch { /* fall through */ }
+    const r = await fetch(url); if (!r.ok) throw new Error("HTTP " + r.status); return r.json();
+  }
+  async function storePack() {
+    const meta = S.enginePack; if (!meta?.url) return null; if (ST.pack && ST.packId === meta.id) return ST.pack;
+    const j = await cachedJson(meta.url);
+    ST.pack = { cfg: { ...ENGINE_DEFAULT, ...(j.cfg || {}) }, model: j.model || null,
+      refs: (j.refs || []).map((r) => ({ name: r.n, brand: r.b || r.n.split(" ")[0], category: r.c || "Others", from: "pack", f: { hist: Float32Array.from(r.h), lay: Float32Array.from(r.l), hash: Int8Array.from(r.g, (ch) => (ch === "1" ? 1 : -1)) } })) };
+    ST.packId = meta.id; return ST.pack;
+  }
+  async function storeNn(pack) {
+    const md = pack.model; if (!md?.url) return null; if (ST.nn && ST.nnId === md.id) return ST.nn;
+    try { const tf = await ensureTf(), j = await cachedJson(md.url), bin = Uint8Array.from(atob(j.data), (ch) => ch.charCodeAt(0)).buffer;
+      const m = await tf.loadLayersModel(tf.io.fromMemory({ modelTopology: j.topology, weightSpecs: j.specs, weightData: bin })); ST.nn = { m, labels: j.labels, size: j.size }; ST.nnId = md.id; return ST.nn;
+    } catch { return null; } // the fingerprints still work without the network
+  }
+  /** The store's own product that a recognised name refers to (same words, most overlap). */
+  function shelfMatch(name) {
+    const want = new Set(fold(name).split(" ").filter((w) => w.length > 1)); if (!want.size) return null; let best = null;
+    for (const p of activeProducts()) { const have = new Set(fold(p.name).split(" ").filter((w) => w.length > 1)); let both = 0; for (const w of want) if (have.has(w)) both++;
+      const sc = both / Math.max(1, Math.min(want.size, have.size) + 0.5 * Math.abs(want.size - have.size)); if (sc >= 0.5 && (!best || sc > best.sc)) best = { p, sc }; }
+    return best?.p || null;
+  }
+  async function shelfCheck() {
+    if (ST.busy) return;
+    if (!S.enginePack?.url) return toast(L("Natututo pa ang mga engine — wala pang ipinadalang shelf pack ang KELSON.", "The engines are still learning — KELSON hasn't sent the shelf pack yet."));
+    const file = await pickPhoto(true); if (!file) return;
+    ST.busy = true; toast(L("Binabasa ang estante sa phone mo…", "Reading your shelf on this phone…"));
+    let url = null;
+    try {
+      const pack = await storePack(), nn = await storeNn(pack); url = URL.createObjectURL(file); const im = await seImg(url), W = im.naturalWidth, H = im.naturalHeight;
+      const cands = { im, list: seDetect(im, pack.cfg.sens).map((b) => ({ b, f: seFeat(im, b[0] * W, b[1] * H, b[2] * W, b[3] * H) })) };
+      const hits = await seLabel(cands, pack.refs, pack.cfg, null, nn), groups = seGroup(hits);
+      const seen = groups.map((g) => { const p = shelfMatch(g.name); return { name: g.name, facings: g.facings, how: g.how, p, stock: p ? stockOf(p.id) : null }; });
+      const seenIds = new Set(seen.filter((x) => x.p).map((x) => x.p.id));
+      // Virgo + the app: what to restock
+      // restock = low in the app (the shelf photo adds what it saw); refill = stock in the app but only one pack showing
+      const seenBy = new Map(seen.filter((x) => x.p).map((x) => [x.p.id, x]));
+      const restock = activeProducts().filter((p) => stockOf(p.id) <= (p.reorder || 0)).sort((x, y) => (seenBy.has(x.id) ? 1 : 0) - (seenBy.has(y.id) ? 1 : 0)).slice(0, 15).map((p) => { const s = seenBy.get(p.id);
+        return { p, why: s ? L(`paubos sa app (${qtyFmt(stockOf(p.id))}) · ${s.facings} sa estante`, `low in the app (${qtyFmt(stockOf(p.id))}) · ${s.facings} on the shelf`) : L(`paubos sa app (${qtyFmt(stockOf(p.id))}) · hindi nakita sa larawan`, `low in the app (${qtyFmt(stockOf(p.id))}) · not seen in this photo`) }; });
+      const refill = seen.filter((x) => x.p && x.facings <= 1 && x.stock > (x.p.reorder || 0)).map((x) => x.p);
+      // Libra: does the shelf agree with the app's count? Only clear cases (pack counts from a photo are rough)
+      const mismatch = seen.filter((x) => x.p && ((x.stock <= 0 && x.facings >= 1) || x.facings >= 2 * Math.max(0, x.stock) + 2)).map((x) => ({ p: x.p, facings: x.facings, stock: x.stock }));
+      const unknown = hits.filter((x) => !x.ok).length, named = hits.length - unknown;
+      const res = { at: new Date().toISOString(), seen: seen.map((x) => ({ name: x.name, facings: x.facings, pid: x.p?.id || null })), restock: restock.map((r) => r.p.id), refill: refill.map((p) => p.id), mismatch: mismatch.map((m) => m.p.id), boxes: hits.length, named, nn: !!nn };
+      try { await write("store/shelfcheck", res); } catch { /* the result is shown anyway */ }
+      const row = (a, b, c) => h("li", {}, h("span", { class: "grow" }, h("b", { text: a }), b ? h("div", { class: "muted small", text: b }) : null), c || null);
+      openDialog(L("Resulta ng estante", "Your shelf check"), h("div", { class: "grid", id: "shelfResult", style: "gap:12px" },
+        h("p", { class: "small", style: "margin:0", text: L(`♍ Virgo: ${hits.length} pakete, ${named} ang nakilala${nn ? " (kasama ang ♒ Aquarius)" : ""}. ♎ Libra: ikinumpara sa stock ng app. Nasa phone mo lang ang larawan.`, `♍ Virgo: ${hits.length} packs, ${named} named${nn ? " (with ♒ Aquarius)" : ""}. ♎ Libra: checked against your app stock. The photo stays on your phone.`) }),
+        h("div", {}, h("h3", { style: "margin:0 0 4px", text: L("📦 I-restock", "📦 Restock") }), restock.length ? h("ul", { class: "list", id: "shelfRestock" }, restock.map((r) => row(r.p.name, r.why, h("button", { class: "btn sm", onclick: () => { dlg.close(); go("products", "p-" + r.p.id); } }, L("Buksan", "Open"))))) : h("div", { class: "muted small", text: L("Walang kailangang i-restock ngayon.", "Nothing needs restocking right now.") })),
+        refill.length ? h("div", {}, h("h3", { style: "margin:0 0 4px", text: L("🧺 Dagdagan sa estante", "🧺 Refill the shelf") }), h("ul", { class: "list", id: "shelfRefill" }, refill.map((p) => row(p.name, L(`isa lang ang nakadisplay, may ${qtyFmt(stockOf(p.id))} sa app — ilabas mula sa bodega`, `only one showing, ${qtyFmt(stockOf(p.id))} in the app — bring more out from storage`))))) : null,
+        mismatch.length ? h("div", {}, h("h3", { style: "margin:0 0 4px", text: L("⚖️ Hindi tugma ang bilang", "⚖️ Count doesn't match") }), h("ul", { class: "list", id: "shelfMismatch" }, mismatch.map((m) => row(m.p.name, L(`${m.facings} sa estante, ${qtyFmt(m.stock)} sa app — mag-stock-in o itama ang bilang`, `${m.facings} on the shelf, ${qtyFmt(m.stock)} in the app — record a stock-in or fix the count`), h("button", { class: "btn sm", onclick: () => { dlg.close(); go("products", "p-" + m.p.id); } }, L("Itama", "Fix")))))) : null,
+        h("div", {}, h("h3", { style: "margin:0 0 4px", text: L("👀 Nakita sa estante", "👀 Seen on the shelf") }), seen.length ? h("ul", { class: "list", id: "shelfSeen" }, seen.map((x) => row(x.name, `${x.facings} ${L("harap", "facing(s)")}${x.p ? " · " + L("sa app: ", "in the app: ") + qtyFmt(x.stock) : " · " + L("wala sa listahan mo", "not in your products")}`))) : h("div", { class: "muted small", text: L("Walang nakilalang produkto. Lumapit nang kaunti, sa maliwanag na lugar.", "No products named. Step a little closer, in good light.") })),
+        unknown ? h("p", { class: "muted small", style: "margin:0", text: L(`${unknown} bahagi ang hindi pa kilala. Kapag naka-on ang Antas 1 at nagpadala ka ng larawan ng estante, matututunan ito ng hive.`, `${unknown} spot(s) not known yet. With Level 1 on, sending shelf photos lets the hive learn them.`) }) : null));
+    } catch (e) { toast(L("Hindi nabasa ang estante: ", "Could not read the shelf: ") + (e?.message || "error")); }
+    finally { ST.busy = false; if (url) setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  }
+  function shelfCheckCard() {
+    return h("div", { class: "card grid", id: "shelfCheckCard", style: "gap:8px" },
+      h("h2", { text: L("🔍 Suriin ang estante ko (offline)", "🔍 Check my shelf (offline)") }),
+      h("p", { class: "muted small", style: "margin:0", text: L("Kunan ng larawan ang estante: makikita mo ang dapat i-restock at kung tugma ang stock sa app. Ginagawa ito ng tatlong engine sa phone mo — walang AI, walang ipinapadala.", "Take a shelf photo: see what to restock and whether the shelf matches your app stock. The three engines do it on your phone — no AI, nothing is sent.") }),
+      S.enginePack ? h("div", { class: "muted small", text: L(`Shelf pack: ${S.enginePack.products} produkto · ${fmtDate(S.enginePack.at)}`, `Shelf pack: ${S.enginePack.products} products · ${fmtDate(S.enginePack.at)}`) }) : h("div", { class: "note small", style: "margin:0", text: L("Natututo pa ang mga engine. Lalabas ito kapag nagpadala na ang KELSON.", "The engines are still learning. This works once KELSON sends the shelf pack.") }),
+      h("button", { class: "btn primary", id: "shelfCheckBtn", disabled: !S.enginePack || null, onclick: shelfCheck }, L("Kunan ang estante", "Photograph my shelf")));
   }
   /** Honest accuracy: each teacher photo read without its own labels, compared with what the teacher says. */
   async function engineTest() {
@@ -5665,7 +5756,9 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
         h("button", { class: "btn", id: "coachBtn", disabled: !!SE.busy || null, onclick: () => coachRun() }, SE.busy === "coach" ? "Coach working…" : "🧭 Run the Coach (Libra)"),
         h("button", { class: "btn", id: "trainBtn", disabled: !!SE.busy || null, onclick: () => strategistTrain() }, SE.busy === "train" ? "Training…" : "🧠 Train the neural network (Aquarius)"),
         h("button", { class: "btn", id: "engineTestBtn", onclick: engineTest }, "Test accuracy"),
-        h("button", { class: "btn", id: "reportBtn", onclick: learningReport }, "📊 Learning report")),
+        h("button", { class: "btn", id: "reportBtn", onclick: learningReport }, "📊 Learning report"),
+        h("button", { class: "btn", id: "packBtn", onclick: () => enginePackPublish(false) }, "📤 Send to stores")),
+      h("p", { class: "muted small", style: "margin:6px 0 0", id: "packInfo", text: S.enginePack ? `Stores have the engine pack from ${fmtDate(S.enginePack.at)}: ${S.enginePack.products} products, ${S.enginePack.refs} fingerprints${S.enginePack.model ? ", neural network " + S.enginePack.model.valAcc + "%" : ""}. Sent automatically after each Coach run or training.` : "Stores have no engine pack yet: run the Coach or press “Send to stores”." }),
       SE.busy === "train" ? h("p", { class: "small", id: "nnStatus", style: "margin:6px 0 0", text: "Starting…" }) : null);
   }
   function viewAuditDrill(a) {
@@ -5819,6 +5912,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const sorted = [...mySubs].sort((a, b) => (b.at || "").localeCompare(a.at || ""));
     return h("div", { class: "view" },
       h("div", { class: "head" }, h("div", {}, h("button", { class: "btn sm", onclick: () => go("home") }, "‹ Home"), h("h1", { text: "Shelf photos", style: "margin-top:8px" }))),
+      shelfCheckCard(),
       h("div", { class: "grid kpis" }, h("div", { class: "card kpi" }, h("div", { class: "label", text: "Your points" }), h("div", { class: "value num", text: String(myPoints()) }), h("div", { class: "muted small", text: `${sorted.filter((x) => x.status === "approved").length} approved photo(s)` })),
         h("div", { class: "card kpi" }, h("div", { class: "label", text: "Waiting for approval" }), h("div", { class: "value num", text: String(sorted.filter((x) => (x.status || "pending") === "pending").length) }))),
       h("div", { class: "card grid", style: "gap:12px" },

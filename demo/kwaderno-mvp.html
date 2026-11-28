@@ -5256,11 +5256,11 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
 
   // ----- Drilldown of one submission (visit) -----
   // ---------- KWADERNO OFFLINE AI: three smart algorithms, no outside AI needed once it graduates ----------
-  // Tallgeese 1 · Worker: shelf rows + product boxes from edges, a fingerprint per box (colour mix, colour layout, edge pattern),
+  // Virgo · Worker: shelf rows + product boxes from edges, a fingerprint per box (colour mix, colour layout, edge pattern),
   //          nearest match in OUR memory (teacher-labelled boxes + the product photo library), same product side by side = facings.
-  // Tallgeese 2 · Coach: compares the worker with the teacher (team-checked photos, and AI readings while teaching), tries several
+  // Libra · Coach: compares the worker with the teacher (team-checked photos, and AI readings while teaching), tries several
   //          settings and keeps the best, lists weak products, graduates the worker when it agrees ≥85% three days running.
-  // Tallgeese 3 · Strategist: trains a small neural network (TensorFlow.js, in this browser) on the teacher's product crops,
+  // Aquarius · Strategist: trains a small neural network (TensorFlow.js, in this browser) on the teacher's product crops,
   //          runs experiments (sizes, layers, augmentation), keeps the winner, and tells the team what to teach next.
   // The engine reads with the neural network first, the fingerprints second; anything unsure is left for a person.
   const SE = { refs: null, key: "", cands: new Map(), nn: null, nnKey: "", busy: null };
@@ -5384,7 +5384,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     const prec = tp + fp ? tp / (tp + fp) : 0, rec = tp + fn ? tp / (tp + fn) : 0;
     return { prec, rec, f1: prec + rec ? (2 * prec * rec) / (prec + rec) : 0 };
   }
-  /** Tallgeese 2 · Coach: try several settings, keep the best, find weak products, log the day, graduate when ready. */
+  /** Libra · Coach: try several settings, keep the best, find weak products, log the day, graduate when ready. */
   async function coachRun(quiet) {
     if (SE.busy) return; const T = teacherPhotos().slice(0, 40); if (T.length < 2) { if (!quiet) toast("The Coach needs at least 2 teacher photos: check some, or read some with AI"); return; }
     SE.busy = "coach"; render(); try {
@@ -5403,7 +5403,7 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
       if (!quiet) toast(`Coach: best setting scores ${Math.round(final.f1 * 100)}% agreement with the teacher`);
     } catch (e) { if (!quiet) toast("Coach stopped: " + (e?.message || "error")); } finally { SE.busy = null; render(); }
   }
-  // ----- Tallgeese 3 · Strategist: a small neural network trained here, in the browser (TensorFlow.js, Apache-2.0) -----
+  // ----- Aquarius · Strategist: a small neural network trained here, in the browser (TensorFlow.js, Apache-2.0) -----
   const TF_URL = "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js";
   let tfLoading = null;
   function ensureTf() { if (window.tf) return Promise.resolve(window.tf); return (tfLoading ||= new Promise((res, rej) => { const sc = document.createElement("script"); sc.src = TF_URL; sc.async = true; sc.onload = () => (window.tf ? res(window.tf) : rej(new Error("no tf"))); sc.onerror = () => { tfLoading = null; rej(new Error("Could not load TensorFlow.js")); }; document.head.append(sc); })); }
@@ -5499,12 +5499,12 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
     openDialog("KWADERNO offline AI — learning report", h("div", { class: "grid", id: "learnReport" },
       h("div", { class: "note", style: "margin:0;font-weight:600", text: status }),
       h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px" },
-        kpiBox("Agreement (Tallgeese 1)", last ? last.f1 + "%" : "—", last ? `correct ${last.prec}% · finds ${last.rec}%` : "run the Coach"),
-        kpiBox("Neural network (Tallgeese 3)", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products · ${e.model.samples} examples` : "train it"),
+        kpiBox("Agreement (Virgo)", last ? last.f1 + "%" : "—", last ? `correct ${last.prec}% · finds ${last.rec}%` : "run the Coach"),
+        kpiBox("Neural network (Aquarius)", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products · ${e.model.samples} examples` : "train it"),
         kpiBox("Products known", last ? String(last.products) : "—", last ? `${last.photos} teacher photos · ${last.team} team-checked` : "")),
       pts.length > 1 ? h("div", {}, h("b", { class: "small", text: "Agreement with the teacher, by day" }), svg) : h("p", { class: "muted small", style: "margin:0", text: "The trend chart appears after the Coach has run on two different days." }),
-      e.tried?.length ? h("div", {}, h("b", { class: "small", text: "Coach (Tallgeese 2) — settings tried, best first" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.tried.slice(0, 4).map((t) => h("li", { text: `match ≥ ${t.th} · colour/layout/pattern ${t.w.join("/")} · detail ${t.sens} → ${Math.round(t.f1 * 100)}%` })))) : null,
-      e.experiments?.length ? h("div", {}, h("b", { class: "small", text: "Strategist (Tallgeese 3) — neural network experiments" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.experiments.map((x) => h("li", { text: `${x.id}${x.id === e.model?.winner ? " (winner)" : ""}: ${x.acc}% on unseen examples` })))) : null,
+      e.tried?.length ? h("div", {}, h("b", { class: "small", text: "Coach (Libra) — settings tried, best first" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.tried.slice(0, 4).map((t) => h("li", { text: `match ≥ ${t.th} · colour/layout/pattern ${t.w.join("/")} · detail ${t.sens} → ${Math.round(t.f1 * 100)}%` })))) : null,
+      e.experiments?.length ? h("div", {}, h("b", { class: "small", text: "Strategist (Aquarius) — neural network experiments" }), h("ul", { class: "small", style: "margin:4px 0 0;padding-left:18px" }, e.experiments.map((x) => h("li", { text: `${x.id}${x.id === e.model?.winner ? " (winner)" : ""}: ${x.acc}% on unseen examples` })))) : null,
       e.weak?.length ? h("div", {}, h("b", { class: "small", text: "Weak products — check more photos with these" }), h("div", { class: "chips", style: "margin-top:4px" }, e.weak.map((w) => h("span", { class: "chip", text: `${w.name} · ${w.recall}%` })))) : null,
       e.teachNext?.length ? h("div", {}, h("b", { class: "small", text: "Teach next — fewest examples" }), h("div", { class: "chips", style: "margin-top:4px" }, e.teachNext.map((w) => h("span", { class: "chip", text: `${w.name} · ${w.n}` })))) : null,
       h("p", { class: "muted small", style: "margin:0", text: "Learns while Super Admin is open. Graduates when it agrees with the teacher ≥85% three days in a row; if it drops, teaching turns back on." })));
@@ -5523,20 +5523,20 @@ At most 40 items. Skip anything you cannot read clearly; do not guess.`, { image
   function engineCard() {
     const e = engineDoc(), T = teacherPhotos(), team = T.filter((t) => t.by === "team").length, last = e.history?.at(-1);
     return h("div", { class: "card", id: "engineCard" },
-      h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline" }, h("h2", { style: "margin:0", text: "KWADERNO offline AI — Tallgeese 1 · 2 · 3" }),
+      h("div", { style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline" }, h("h2", { style: "margin:0", text: "KWADERNO offline AI — ♍ Virgo · ♎ Libra · ♒ Aquarius" }),
         h("span", { class: "chip", text: e.status === "graduated" ? "🎓 Graduated" : e.startedAt ? "📚 Teaching" : "Not started" })),
-      h("p", { class: "muted small", style: "margin:4px 0 8px", text: "Tallgeese 1 reads shelves by colours, edges and patterns · Tallgeese 2 (Coach) checks it against the teacher and tunes it · Tallgeese 3 (Strategist, the advanced algorithm) trains a small neural network here in the browser. Works offline once it graduates." }),
+      h("p", { class: "muted small", style: "margin:4px 0 8px", text: "Virgo reads shelves by colours, edges and patterns · Libra (Coach) checks it against the teacher and tunes it · Aquarius (Strategist, the advanced algorithm) trains a small neural network here in the browser. Works offline once it graduates." }),
       h("div", { class: "kpis", style: "display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px" },
         kpiBox("Teacher photos", String(T.length), `${team} checked by your team · ${T.length - team} AI-read`),
-        kpiBox("Agreement (Tallgeese 1)", last ? last.f1 + "%" : "—", "goal 85%, 3 days running"),
-        kpiBox("Neural network", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products` : "Tallgeese 3"),
+        kpiBox("Agreement (Virgo)", last ? last.f1 + "%" : "—", "goal 85%, 3 days running"),
+        kpiBox("Neural network", e.model ? e.model.valAcc + "%" : "not trained", e.model ? `${e.model.products} products` : "Aquarius"),
         kpiBox("Accuracy test", e.test ? `${e.test.precision}% / ${e.test.recall}%` : "not tested", "correct / found")),
       h("label", { class: "small", style: "display:flex;gap:8px;align-items:center;margin-top:8px" }, h("input", { type: "checkbox", id: "aiTeacher", checked: useAiTeacher() || null, onchange: async (ev) => { try { await S.db.doc("admin/engine").set({ ...engineDoc(), cfg: { ...(engineDoc().cfg || {}), useAi: ev.target.checked } }); SE.refs = null; } catch { toast("Could not save"); } } }),
         "Learn from AI readings too (marked AI-taught; team checks always win — confirm the AI provider's terms)"),
       h("div", { class: "pills", style: "margin-top:8px" },
         !e.startedAt ? h("button", { class: "btn primary", id: "startTeach", onclick: async () => { try { await S.db.doc("admin/engine").set({ ...engineDoc(), startedAt: new Date().toISOString(), status: "teaching" }); toast("Teaching week started"); coachRun(); } catch { toast("Could not save"); } } }, "▶ Start the teaching week") : null,
-        h("button", { class: "btn", id: "coachBtn", disabled: !!SE.busy || null, onclick: () => coachRun() }, SE.busy === "coach" ? "Coach working…" : "🧭 Run the Coach (Tallgeese 2)"),
-        h("button", { class: "btn", id: "trainBtn", disabled: !!SE.busy || null, onclick: () => strategistTrain() }, SE.busy === "train" ? "Training…" : "🧠 Train the neural network (Tallgeese 3)"),
+        h("button", { class: "btn", id: "coachBtn", disabled: !!SE.busy || null, onclick: () => coachRun() }, SE.busy === "coach" ? "Coach working…" : "🧭 Run the Coach (Libra)"),
+        h("button", { class: "btn", id: "trainBtn", disabled: !!SE.busy || null, onclick: () => strategistTrain() }, SE.busy === "train" ? "Training…" : "🧠 Train the neural network (Aquarius)"),
         h("button", { class: "btn", id: "engineTestBtn", onclick: engineTest }, "Test accuracy"),
         h("button", { class: "btn", id: "reportBtn", onclick: learningReport }, "📊 Learning report")),
       SE.busy === "train" ? h("p", { class: "small", id: "nnStatus", style: "margin:6px 0 0", text: "Starting…" }) : null);

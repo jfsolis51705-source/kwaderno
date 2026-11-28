@@ -1,0 +1,156 @@
+<title>KELSON System Workflow</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: three lanes left→right (Stores · Hub · Creator & Super Admin), a security band on top, the engines room and chat below; stacks on phones */
+:root{
+  --bg:#F2F6F6; --paper:#FFFFFF; --ink:#13282B; --soft:#5A6E71; --line:#D3E0E1;
+  --teal:#0E7C86; --teal-s:#DDF0F1; --lime:#6E9A00; --lime-s:#EEF6D8; --violet:#5B4BC4; --violet-s:#ECE9FB; --amber:#B86E00; --amber-s:#FCEFD6;
+  --built:#1F8A4C; --built-s:#E2F4E8; --next:#2563B8; --next-s:#E2ECFA; --idea:#8A5A00; --idea-s:#FBEFD9;
+  --display:'Space Grotesk','Trebuchet MS',system-ui,sans-serif; --body:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0D1A1C; --paper:#142629; --ink:#E5F1F1; --soft:#9DB6B8; --line:#26403F;
+  --teal:#3CC4BA; --teal-s:#123634; --lime:#B6E04A; --lime-s:#243012; --violet:#A99CFF; --violet-s:#221F3D; --amber:#F2B347; --amber-s:#352812;
+  --built:#5CCB83; --built-s:#15301F; --next:#7FB0F5; --next-s:#16253A; --idea:#F2B347; --idea-s:#352812; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D1A1C; --paper:#142629; --ink:#E5F1F1; --soft:#9DB6B8; --line:#26403F;
+  --teal:#3CC4BA; --teal-s:#123634; --lime:#B6E04A; --lime-s:#243012; --violet:#A99CFF; --violet-s:#221F3D; --amber:#F2B347; --amber-s:#352812;
+  --built:#5CCB83; --built-s:#15301F; --next:#7FB0F5; --next-s:#16253A; --idea:#F2B347; --idea-s:#352812; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1280px;margin:0 auto;padding-block:22px 40px;display:grid;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;line-height:1.15;text-wrap:balance}
+h1{font-size:clamp(1.8rem,4vw,2.6rem)} h2{font-size:1.15rem} h3{font-size:.98rem}
+p{margin:0}
+.lead{color:var(--soft);max-width:75ch}
+.legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:.85rem;color:var(--soft)}
+.tag{display:inline-block;font:600 .68rem/1 var(--body);letter-spacing:.06em;text-transform:uppercase;border-radius:99px;padding:4px 8px;vertical-align:middle;white-space:nowrap}
+.b{background:var(--built-s);color:var(--built)} .n{background:var(--next-s);color:var(--next)} .i{background:var(--idea-s);color:var(--idea)}
+.band{border-radius:18px;padding:14px 16px;display:grid;gap:10px}
+.sec{background:var(--violet-s);border:2px solid var(--violet)}
+.sec h2{color:var(--violet)}
+.secgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.lanes{display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr) 64px minmax(0,1fr);gap:0;align-items:stretch}
+.lane{background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.lane>h2{display:flex;gap:8px;align-items:center}
+.lane.store{border-color:var(--teal)} .lane.store>h2{color:var(--teal)}
+.lane.hub{border-color:var(--lime)} .lane.hub>h2{color:var(--lime)}
+.lane.top{border-color:var(--amber)} .lane.top>h2{color:var(--amber)}
+.box{background:var(--bg);border-radius:12px;padding:10px 12px;display:grid;gap:4px}
+.box ul{margin:0;padding-left:18px;color:var(--soft);font-size:.9rem}
+.box li{margin:2px 0}
+.who{font-size:.8rem;color:var(--soft)}
+.links{display:grid;align-content:center;gap:28px;padding:0 4px}
+.links svg{width:100%;height:auto;overflow:visible}
+.links .lab{font:600 10px var(--body);fill:var(--soft)}
+.engines{background:var(--paper);border:2px solid var(--line);border-radius:18px;padding:14px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:14px}
+.eng3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.eng{border-radius:12px;padding:10px;background:var(--bg);display:grid;gap:4px}
+.eng .s{font-size:1.6rem;line-height:1}
+.eng .tag{justify-self:start}
+.chat{border-radius:14px;background:var(--bg);padding:10px;display:grid;gap:8px}
+.msg{max-width:88%;border-radius:12px;padding:7px 10px;font-size:.86rem;background:var(--paper);border:1px solid var(--line)}
+.msg.me{justify-self:end;background:var(--teal-s);border-color:transparent}
+.msg b{display:block;font-size:.74rem;color:var(--soft)}
+.steps{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;counter-reset:s}
+.step{background:var(--paper);border:2px solid var(--line);border-radius:14px;padding:10px 12px;display:grid;gap:4px;counter-increment:s}
+.step h3::before{content:counter(s) ". ";color:var(--teal)}
+.step p{font-size:.86rem;color:var(--soft)}
+.note{font-size:.86rem;color:var(--soft);border-left:4px solid var(--amber);padding:6px 10px;background:var(--amber-s);border-radius:0 10px 10px 0}
+@media (max-width:980px){
+  .lanes{grid-template-columns:minmax(0,1fr)} .links{display:none}
+  .lanes{gap:12px} .secgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .engines{grid-template-columns:minmax(0,1fr)} .steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:520px){ .secgrid,.eng3,.steps{grid-template-columns:minmax(0,1fr)} }
+</style>
+
+<div class="wrap">
+  <header style="display:grid;gap:8px">
+    <h1>KELSON System Workflow</h1>
+    <p class="lead">Who uses what, how they sign in, and how data and guidance move between the stores, the main server and the Super Admin. Every part is marked by status.</p>
+    <div class="legend"><span class="tag b">Built</span> working today <span class="tag n">Next</span> planned to build <span class="tag i">Idea</span> needs a decision or a partner</div>
+  </header>
+
+  <section class="band sec" aria-label="Security for everyone">
+    <h2>🔐 One security gate for everyone: phone, tablet and desktop</h2>
+    <div class="secgrid">
+      <div class="box"><h3>Creator (you) <span class="tag n">Next</span></h3><ul><li>Password + approve on your phone with fingerprint</li><li>Only you open the main server and security settings</li></ul></div>
+      <div class="box"><h3>Super Admin & KELSON staff <span class="tag n">Next</span></h3><ul><li>Own account each, never shared</li><li>Must install the phone app; every sign-in pops up on the phone: fingerprint or PIN #</li><li>Role limits what each person sees</li></ul></div>
+      <div class="box"><h3>Store owner <span class="tag n">Next</span></h3><ul><li>Same gate for the desktop mode: password + fingerprint on the owner's phone</li><li>Sees only their own stores and branches</li></ul></div>
+      <div class="box"><h3>Store staff <span class="tag b">Built</span></h3><ul><li>PIN + selfie to clock in and out</li><li>Store data stays on the device; sharing levels chosen by the owner</li></ul></div>
+    </div>
+  </section>
+
+  <section class="lanes" aria-label="Main workflow">
+    <div class="lane store">
+      <h2>🏪 Stores</h2>
+      <div class="box"><h3>Phone / tablet · selling <span class="tag b">Built</span></h3><ul><li>POS: cash, e-wallet, credit</li><li>Stock, scanner, notebook reader</li><li>Check my shelf (3 engines, offline)</li><li>Staff time in / time out</li></ul></div>
+      <div class="box"><h3>Desktop mode · owner office <span class="tag n">Next</span></h3><p class="who">A small Super Admin, limited to the owner's own stores</p><ul><li>Create and manage branches <span class="tag b">Built</span></li><li>Transactions of every store and branch</li><li>Time in / time out per staff <span class="tag b">Built</span></li><li>HR payroll <span class="tag i">Premium</span></li></ul></div>
+      <div class="box"><h3>Privacy</h3><ul><li>Privacy notice only when the account is created <span class="tag b">Built</span></li><li>Levels 1 · 2 · 3 changed anytime in Settings <span class="tag b">Built</span></li></ul></div>
+    </div>
+
+    <div class="links" aria-hidden="true">
+      <svg viewBox="0 -6 64 76"><path d="M4 22H54" stroke="var(--teal)" stroke-width="3" fill="none" marker-end="url(#ah)"/><text class="lab" x="2" y="10">summary</text>
+        <path d="M60 46H10" stroke="var(--lime)" stroke-width="3" fill="none" marker-end="url(#ah2)"/><text class="lab" x="8" y="64">guidance</text>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--teal)"/></marker><marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--lime)"/></marker></defs></svg>
+    </div>
+
+    <div class="lane hub">
+      <h2>🗄️ Main server (the hive)</h2>
+      <div class="box"><h3>Store accounts & sync <span class="tag b">Built</span></h3><ul><li>Database in Singapore with owner-only rules</li><li>Keeps only what each store chose to share</li><li>Deletion request stops all sync</li></ul></div>
+      <div class="box"><h3>Guidance down <span class="tag b">Built</span></h3><ul><li>Engine pack, product photos, rules, tips</li></ul></div>
+      <div class="box"><h3>Reports up <span class="tag b">Built</span></h3><ul><li>Areas with 5+ stores only</li><li>Credit applications (no lender yet)</li></ul></div>
+      <div class="box"><h3>Connect the apps <span class="tag n">Next</span></h3><ul><li>Sign-in and sync from the store app and desktop mode</li></ul></div>
+    </div>
+
+    <div class="links" aria-hidden="true">
+      <svg viewBox="0 -6 64 76"><path d="M4 22H54" stroke="var(--lime)" stroke-width="3" fill="none" marker-end="url(#ah3)"/><text class="lab" x="4" y="10">reports</text>
+        <path d="M60 46H10" stroke="var(--amber)" stroke-width="3" fill="none" marker-end="url(#ah4)"/><text class="lab" x="10" y="64">rules</text>
+        <defs><marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--lime)"/></marker><marker id="ah4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--amber)"/></marker></defs></svg>
+    </div>
+
+    <div class="lane top">
+      <h2>👑 Creator & Super Admin</h2>
+      <div class="box"><h3>Super Admin <span class="tag b">Built</span></h3><p class="who">You and KELSON staff, same view on phone, tablet and desktop</p><ul><li>Every store, branch and transaction summary</li><li>Market by area: Philippines and Pakistan</li><li>Shelf audit, photo library, legal check</li></ul></div>
+      <div class="box"><h3>Main server control room <span class="tag n">Next</span></h3><p class="who">Creator only</p><ul><li>Security settings: who can sign in, roles, devices</li><li>Step-by-step checklist: how the system works <span class="tag b">Built</span> (Academy)</li><li>Every setting explained, and the future plan</li><li>Engines status: what they fixed and found</li></ul></div>
+    </div>
+  </section>
+
+  <section class="engines" aria-label="Engines and team chat">
+    <div style="display:grid;gap:10px">
+      <h2>⚙️ The 3 engines</h2>
+      <div class="eng3">
+        <div class="eng"><span class="s">♍</span><h3>Virgo · scout</h3><p class="who">Reads shelf photos</p><span class="tag b">Built</span></div>
+        <div class="eng"><span class="s">♎</span><h3>Libra · guard</h3><p class="who">Checks accuracy, flags problems</p><span class="tag b">Built</span></div>
+        <div class="eng"><span class="s">♒</span><h3>Aquarius · nurse</h3><p class="who">Trains the model</p><span class="tag b">Built</span></div>
+      </div>
+      <div class="box"><h3>Engines report and fix <span class="tag n">Next</span></h3><ul><li>Each run posts a short report: accuracy, weak products, what was fixed</li><li>Safe fixes run on their own; big changes wait for your OK</li></ul></div>
+      <p class="note">The engines are fast counting and learning algorithms, not a talking AI. To reply in natural, person-like language, the chat uses a language AI (admin side only, never in stores) that reads the engines' reports.</p>
+    </div>
+    <div style="display:grid;gap:10px">
+      <h2>💬 Team chat <span class="tag n">Next</span></h2>
+      <div class="chat" aria-label="Example chat">
+        <div class="msg"><b>Libra · 9:00</b>Accuracy today 82%. Weak: Kopiko Blanca, Bear Brand. 12 new photos need a check.</div>
+        <div class="msg"><b>Aquarius · 9:02</b>Training done: 86% on unseen photos. Sent the new pack to 25 stores.</div>
+        <div class="msg me"><b>You</b>Why did Bear Brand drop?</div>
+        <div class="msg"><b>Libra · 9:03</b>New pack design in 4 stores. I need 5 checked photos to relearn it.</div>
+      </div>
+      <div class="box"><h3>Group chat with KELSON staff and the engines</h3><ul><li>Voice mode: updates read aloud every 15 s, 30 s, 1 min, or live when something changes <span class="tag n">Next</span></li><li>WhatsApp group: needs WhatsApp Business API approval from Meta; until then, a WhatsApp-style chat inside KELSON <span class="tag i">Idea</span></li></ul></div>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:10px" aria-label="Step by step">
+    <h2>How one day flows</h2>
+    <div class="steps">
+      <div class="step"><h3>Sign in</h3><p>Password, then fingerprint on the phone.</p></div>
+      <div class="step"><h3>Sell & count</h3><p>Stores sell, scan and clock in, offline.</p></div>
+      <div class="step"><h3>Share</h3><p>Only the chosen level goes to the main server.</p></div>
+      <div class="step"><h3>Engines learn</h3><p>Virgo reads, Libra checks, Aquarius trains.</p></div>
+      <div class="step"><h3>Report</h3><p>Results go to Super Admin and the team chat.</p></div>
+      <div class="step"><h3>Guide</h3><p>New pack, photos and tips go back to the stores.</p></div>
+    </div>
+  </section>
+</div>

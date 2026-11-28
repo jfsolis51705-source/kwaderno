@@ -4752,7 +4752,10 @@ ${catalog}`;
   const shareLevel = (n, tl, en, tlD, enD) => h("div", { style: "display:grid;gap:2px" }, h("b", { class: "small", text: L(`Antas ${n} · ${tl}`, `Level ${n} · ${en}`) }), h("span", { class: "muted small", text: L(tlD, enD) }));
   const LV1 = ["Tulungang matuto ang KWADERNO", "Help KWADERNO learn", "Paninda, bilang ng stock, ilang piraso ang nabenta, barcode at larawan ng estante. Walang halaga ng pera.", "Products, stock counts, units sold, barcodes and shelf photos. No money amounts."];
   const LV2 = ["Buod ng benta", "Sales summary", "Kabuuang benta bawat araw, paraan ng bayad, halaga ng stock at kabuuang utang. Hindi bawat resibo, walang pangalan ng customer.", "Daily sales totals, payment mix, stock value and total credit. Not each receipt, no customer names."];
+  // The Privacy Notice is shown when the account is created (sign-up). It is not shown again on the home screen;
+  // the owner can read it and change the sharing levels anytime in Settings → Privacy & my data.
   function consentBanner() {
+    return null;
     if (!S.store?.name || consentOk()) return null;
     return h("div", { class: "note", id: "consentBanner", style: "margin:0 0 12px;display:grid;gap:8px" },
       h("b", { text: L("Pakisuri ang Abiso sa Privacy", "Please review the Privacy Notice") }),

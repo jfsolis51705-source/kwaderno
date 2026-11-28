@@ -1,14 +1,14 @@
-/* KWADERNO Scan — Logbook: photo of a handwritten page (logbook, notebook, receipt) → sales or stock-in.
+/* KELSON Scan — Logbook: photo of a handwritten page (logbook, notebook, receipt) → sales or stock-in.
  *
  * Works offline after the first use: the handwriting reader (Tesseract 5, ~7 MB) is bundled with this app and kept
  * on the phone. Nothing is sent to any AI or server. Steps:
  *   1. capture the page (live camera, or a photo from the gallery)
  *   2. clean it: straighten (deskew), remove notebook ruled lines, local-contrast black & white + a gray copy
  *   3. read it twice (black & white, gray) and keep the reading that matches more of the store's products
- *   4. each line → qty · product · amount, matched with KWADERNO's own rules (store products, Filipino spellings,
+ *   4. each line → qty · product · amount, matched with KELSON's own rules (store products, Filipino spellings,
  *      learned corrections, qty from amount ÷ price), checked against the page's written total
- *   5. review → send to KWADERNO (straight away when it's open, otherwise kept and sent later)
- * The store's product list comes from KWADERNO (kept on this phone) so matching also works offline. */
+ *   5. review → send to KELSON (straight away when it's open, otherwise kept and sent later)
+ * The store's product list comes from KELSON (kept on this phone) so matching also works offline. */
 (() => {
   "use strict";
   const api = window.__kwscanApi; if (!api) return;
@@ -20,14 +20,14 @@
   const peso = (n) => "₱" + (Number(n) || 0).toFixed(2);
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 
-  // ---------- the store's products (from KWADERNO, kept on this phone) ----------
+  // ---------- the store's products (from KELSON, kept on this phone) ----------
   let catalog = store.get(CAT_KEY, null); // { products:[{id,name,price,cost,sold}], learned:[{raw,to}], dict:[{from,to}], at }
   const opener = api.opener;
-  // Logbook pages can hold customer names (utang), so they go only to the KWADERNO tab that answered our hello,
+  // Logbook pages can hold customer names (utang), so they go only to the KELSON tab that answered our hello,
   // at the address it answered from — never to whatever page happened to open the scanner.
   let openerOrigin = null;
   if (opener) {
-    try { opener.postMessage({ type: "kw-hello" }, "*"); } catch { /* KWADERNO closed */ } // the hello carries no data
+    try { opener.postMessage({ type: "kw-hello" }, "*"); } catch { /* KELSON closed */ } // the hello carries no data
     window.addEventListener("message", (e) => {
       if (e.source !== opener || !e.data || e.data.type !== "kw-catalog" || !Array.isArray(e.data.products)) return;
       openerOrigin = e.origin;
@@ -39,7 +39,7 @@
   }
   const products = () => catalog?.products || [];
 
-  // ---------- matching rules (same as KWADERNO's logbook reader) ----------
+  // ---------- matching rules (same as KELSON's logbook reader) ----------
   const fold = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
   function lev(a, b) { const m = a.length, n = b.length; if (!m) return n; if (!n) return m; let prev = Array.from({ length: n + 1 }, (_, j) => j); for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; } return prev[n]; }
   const SEED = [["coke", "coca cola"], ["koke", "coca cola"], ["cocacola", "coca cola"], ["sprite", "sprite"], ["royal", "royal"], ["pepsi", "pepsi"],
@@ -212,7 +212,7 @@
     if (!$("lbState")) return;
     const n = products().length, pend = store.get(PEND_KEY, []);
     $("lbState").textContent = [store.get("kwscan-reader-offline", false) ? "✓ Reader saved on this phone (works offline)" : "Reader: downloads once (~7 MB), then works offline",
-      n ? `✓ ${n} of your products known` : "Open the scanner from KWADERNO once so it knows your products"].join(" · ");
+      n ? `✓ ${n} of your products known` : "Open the scanner from KELSON once so it knows your products"].join(" · ");
     $("lbPendBtn").hidden = !pend.length; $("lbPendTxt").textContent = `${pend.length} waiting`;
   }
   let readPass = "";
@@ -450,26 +450,26 @@
         page.error ? el("p", { class: "warn", text: page.error }) : null,
         page.printed ? el("p", { class: "lb-ok", id: "lbPrinted", text: `Read as a printed bill${page.printed.name ? " (" + page.printed.name + ")" : ""}: the amount due${page.printed.due ? " and due date" : ""} were taken from it. Check them before sending.` }) : null,
         totalNote ? el("p", { class: totalNote.startsWith("⚠") ? "warn" : "lb-ok", id: "lbTotal", text: totalNote }) : null,
-        el("p", { class: "muted small", style: "margin:0", text: `${ok} line(s) ready${open ? ` · ${open} need ${money ? (kind === "credit" ? "a customer and amount" : "a name and amount") : "a product"} (or ✕ to skip)` : ""}.` + (money ? "" : " KWADERNO learns from your fixes.") }),
+        el("p", { class: "muted small", style: "margin:0", text: `${ok} line(s) ready${open ? ` · ${open} need ${money ? (kind === "credit" ? "a customer and amount" : "a name and amount") : "a product"} (or ✕ to skip)` : ""}.` + (money ? "" : " KELSON learns from your fixes.") }),
         el("ul", { class: "lb-rows", id: "lbRows" }, page.rows.map(rowEl)),
         el("button", { type: "button", class: "btn", onclick: () => { page.rows.push(blankRow()); draw(); } }, "+ Add a line"),
-        el("button", { type: "button", class: "btn primary big", id: "lbSend", disabled: !ok, onclick: send }, `Send ${ok} line(s) to KWADERNO as ${label}`),
+        el("button", { type: "button", class: "btn primary big", id: "lbSend", disabled: !ok, onclick: send }, `Send ${ok} line(s) to KELSON as ${label}`),
         el("button", { type: "button", class: "btn", onclick: () => { sheet.hidden = true; } }, "Retake the photo")].filter(Boolean));
-      if (!money && !ps.length) { const b = body.querySelector("#lbSend"); b.disabled = !page.rows.some((r) => !r.skip && r.name); b.textContent = "Send to KWADERNO (it matches the products there)"; }
+      if (!money && !ps.length) { const b = body.querySelector("#lbSend"); b.disabled = !page.rows.some((r) => !r.skip && r.name); b.textContent = "Send to KELSON (it matches the products there)"; }
     };
     sheet.hidden = false;
     sheet.replaceChildren(el("header", { class: "bar" }, el("button", { class: "icon", type: "button", "aria-label": "Back", onclick: () => { sheet.hidden = true; }, text: "←" }), el("b", { id: "lbTitle", text: "Check the lines" }), el("span")), body);
     draw();
   }
 
-  // ---------- sending to KWADERNO ----------
+  // ---------- sending to KELSON ----------
   function payloadOf(pg) {
     const kind = pg.kind, money = MONEY.has(kind);
     const rows = pg.rows.filter((r) => !r.skip).map((r) => money
       ? { desc: String(r.desc || "").slice(0, 80), cat: r.cat || "other", due: r.due || null, cid: r.cid || "", cname: String(r.cname || "").slice(0, 60), amount: Number(r.amount) || 0, raw: String(r.raw || "").slice(0, 120) }
       : { pid: r.pid || "", name: String(r.name || "").slice(0, 80), raw: String(r.raw || "").slice(0, 120), qty: Number(r.qty) || 1, amount: r.amount == null || r.amount === "" ? null : Number(r.amount), auto: r.auto || "" })
       .filter((r) => (money ? r.amount > 0 && (kind === "credit" ? r.cid || r.cname.trim() : r.desc.trim()) : (r.pid || r.name) && r.qty > 0)).slice(0, 80);
-    // words nothing matched (skipped product lines) go along so KWADERNO / the Super Admin can learn them
+    // words nothing matched (skipped product lines) go along so KELSON / the Super Admin can learn them
     const miss = money ? [] : pg.rows.filter((r) => r.skip && !r.pid && (r.name || "").replace(/[^a-z]/gi, "").length >= 3).map((r) => String(r.name).slice(0, 40)).slice(0, 20);
     return { type: "kw-logbook", v: 2, kind, mode: kind === "stock" ? "stock" : "sale", date: pg.date, rows, miss };
   }
@@ -479,18 +479,18 @@
     const pl = payloadOf(page); if (!pl.rows.length) return;
     let sent = false;
     if (opener && !opener.closed && openerOrigin) { try { opener.postMessage(pl, openerOrigin); sent = true; } catch { sent = false; } }
-    if (sent) { api.beep(true); toast(`Sent ${pl.rows.length} line(s) to KWADERNO ✓`); sheet.hidden = true; return; }
-    // KWADERNO isn't open here (or no internet): keep the page and send it from the "waiting" list
+    if (sent) { api.beep(true); toast(`Sent ${pl.rows.length} line(s) to KELSON ✓`); sheet.hidden = true; return; }
+    // KELSON isn't open here (or no internet): keep the page and send it from the "waiting" list
     const pend = store.get(PEND_KEY, []); pend.push({ ...pl, at: Date.now() }); store.set(PEND_KEY, pend.slice(-20));
     sheet.hidden = true; renderCam();
-    toast(navigator.onLine ? "Saved — tap “waiting” to open KWADERNO and add it" : "Saved on this phone — send it when you have internet");
+    toast(navigator.onLine ? "Saved — tap “waiting” to open KELSON and add it" : "Saved on this phone — send it when you have internet");
   }
   function showPending() {
     const pend = store.get(PEND_KEY, []);
     sheet.hidden = false;
     sheet.replaceChildren(el("header", { class: "bar" }, el("button", { class: "icon", type: "button", "aria-label": "Back", onclick: () => { sheet.hidden = true; }, text: "←" }), el("b", { id: "lbTitle", text: "Pages waiting to send" }), el("span")),
       el("div", { class: "sheet-body" },
-        el("p", { class: "muted small", style: "margin:0", text: "Each page opens KWADERNO and adds its lines. Needs internet." }),
+        el("p", { class: "muted small", style: "margin:0", text: "Each page opens KELSON and adds its lines. Needs internet." }),
         pend.length ? el("ul", { class: "hist" }, pend.map((pl, i) => el("li", {},
           el("div", { class: "t", text: `${pl.rows.length} line(s) · ${kindName(pl.kind || (pl.mode === "stock" ? "stock" : "sale"))} · ${pl.date}` }),
           el("div", { class: "m" }, pl.rows.slice(0, 3).map((r) => (r.desc != null ? `${r.desc || r.cname} ₱${r.amount}` : `${r.qty} ${r.name || r.raw}`)).join(" · ")),

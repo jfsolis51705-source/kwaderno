@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>KWADERNO Scan</title>
+  <title>KELSON Scan</title>
   <meta name="description" content="Point your camera at a barcode or QR code — it reads it by itself.">
   <meta name="theme-color" content="#000000">
   <link rel="manifest" href="manifest.webmanifest">
@@ -38,13 +38,13 @@
         <button type="button" class="btn undo" id="hudUndo" disabled>↶ Remove last scan</button>
         <button type="button" class="btn sm ghost" id="hudPeek" aria-pressed="false">👁 Show camera</button>
         <button type="button" class="btn sm ghost" id="hudClear">New count</button>
-        <a class="btn sm primary" id="hudSend" hidden>Send to KWADERNO</a>
+        <a class="btn sm primary" id="hudSend" hidden>Send to KELSON</a>
       </div>
     </div>
 
     <header class="bar top">
       <button class="icon" id="histBtn" type="button" title="History" aria-label="History">☰</button>
-      <div class="title"><b>SCAN</b><span id="kwBadge" hidden>→ KWADERNO</span></div>
+      <div class="title"><b>SCAN</b><span id="kwBadge" hidden>→ KELSON</span></div>
       <div class="right">
         <button class="icon" id="torchBtn" type="button" aria-pressed="false" title="Flashlight" aria-label="Flashlight" hidden>🔦</button>
         <button class="icon" id="lensBtn" type="button" title="Switch camera" aria-label="Switch camera" hidden>⟲</button>
@@ -93,7 +93,7 @@
         <button type="button" id="copyBtn" class="tool"><span aria-hidden="true">⧉</span>Copy</button>
         <a id="webBtn" class="tool" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">⌕</span>Web search</a>
         <a id="openBtn" class="tool" target="_blank" rel="noopener noreferrer" hidden><span aria-hidden="true">↗</span>Open link</a>
-        <a id="kwBack" class="tool" hidden><span aria-hidden="true">⮌</span>KWADERNO</a>
+        <a id="kwBack" class="tool" hidden><span aria-hidden="true">⮌</span>KELSON</a>
       </div>
       <p class="warn" id="linkWarn" hidden>Check the address before opening. QR codes can lead to fake sites.</p>
       <div class="barcode-art" id="resArt" aria-hidden="true"></div>
@@ -116,7 +116,7 @@
 
   <!-- batch list (continuous mode) -->
   <div class="batch" id="batch" hidden>
-    <div class="batch-head"><b id="batchCount">0 scanned</b><button class="btn sm" id="batchSend" type="button" hidden>Send to KWADERNO</button><button class="btn sm" id="batchDone" type="button">Done</button></div>
+    <div class="batch-head"><b id="batchCount">0 scanned</b><button class="btn sm" id="batchSend" type="button" hidden>Send to KELSON</button><button class="btn sm" id="batchDone" type="button">Done</button></div>
     <ul id="batchList"></ul>
   </div>
 

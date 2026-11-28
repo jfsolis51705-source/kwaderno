@@ -1,5 +1,5 @@
-/* KWADERNO Photo Finder — looks up product photos on the open product databases (any country)
- * for the Super Admin, and sends each photo back to KWADERNO, which asks the admin before saving.
+/* KELSON Photo Finder — looks up product photos on the open product databases (any country)
+ * for the Super Admin, and sends each photo back to KELSON, which asks the admin before saving.
  * Barcode first (exact), then name search; sizes must agree (155g ≠ 425g). */
 (() => {
   "use strict";
@@ -66,7 +66,7 @@
     g.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, c.width, c.height);
     return new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
   }
-  const send = (msg) => { try { opener && opener.postMessage(msg, "*"); } catch { /* KWADERNO closed */ } };
+  const send = (msg) => { try { opener && opener.postMessage(msg, "*"); } catch { /* KELSON closed */ } };
 
   async function run(items) {
     items = items.slice(0, 200); let found = 0;
@@ -92,18 +92,18 @@
     }
     send({ type: "kw-photo-done", found, total: items.length });
     document.querySelector("h1").textContent = "Done";
-    $("st").textContent = AUTO ? `Found ${found} of ${items.length}. Sure matches were saved in KWADERNO by themselves — this tab closes now.` : `Found ${found} of ${items.length}. Check them in KWADERNO and tap Save — you can close this tab.`;
+    $("st").textContent = AUTO ? `Found ${found} of ${items.length}. Sure matches were saved in KELSON by themselves — this tab closes now.` : `Found ${found} of ${items.length}. Check them in KELSON and tap Save — you can close this tab.`;
     if (AUTO) setTimeout(() => { try { window.close(); } catch { /* the browser keeps it */ } }, 2500);
   }
   let AUTO = location.hash === "#auto";
 
   let started = false;
   window.addEventListener("message", (e) => {
-    if (!opener || e.source !== opener) return; // only the KWADERNO page that opened us
+    if (!opener || e.source !== opener) return; // only the KELSON page that opened us
     const d = e.data; if (!d || d.type !== "kw-photo-list" || started || !Array.isArray(d.items)) return;
     started = true; if (d.auto) AUTO = true; run(d.items.filter((x) => x && typeof x.name === "string").map((x) => ({ name: x.name.slice(0, 120), bc: typeof x.bc === "string" ? x.bc.slice(0, 20) : "" })));
   });
-  if (!opener) $("st").textContent = "Open this from KWADERNO → Super Admin → Photo library → Find photos online.";
+  if (!opener) $("st").textContent = "Open this from KELSON → Super Admin → Photo library → Find photos online.";
   else { const hello = () => { if (!started) { send({ type: "kw-photo-hello" }); setTimeout(hello, 1000); } }; hello(); }
   window.__kwPhotoFinder = { score, find, sizeOf };
 })();

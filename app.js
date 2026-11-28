@@ -1,11 +1,11 @@
-/* KWADERNO Scan — live QR + barcode scanner with auto-capture (Android, iPhone/iPad, Mac/PC).
+/* KELSON Scan — live QR + barcode scanner with auto-capture (Android, iPhone/iPad, Mac/PC).
  *
  * Camera: getUserMedia, back lens, 1920×1080, continuous autofocus, torch/zoom when the camera has them.
  * Decoding, about 10 times a second, QR and 1D at the same time, no mode switch:
  *   - the phone's own BarcodeDetector when it has one (Android Chrome: very fast, gives the code's corners);
  *   - otherwise ZXing 0.21.3 ("try harder") on the scan window, the whole picture and the window turned 90°.
  * A Bluetooth/USB scanner (it types fast and presses Enter) works at the same time.
- * Opened from KWADERNO (?kw=1&return=…) the code is sent straight back. History stays on this device. */
+ * Opened from KELSON (?kw=1&return=…) the code is sent straight back. History stays on this device. */
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -66,11 +66,11 @@
   const isAndroid = /Android/i.test(ua);
   const inApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Messenger|TikTok|Snapchat|MicroMessenger/i.test(ua);
 
-  // ---------- opened from KWADERNO: where to send the code back ----------
+  // ---------- opened from KELSON: where to send the code back ----------
   const params = new URLSearchParams(location.search);
   const RETURN = (() => {
     const r = params.get("return") || "";
-    // only back to the KWADERNO app (or a local test copy) — never to any other site
+    // only back to the KELSON app (or a local test copy) — never to any other site
     if (/^https:\/\/claude\.ai\/artifact\/[A-Za-z0-9_-]+#scan-(sell|stock)-$/.test(r)) return r;
     if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && /^http:\/\/(localhost|127\.0\.0\.1):\d+\/[^#]*#scan-(sell|stock)-$/.test(r)) return r;
     return "";
@@ -147,7 +147,7 @@
     }
     return null;
   }
-  /** Where are barcode-like stripes in the picture? (from KWADERNO's photo reader) best first, boxes in video pixels. */
+  /** Where are barcode-like stripes in the picture? (from KELSON's photo reader) best first, boxes in video pixels. */
   function locateBarcodes(bmp) {
     const W = 400, k = W / (bmp.videoWidth || bmp.width), H = Math.max(8, Math.round((bmp.videoHeight || bmp.height) * k)), c = document.createElement("canvas"); c.width = W; c.height = H;
     const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(bmp, 0, 0, W, H);
@@ -336,7 +336,7 @@
     holdUntil = now + 10 * 60 * 1000; // hold until the person goes back to scanning
     status("Found it", false);
     setTimeout(() => {
-      if (KW) { const how = sendToKwaderno([text]); if (how === "message") lookupName(text); if (how === "message") { showResult(item, true); toast("Sent to KWADERNO ✓"); } return; }
+      if (KW) { const how = sendToKwaderno([text]); if (how === "message") lookupName(text); if (how === "message") { showResult(item, true); toast("Sent to KELSON ✓"); } return; }
       showResult(item);
     }, 350);
   }
@@ -357,7 +357,7 @@
   }
 
   // ---------- GROCERY MODE ----------
-  const startMode = params.get("mode") === "logbook" ? "logbook" : store.get("kwscan-mode", "grocery"); // KWADERNO's Logbook page opens it with ?mode=logbook
+  const startMode = params.get("mode") === "logbook" ? "logbook" : store.get("kwscan-mode", "grocery"); // KELSON's Logbook page opens it with ?mode=logbook
   let grocery = startMode !== "camera" && startMode !== "logbook", qrDetour = false; // qrDetour: switched to the camera only for a QR code
   const names = new Map(), photos = new Map(); // code → product name / real photo (open product databases, any country), looked up once
   const PRODUCT_DBS = [["https://world.openfoodfacts.org", "Open Food Facts"], ["https://world.openbeautyfacts.org", "Open Beauty Facts"], ["https://world.openproductsfacts.org", "Open Products Facts"]];
@@ -371,7 +371,7 @@
     return new Promise((r) => c.toBlob(r, "image/jpeg", 0.85));
   }
   /** Barcode → real product name + photo. Only the barcode number leaves the phone. The photo is shown here and,
-   *  when KWADERNO opened this scanner, sent back to it (Add stock / Add product show it; Super Admin saves it for all stores). */
+   *  when KELSON opened this scanner, sent back to it (Add stock / Add product show it; Super Admin saves it for all stores). */
   async function lookupName(code) {
     if (names.has(code) || !/^\d{8,14}$/.test(code)) return;
     names.set(code, "");
@@ -383,7 +383,7 @@
       const img = p.image_front_url || p.image_front_small_url;
       if (img && /^https:\/\//.test(img)) {
         try { const blob = await squareJpeg(await getBlob(img), 640); photos.set(code, URL.createObjectURL(blob));
-          if (KW && opener) { try { opener.postMessage({ type: "kw-scan-photo", code, name, blob, source: label, link: `${host}/product/${code}` }, "*"); } catch { /* KWADERNO closed */ } }
+          if (KW && opener) { try { opener.postMessage({ type: "kw-scan-photo", code, name, blob, source: label, link: `${host}/product/${code}` }, "*"); } catch { /* KELSON closed */ } }
         } catch { /* name only */ }
       }
       renderHud(); if ($("popCode").textContent === code) showPopInfo(code);
@@ -453,13 +453,13 @@
     $("hudUndo").disabled = !batchCodes.length;
     $("hudUndo").textContent = last ? `↶ Remove last scan (${names.get(last.value) || last.value})` : "↶ Remove last scan";
     const send = $("hudSend"); send.hidden = !(KW && !opener && batchCodes.length);
-    if (!send.hidden) { send.href = RETURN + encodeURIComponent(batchCodes.map((x) => x.value).reverse().join(",")); send.textContent = `Send ${batchCodes.length} to KWADERNO`; }
+    if (!send.hidden) { send.href = RETURN + encodeURIComponent(batchCodes.map((x) => x.value).reverse().join(",")); send.textContent = `Send ${batchCodes.length} to KELSON`; }
   }
-  /** A mistake: take back the most recent scan (again and again, newest first). Also takes 1 off the KWADERNO sale. */
+  /** A mistake: take back the most recent scan (again and again, newest first). Also takes 1 off the KELSON sale. */
   function undoLast() {
     const x = batchCodes.shift(); if (!x) return;
     store.set(HIST_KEY, history().filter((y) => y.id !== x.id));
-    if (KW && opener) { try { opener.postMessage({ type: "kw-unscan", code: x.value, mode: KW_MODE }, "*"); } catch { /* KWADERNO tab closed */ } }
+    if (KW && opener) { try { opener.postMessage({ type: "kw-unscan", code: x.value, mode: KW_MODE }, "*"); } catch { /* KELSON tab closed */ } }
     beep(false); renderHud(); renderBatch();
     toast(`Removed 1 × ${names.get(x.value) || x.value}`);
   }
@@ -480,8 +480,8 @@
     $("kwBack").hidden = !KW; if (KW) $("kwBack").href = RETURN + encodeURIComponent(code);
     $("resArt").replaceChildren(); const art = eanSvg(code); if (art) $("resArt").append(art); $("resArt").hidden = !art;
     $("resImg").replaceChildren(document.createTextNode(TWO_D.has(item.format) ? "▦" : "▥"));
-    $("resName").textContent = sent ? "Sent to KWADERNO ✓" : num ? "Looking up the product…" : TWO_D.has(item.format) ? "QR code" : "Code";
-    $("resBrand").textContent = sent ? "Go back to the KWADERNO tab — the item is there." : "";
+    $("resName").textContent = sent ? "Sent to KELSON ✓" : num ? "Looking up the product…" : TWO_D.has(item.format) ? "QR code" : "Code";
+    $("resBrand").textContent = sent ? "Go back to the KELSON tab — the item is there." : "";
     $("againBtn").focus();
     // product name and photo from Open Food Facts (only the barcode number is sent)
     offCtl?.abort();
@@ -492,7 +492,7 @@
           if (ctl.signal.aborted) return;
           const p = d && d.status === 1 ? d.product : null;
           $("resName").textContent = p?.product_name ? p.product_name + (p.quantity ? ` ${p.quantity}` : "") : "Product not in the public list";
-          $("resBrand").textContent = p?.brands || (p ? "" : "Add it in KWADERNO with this barcode.");
+          $("resBrand").textContent = p?.brands || (p ? "" : "Add it in KELSON with this barcode.");
           if (p?.image_front_small_url && /^https:\/\//.test(p.image_front_small_url)) { const im = new Image(); im.alt = ""; im.referrerPolicy = "no-referrer"; im.src = p.image_front_small_url; $("resImg").replaceChildren(im); }
         }).catch(() => { if (!ctl.signal.aborted) { $("resName").textContent = "Couldn't look it up (offline?)"; } });
     }
@@ -587,7 +587,7 @@
     $("batch").hidden = !batch; $("batchBtn").setAttribute("aria-pressed", String(batch));
     // one line per code with how many times it was scanned (10 cans of the same product = ×10)
     const groups = new Map(); for (const x of batchCodes) { const g = groups.get(x.value) || { value: x.value, format: x.format, n: 0 }; g.n++; groups.set(x.value, g); }
-    $("batchCount").textContent = `${batchCodes.length} scanned · ${groups.size} product(s)` + (KW && opener ? " · sent to KWADERNO" : "");
+    $("batchCount").textContent = `${batchCodes.length} scanned · ${groups.size} product(s)` + (KW && opener ? " · sent to KELSON" : "");
     $("batchSend").hidden = !(KW && !opener && batchCodes.length);
     const ul = $("batchList"); ul.replaceChildren();
     for (const g of [...groups.values()].slice(0, 50)) {
@@ -628,7 +628,7 @@
     if (checkDigitOk(v) === false || (/^\d+$/.test(v) && v.length >= 9 && v.length <= 11)) { e.preventDefault(); beep(false); $("typeWarn").textContent = v.length >= 9 && v.length <= 11 ? `Only ${v.length} digits — product barcodes have 8, 12 or 13.` : "The last digit (check digit) doesn't match — check the number."; return; }
     setTimeout(() => found({ text: v, format: /^\d{13}$/.test(v) ? "EAN_13" : /^\d{12}$/.test(v) ? "UPC_A" : /^\d{8}$/.test(v) ? "EAN_8" : "Typed" }, "typed"), 0);
   });
-  if (KW) { $("kwBadge").hidden = false; document.title = "Scan → KWADERNO"; }
+  if (KW) { $("kwBadge").hidden = false; document.title = "Scan → KELSON"; }
 
   // free the camera in the background, start again when back
   document.addEventListener("visibilitychange", () => { if (document.hidden) stopCamera(); else if ($("result").hidden && !starting) startCamera(); });
